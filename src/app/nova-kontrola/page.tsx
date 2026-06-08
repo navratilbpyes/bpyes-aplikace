@@ -23,7 +23,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { generateRecordNumber, cn } from "@/app/lib/utils";
-// Pridany importy novych seznamu z vaseho souboru
 import { CHECKLIST_SECTIONS, CHECKLIST_PPP, CHECKLIST_PBOZP, ChecklistSection, ChecklistPoint } from "./checklist-data";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
@@ -510,4 +509,156 @@ export default function NewInspectionPage() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <Card className="p-4 flex flex-col items-center gap-1 border-green-200 bg-green-50">
               <span className="text-2xl font-bold text-green-700">{stats.V}</span>
-              <span className="text-[10px]
+              <span className="text-[10px] uppercase font-bold text-green-600">Vyhovuje</span>
+            </Card>
+            <Card className="p-4 flex flex-col items-center gap-1 border-red-200 bg-red-50">
+              <span className="text-2xl font-bold text-red-700">{stats.N}</span>
+              <span className="text-[10px] uppercase font-bold text-red-600">Nevyhovuje</span>
+            </Card>
+            <Card className="p-4 flex flex-col items-center gap-1 border-gray-200 bg-gray-50">
+              <span className="text-2xl font-bold text-gray-700">{stats.NA}</span>
+              <span className="text-[10px] uppercase font-bold text-gray-600">Neaplikováno</span>
+            </Card>
+            <Card className="p-4 flex flex-col items-center gap-1 border-gray-200 bg-gray-50">
+              <span className="text-2xl font-bold text-gray-700">{stats.NK}</span>
+              <span className="text-[10px] uppercase font-bold text-gray-600">Nekontrolováno</span>
+            </Card>
+            <Card className="p-4 flex flex-col items-center gap-1 border-amber-200 bg-amber-50">
+              <span className="text-2xl font-bold text-amber-700">{stats.unfilled}</span>
+              <span className="text-[10px] uppercase font-bold text-amber-600">Nevyplněno</span>
+            </Card>
+          </div>
+
+          <Card className="border-none shadow-sm">
+            <CardHeader>
+              <CardTitle>Generované závady ({stats.N})</CardTitle>
+              <CardDescription>Tyto body budou automaticky zahrnuty v auditní zprávě.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {Object.entries(pointDefects).filter(([id]) => checklist[Number(id)]?.hodnoceni === 'N').map(([id, defect]) => (
+                <div key={id} className="p-4 border rounded-lg flex items-start gap-4 hover:bg-muted/20 transition-colors">
+                  <div className="bg-red-600 text-white font-mono text-xs h-6 w-6 rounded-full flex items-center justify-center shrink-0 mt-1">
+                    {id}
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <p className="font-bold">{defect.popis}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <CalendarIcon className="h-3 w-3" />
+                        {defect.terminOdstraneni ? new Date(defect.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neuvedeno'}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <UserIcon className="h-3 w-3" />
+                        {defect.odpovednaOsoba || 'Neuvedena'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              
+              {stats.N === 0 && (
+                <div className="py-12 text-center text-muted-foreground italic">
+                  Nebyly zjištěny žádné systémové závady.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Ostatní závady</CardTitle>
+                <CardDescription>Závady zjištěné nad rámec checklistu.</CardDescription>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setManualDefects(prev => [...prev, {
+                popis: '',
+                navrhOpatreni: '',
+                terminOdstraneni: new Date().toISOString().split('T')[0],
+                odpovednaOsoba: ''
+              }])}>
+                <Plus className="h-4 w-4 mr-1" />
+                Přidat závadu
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {manualDefects.map((def, idx) => (
+                <div key={idx} className="p-6 border rounded-lg space-y-4 relative">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="absolute top-2 right-2 text-muted-foreground"
+                    onClick={() => setManualDefects(prev => prev.filter((_, i) => i !== idx))}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Popis závady</Label>
+                      <Textarea 
+                        value={def.popis} 
+                        onChange={(e) => {
+                          const next = [...manualDefects];
+                          next[idx].popis = e.target.value;
+                          setManualDefects(next);
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Návrh opatření</Label>
+                      <Textarea 
+                        value={def.navrhOpatreni} 
+                        onChange={(e) => {
+                          const next = [...manualDefects];
+                          next[idx].navrhOpatreni = e.target.value;
+                          setManualDefects(next);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {manualDefects.length === 0 && (
+                <div className="py-12 text-center text-muted-foreground italic">
+                  Žádné dodatečné závady nebyly přidány.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Persistent Navigation */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 z-50 flex justify-center">
+        <div className="max-w-5xl w-full flex justify-between items-center px-4 md:px-8">
+          <Button 
+            variant="ghost" 
+            disabled={step === 1} 
+            onClick={() => {
+              setStep(s => s - 1);
+              window.scrollTo(0, 0);
+            }}
+            className="h-11 px-6"
+          >
+            <ChevronLeft className="mr-2 h-4 w-4" />
+            Zpět
+          </Button>
+          
+          <div className="flex gap-2">
+            {step === 3 && (
+              <Button variant="outline" className="h-11 px-6" onClick={() => handleFinish(true)}>
+                Uložit jako koncept
+              </Button>
+            )}
+            <Button 
+              onClick={step === 3 ? () => handleFinish(false) : handleNext}
+              className="h-11 px-8 shadow-sm"
+            >
+              {step === 3 ? "Uzavřít záznam" : "Pokračovat"}
+              {step !== 3 && <ChevronRight className="ml-2 h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
