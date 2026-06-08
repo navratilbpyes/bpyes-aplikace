@@ -79,11 +79,11 @@ export default function NewInspectionPage() {
 
   // Dynamicky vypocet poctu otazek podle vybraneho typu kontroly
   const currentChecklistFlat = useMemo(() => {
-    if (formData.typKontroly === 'PPP') return CHECKLIST_PPP || [];
-    if (formData.typKontroly === 'PBOZP') return CHECKLIST_PBOZP || [];
-    if (formData.typKontroly === 'BOZPaPO') return CHECKLIST_SECTIONS.flatMap(s => s.points);
-    return [];
-  }, [formData.typKontroly]);
+  if (formData.typKontroly === 'PPP') return CHECKLIST_PPP || [];
+  if (formData.typKontroly === 'PBOZP') return CHECKLIST_PBOZP || [];
+  if (formData.typKontroly === 'BOZPaPO') return CHECKLIST_SECTIONS.flatMap(s => s.points);
+  return [];
+}, [formData.typKontroly]);
 
   const totalPoints = currentChecklistFlat.length > 0 ? currentChecklistFlat.length : 1;
   const answeredPoints = Object.keys(checklist).length;
