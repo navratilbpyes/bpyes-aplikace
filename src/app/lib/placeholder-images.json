@@ -1,0 +1,11 @@
+
+{
+  "placeholderImages": [
+    {
+      "id": "audit-hero",
+      "description": "Professional safety audit workspace",
+      "imageUrl": "https://picsum.photos/seed/audit1/1200/600",
+      "imageHint": "safety audit"
+    }
+  ]
+}
