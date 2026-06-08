@@ -1,4 +1,3 @@
-
 export interface ChecklistPoint {
   id: number;
   text: string;
@@ -272,7 +271,7 @@ export const CHECKLIST_SECTIONS: ChecklistSection[] = [
       { id: 134, text: "Kolaudační rozhodnutí a užívání stavby v souladu s rozhodnutím" },
       { id: 135, text: "Požárně bezpečnostní řešení stavby" },
       { id: 136, text: "Dokumentace o začlenění do kategorie činností podle požárního nebezpečí" },
-      { id: 136, text: "Stanovení organizace PO" },
+      { id: 136, text: "Stanovení organizace PO" }, // Ponecháno původní zdvojené ID 136 podle zadání
       { id: 137, text: "Tematický plán a časový rozvrh školení PO vedoucích zaměstnanců" },
       { id: 138, text: "Tematický plán a časový rozvrh školení PO zaměstnanců" },
       { id: 139, text: "Tematický plán a časový rozvrh školení preventisty PO" },
@@ -306,4 +305,47 @@ export const CHECKLIST_SECTIONS: ChecklistSection[] = [
       { id: 168, text: "Zařízení zamezující iniciaci požáru nebo výbuchu" }
     ]
   }
+];
+
+export const CHECKLIST_PPP: ChecklistPoint[] = [
+  { id: 1, text: "Požární poplachové směrnice – umístění, počet, aktuálnost a stav", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 2, text: "Požární řád – umístění, aktuálnost a stav", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 3, text: "Únikové komunikace – přístup, značení", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 4, text: "Únikové východy – přístup, značení", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 5, text: "Přenosné hasicí přístroje – stav, přístup, kontrola, umístění", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 6, text: "Hydranty – stav, přístup, kontrola, umístění", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 7, text: "Suchovody – stav, přístup, kontrola", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 8, text: "Požární žebříky – stav, přístup", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 9, text: "Nouzové osvětlení – stav, funkčnost", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 10, text: "Tlačítka požárního poplachu – značení, stav, funkce", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 11, text: "Požární klapky – stav, funkčnost", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 12, text: "Funkce požární poplachové sirény", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 13, text: "Úklid a čistota pracoviště, vrstvy prachu", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 14, text: "Uložení a skladování tlakových lahví – stav lahví, počet, umístění na pracovišti, zajištění proti pádu, označení prostoru uložení, bezpečnostní listy na pracovišti", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 15, text: "Uložení a skladování NCHLaS – stav nádob, umístění v záchytných prostředích, dovolené množství, bezpečnostní listy na pracovišti", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 16, text: "Skladování hořlavého materiálu – množství (dovolené množství dle požárního řádu)", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 17, text: "Umístění prostředků pro únik kapalin – sorbenty, havarijní souprava", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 18, text: "Přístup a označení hlavního uzávěru plynu", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 19, text: "Přístup a označení hlavního vypínače elektrické energie", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 20, text: "Skladování hořlavého materiálu v blízkosti rozvaděčů – min. vzdálenost 80 cm + značení rozvaděče", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 21, text: "Značení potrubí – zejména technické plyny, zemní plyn", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 22, text: "Evidence a revize / kontroly elektro spotřebičů a prodlužovacích přívodů (namátkový výběr)", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 23, text: "Revize elektro instalací", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 24, text: "Revize hromosvodu", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 25, text: "Revize plynu – spotřebiče a potrubí", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 26, text: "Provádění údržby strojů a zařízení (namátková kontrola údržbových plánů, provozní dokumentace a fyzický stav)", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 27, text: "Umístění a stav ostatního požárního značení – elektro rozvaděče, hlavního uzávěru, značení na vstupu do objektu", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." }
+];
+
+export const CHECKLIST_PBOZP: ChecklistPoint[] = [
+  { id: 1, text: "Je volný přístup / komunikace k pracovišti?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 2, text: "Používá zaměstnanec osobní ochranné pracovní prostředky?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 3, text: "Je pracovní prostor zaměstnance uklizený / nezasahují žádné předměty / materiál?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 4, text: "Jsou používané pracovní prostředky / nářadí / stroje vizuálně bez vadné?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 5, text: "Je na pracovišti dostatek světla?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 6, text: "Je pracoviště vybaveno bezpečnostním značením a je bez závad?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 7, text: "Je skladování materiálu na pracovišti prováděno dle bezpečnostních zásad?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 8, text: "Jsou-li používány NCHLaS, je s nimi bezpečně manipulováno a ukládány?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 9, text: "Jsou na pracovišti lékárničky, obsah je kompletní a bez závad?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
+  { id: 10, text: "Jsou volné únikové komunikace a východy?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." }
 ];
