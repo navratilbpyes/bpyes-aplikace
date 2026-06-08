@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useData } from "@/components/data-provider";
@@ -24,7 +23,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { generateRecordNumber, cn } from "@/app/lib/utils";
-import { CHECKLIST_SECTIONS, ChecklistSection, ChecklistPoint } from "./checklist-data";
+// Pridany importy novych seznamu z vaseho souboru
+import { CHECKLIST_SECTIONS, CHECKLIST_PPP, CHECKLIST_PBOZP, ChecklistSection, ChecklistPoint } from "./checklist-data";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
 import { KontrolniBod, Zavada } from "@/app/lib/types";
@@ -78,7 +78,15 @@ export default function NewInspectionPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [formData.klientId]);
 
-  const totalPoints = CHECKLIST_SECTIONS.reduce((acc, s) => acc + s.points.length, 0);
+  // Dynamicky vypocet poctu otazek podle vybraneho typu kontroly
+  const currentChecklistFlat = useMemo(() => {
+    if (formData.typKontroly === 'PPP') return CHECKLIST_PPP || [];
+    if (formData.typKontroly === 'PBOZP') return CHECKLIST_PBOZP || [];
+    if (formData.typKontroly === 'BOZPaPO') return CHECKLIST_SECTIONS.flatMap(s => s.points);
+    return [];
+  }, [formData.typKontroly]);
+
+  const totalPoints = currentChecklistFlat.length > 0 ? currentChecklistFlat.length : 1;
   const answeredPoints = Object.keys(checklist).length;
   const progressPercent = Math.round((answeredPoints / totalPoints) * 100);
 
@@ -89,9 +97,9 @@ export default function NewInspectionPage() {
       N: vals.filter(v => v.hodnoceni === 'N').length,
       NA: vals.filter(v => v.hodnoceni === 'NA').length,
       NK: vals.filter(v => v.hodnoceni === 'NK').length,
-      unfilled: totalPoints - answeredPoints
+      unfilled: currentChecklistFlat.length - answeredPoints
     };
-  }, [checklist, totalPoints, answeredPoints]);
+  }, [checklist, currentChecklistFlat.length, answeredPoints]);
 
   const handleRatingChange = (point: ChecklistPoint, rating: 'V' | 'N' | 'NA' | 'NK') => {
     let text = "";
@@ -184,6 +192,141 @@ export default function NewInspectionPage() {
     localStorage.removeItem('bpyes_draft_kontrola');
     toast({ title: isDraft ? "Uloženo jako koncept" : "Záznam vytvořen", description: `Kontrola ${newRecord.cislo} byla úspěšně založena.` });
     router.push(`/zaznamy/${newRecord.id}`);
+  };
+
+  // Univerzalni komponenta pro vykresleni jednoho bodu checklistu
+  const renderPoint = (point: ChecklistPoint) => {
+    const state = checklist[point.id];
+    const defect = pointDefects[point.id];
+    
+    return (
+      <div key={point.id} className="pt-8 first:pt-0 space-y-4">
+        <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+          <div className="flex gap-3 flex-1">
+            <span className="font-mono text-muted-foreground font-bold">{point.id}.</span>
+            <p className="font-medium text-[15px]">{point.text}</p>
+          </div>
+          
+          <div className="grid grid-cols-4 gap-1 w-full md:w-auto">
+            {[
+              { label: 'V', rating: 'V', color: 'bg-green-100 text-green-700 hover:bg-green-200 border-green-200 data-[state=active]:bg-green-600 data-[state=active]:text-white' },
+              { label: 'N', rating: 'N', color: 'bg-red-100 text-red-700 hover:bg-red-200 border-red-200 data-[state=active]:bg-red-600 data-[state=active]:text-white' },
+              { label: 'NA', rating: 'NA', color: 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200 data-[state=active]:bg-gray-600 data-[state=active]:text-white' },
+              { label: 'NK', rating: 'NK', color: 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200 data-[state=active]:bg-gray-600 data-[state=active]:text-white' }
+            ].map((btn) => (
+              <Button
+                key={btn.label}
+                variant="outline"
+                data-state={state?.hodnoceni === btn.rating ? 'active' : 'inactive'}
+                className={cn("h-12 min-w-[50px] font-bold shadow-none transition-all", btn.color)}
+                onClick={() => handleRatingChange(point, btn.rating as any)}
+              >
+                {btn.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {state?.hodnoceni && state.hodnoceni !== 'NA' && (
+          <div className="space-y-4 ml-8 animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="space-y-2">
+              <Label className="text-xs uppercase text-muted-foreground">Text hodnocení</Label>
+              <Textarea 
+                value={state.textHodnoceni} 
+                onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], textHodnoceni: e.target.value }}))}
+                className="min-h-[80px]"
+              />
+            </div>
+
+            {state.hodnoceni === 'N' && (
+              <div className="p-4 bg-amber-50 rounded-lg border border-amber-200 space-y-4 shadow-inner">
+                <div className="flex items-center gap-2 text-amber-800 font-bold text-sm uppercase">
+                  <AlertTriangle className="h-4 w-4" />
+                  Definice závady
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs">Popis závady</Label>
+                    <Textarea 
+                      value={defect?.popis} 
+                      onChange={(e) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], popis: e.target.value }}))}
+                      placeholder="Popište zjištěný nedostatek..."
+                      className="bg-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Návrh opatření</Label>
+                    <Textarea 
+                      value={defect?.navrhOpatreni} 
+                      onChange={(e) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], navrhOpatreni: e.target.value }}))}
+                      placeholder="Navrhněte řešení..."
+                      className="bg-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Termín odstranění</Label>
+                    <Input 
+                      type="date"
+                      value={defect?.terminOdstraneni} 
+                      onChange={(e) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], terminOdstraneni: e.target.value }}))}
+                      className="bg-white h-11"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Odpovědná osoba</Label>
+                    <div className="flex gap-2">
+                      <Select 
+                        value={defect?.odpovednaOsoba} 
+                        onValueChange={(v) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], odpovednaOsoba: v }}))}
+                      >
+                        <SelectTrigger className="bg-white h-11">
+                          <SelectValue placeholder="Vyberte osobu" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {selectedKlient?.odpovedneOsoby.map(o => (
+                            <SelectItem key={o.id} value={`${o.jmeno} ${o.prijmeni}`}>{o.jmeno} {o.prijmeni} ({o.pozice})</SelectItem>
+                          ))}
+                          <SelectItem value="manual">-- Zadat manuálně --</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              {!state.poznamka && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: " " }}))}
+                  className="text-muted-foreground"
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Poznámka
+                </Button>
+              )}
+              {state.poznamka && (
+                <div className="flex-1 space-y-2">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                    <StickyNote className="h-3 w-3" />
+                    Interní poznámka
+                  </Label>
+                  <Textarea 
+                    value={state.poznamka} 
+                    onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: e.target.value }}))}
+                    placeholder="Libovolný doprovodný text k bodu..."
+                    className="bg-muted/30"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -311,157 +454,54 @@ export default function NewInspectionPage() {
           <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm pb-4 border-b">
             <div className="flex justify-between items-center">
               <h2 className="font-bold text-lg">Průběh auditování</h2>
-              <Badge variant="secondary">Typ: {formData.typKontroly}</Badge>
+              <span className="px-3 py-1 rounded-full bg-secondary text-secondary-foreground text-xs font-bold">
+                Typ: {formData.typKontroly}
+              </span>
             </div>
           </div>
 
-          <Accordion type="single" collapsible className="space-y-4" defaultValue="A">
-            {CHECKLIST_SECTIONS.map((section) => (
-              <AccordionItem key={section.id} value={section.id} className="border rounded-lg bg-white overflow-hidden shadow-sm">
-                <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50">
-                  <div className="flex flex-col items-start gap-1">
-                    <span className="text-xs font-bold uppercase text-muted-foreground">Oddíl {section.id}</span>
-                    <span className="text-base font-bold">{section.title}</span>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent className="px-6 pb-6 space-y-8 pt-4 divide-y">
-                  {section.points.map((point) => {
-                    const state = checklist[point.id];
-                    const defect = pointDefects[point.id];
-                    
-                    return (
-                      <div key={point.id} className="pt-8 first:pt-0 space-y-4">
-                        <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-                          <div className="flex gap-3 flex-1">
-                            <span className="font-mono text-muted-foreground font-bold">{point.id}.</span>
-                            <p className="font-medium text-[15px]">{point.text}</p>
-                          </div>
-                          
-                          <div className="grid grid-cols-4 gap-1 w-full md:w-auto">
-                            {[
-                              { label: 'V', rating: 'V', color: 'bg-green-100 text-green-700 hover:bg-green-200 border-green-200 data-[state=active]:bg-green-600 data-[state=active]:text-white' },
-                              { label: 'N', rating: 'N', color: 'bg-red-100 text-red-700 hover:bg-red-200 border-red-200 data-[state=active]:bg-red-600 data-[state=active]:text-white' },
-                              { label: 'NA', rating: 'NA', color: 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200 data-[state=active]:bg-gray-600 data-[state=active]:text-white' },
-                              { label: 'NK', rating: 'NK', color: 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200 data-[state=active]:bg-gray-600 data-[state=active]:text-white' }
-                            ].map((btn) => (
-                              <Button
-                                key={btn.label}
-                                variant="outline"
-                                data-state={state?.hodnoceni === btn.rating ? 'active' : 'inactive'}
-                                className={cn("h-12 min-w-[50px] font-bold shadow-none transition-all", btn.color)}
-                                onClick={() => handleRatingChange(point, btn.rating as any)}
-                              >
-                                {btn.label}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
+          {/* Zobrazeni pro komplexni BOZPaPO (se sekcemi A-T) */}
+          {formData.typKontroly === 'BOZPaPO' && (
+            <Accordion type="single" collapsible className="space-y-4" defaultValue="A">
+              {CHECKLIST_SECTIONS.map((section) => (
+                <AccordionItem key={section.id} value={section.id} className="border rounded-lg bg-white overflow-hidden shadow-sm">
+                  <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50">
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="text-xs font-bold uppercase text-muted-foreground">Oddíl {section.id}</span>
+                      <span className="text-base font-bold">{section.title}</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-6 pb-6 space-y-8 pt-4 divide-y">
+                    {section.points.map(renderPoint)}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          )}
 
-                        {state?.hodnoceni && state.hodnoceni !== 'NA' && (
-                          <div className="space-y-4 ml-8 animate-in fade-in slide-in-from-top-2 duration-300">
-                            <div className="space-y-2">
-                              <Label className="text-xs uppercase text-muted-foreground">Text hodnocení</Label>
-                              <Textarea 
-                                value={state.textHodnoceni} 
-                                onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], textHodnoceni: e.target.value }}))}
-                                className="min-h-[80px]"
-                              />
-                            </div>
+          {/* Zobrazeni pro Preventivni pozarni prohlidku (PPP) */}
+          {formData.typKontroly === 'PPP' && (
+            <div className="border rounded-lg bg-white overflow-hidden shadow-sm">
+              <div className="px-6 py-4 bg-muted/10 border-b">
+                <span className="text-base font-bold">Kontrolní list - Preventivní požární prohlídka</span>
+              </div>
+              <div className="px-6 pb-6 space-y-8 pt-4 divide-y">
+                {CHECKLIST_PPP.map(renderPoint)}
+              </div>
+            </div>
+          )}
 
-                            {state.hodnoceni === 'N' && (
-                              <div className="p-4 bg-amber-50 rounded-lg border border-amber-200 space-y-4 shadow-inner">
-                                <div className="flex items-center gap-2 text-amber-800 font-bold text-sm uppercase">
-                                  <AlertTriangle className="h-4 w-4" />
-                                  Definice závady
-                                </div>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <div className="space-y-2">
-                                    <Label className="text-xs">Popis závady</Label>
-                                    <Textarea 
-                                      value={defect?.popis} 
-                                      onChange={(e) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], popis: e.target.value }}))}
-                                      placeholder="Popište zjištěný nedostatek..."
-                                      className="bg-white"
-                                    />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label className="text-xs">Návrh opatření</Label>
-                                    <Textarea 
-                                      value={defect?.navrhOpatreni} 
-                                      onChange={(e) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], navrhOpatreni: e.target.value }}))}
-                                      placeholder="Navrhněte řešení..."
-                                      className="bg-white"
-                                    />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label className="text-xs">Termín odstranění</Label>
-                                    <Input 
-                                      type="date"
-                                      value={defect?.terminOdstraneni} 
-                                      onChange={(e) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], terminOdstraneni: e.target.value }}))}
-                                      className="bg-white h-11"
-                                    />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label className="text-xs">Odpovědná osoba</Label>
-                                    <div className="flex gap-2">
-                                      <Select 
-                                        value={defect?.odpovednaOsoba} 
-                                        onValueChange={(v) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], odpovednaOsoba: v }}))}
-                                      >
-                                        <SelectTrigger className="bg-white h-11">
-                                          <SelectValue placeholder="Vyberte osobu" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {selectedKlient?.odpovedneOsoby.map(o => (
-                                            <SelectItem key={o.id} value={`${o.jmeno} ${o.prijmeni}`}>{o.jmeno} {o.prijmeni} ({o.pozice})</SelectItem>
-                                          ))}
-                                          <SelectItem value="manual">-- Zadat manuálně --</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            <div className="flex items-center gap-2">
-                              {!state.poznamka && (
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  onClick={() => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: " " }}))}
-                                  className="text-muted-foreground"
-                                >
-                                  <Plus className="h-3 w-3 mr-1" />
-                                  Poznámka
-                                </Button>
-                              )}
-                              {state.poznamka && (
-                                <div className="flex-1 space-y-2">
-                                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <StickyNote className="h-3 w-3" />
-                                    Interní poznámka
-                                  </Label>
-                                  <Textarea 
-                                    value={state.poznamka} 
-                                    onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: e.target.value }}))}
-                                    placeholder="Libovolný doprovodný text k bodu..."
-                                    className="bg-muted/30"
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
+          {/* Zobrazeni pro Proverku BOZP pracoviste (PBOZP) */}
+          {formData.typKontroly === 'PBOZP' && (
+            <div className="border rounded-lg bg-white overflow-hidden shadow-sm">
+              <div className="px-6 py-4 bg-muted/10 border-b">
+                <span className="text-base font-bold">Kontrolní list - Prověrka BOZP pracoviště</span>
+              </div>
+              <div className="px-6 pb-6 space-y-8 pt-4 divide-y">
+                {CHECKLIST_PBOZP.map(renderPoint)}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -470,156 +510,4 @@ export default function NewInspectionPage() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <Card className="p-4 flex flex-col items-center gap-1 border-green-200 bg-green-50">
               <span className="text-2xl font-bold text-green-700">{stats.V}</span>
-              <span className="text-[10px] uppercase font-bold text-green-600">Vyhovuje</span>
-            </Card>
-            <Card className="p-4 flex flex-col items-center gap-1 border-red-200 bg-red-50">
-              <span className="text-2xl font-bold text-red-700">{stats.N}</span>
-              <span className="text-[10px] uppercase font-bold text-red-600">Nevyhovuje</span>
-            </Card>
-            <Card className="p-4 flex flex-col items-center gap-1 border-gray-200 bg-gray-50">
-              <span className="text-2xl font-bold text-gray-700">{stats.NA}</span>
-              <span className="text-[10px] uppercase font-bold text-gray-600">Neaplikováno</span>
-            </Card>
-            <Card className="p-4 flex flex-col items-center gap-1 border-gray-200 bg-gray-50">
-              <span className="text-2xl font-bold text-gray-700">{stats.NK}</span>
-              <span className="text-[10px] uppercase font-bold text-gray-600">Nekontrolováno</span>
-            </Card>
-            <Card className="p-4 flex flex-col items-center gap-1 border-amber-200 bg-amber-50">
-              <span className="text-2xl font-bold text-amber-700">{stats.unfilled}</span>
-              <span className="text-[10px] uppercase font-bold text-amber-600">Nevyplněno</span>
-            </Card>
-          </div>
-
-          <Card className="border-none shadow-sm">
-            <CardHeader>
-              <CardTitle>Generované závady ({stats.N})</CardTitle>
-              <CardDescription>Tyto body budou automaticky zahrnuty v auditní zprávě.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {Object.entries(pointDefects).filter(([id]) => checklist[Number(id)]?.hodnoceni === 'N').map(([id, defect]) => (
-                <div key={id} className="p-4 border rounded-lg flex items-start gap-4 hover:bg-muted/20 transition-colors">
-                  <div className="bg-red-600 text-white font-mono text-xs h-6 w-6 rounded-full flex items-center justify-center shrink-0 mt-1">
-                    {id}
-                  </div>
-                  <div className="flex-1 space-y-2">
-                    <p className="font-bold">{defect.popis}</p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <CalendarIcon className="h-3 w-3" />
-                        {defect.terminOdstraneni ? new Date(defect.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neuvedeno'}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <UserIcon className="h-3 w-3" />
-                        {defect.odpovednaOsoba || 'Neuvedena'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              
-              {stats.N === 0 && (
-                <div className="py-12 text-center text-muted-foreground italic">
-                  Nebyly zjištěny žádné systémové závady.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-none shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Ostatní závady</CardTitle>
-                <CardDescription>Závady zjištěné nad rámec checklistu.</CardDescription>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => setManualDefects(prev => [...prev, {
-                popis: '',
-                navrhOpatreni: '',
-                terminOdstraneni: new Date().toISOString().split('T')[0],
-                odpovednaOsoba: ''
-              }])}>
-                <Plus className="h-4 w-4 mr-1" />
-                Přidat závadu
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {manualDefects.map((def, idx) => (
-                <div key={idx} className="p-6 border rounded-lg space-y-4 relative">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="absolute top-2 right-2 text-muted-foreground"
-                    onClick={() => setManualDefects(prev => prev.filter((_, i) => i !== idx))}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Popis závady</Label>
-                      <Textarea 
-                        value={def.popis} 
-                        onChange={(e) => {
-                          const next = [...manualDefects];
-                          next[idx].popis = e.target.value;
-                          setManualDefects(next);
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Návrh opatření</Label>
-                      <Textarea 
-                        value={def.navrhOpatreni} 
-                        onChange={(e) => {
-                          const next = [...manualDefects];
-                          next[idx].navrhOpatreni = e.target.value;
-                          setManualDefects(next);
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {manualDefects.length === 0 && (
-                <div className="py-12 text-center text-muted-foreground italic">
-                  Žádné dodatečné závady nebyly přidány.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Persistent Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 z-50 flex justify-center">
-        <div className="max-w-5xl w-full flex justify-between items-center px-4 md:px-8">
-          <Button 
-            variant="ghost" 
-            disabled={step === 1} 
-            onClick={() => {
-              setStep(s => s - 1);
-              window.scrollTo(0, 0);
-            }}
-            className="h-11 px-6"
-          >
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Zpět
-          </Button>
-          
-          <div className="flex gap-2">
-            {step === 3 && (
-              <Button variant="outline" className="h-11 px-6" onClick={() => handleFinish(true)}>
-                Uložit jako koncept
-              </Button>
-            )}
-            <Button 
-              onClick={step === 3 ? () => handleFinish(false) : handleNext}
-              className="h-11 px-8 shadow-sm"
-            >
-              {step === 3 ? "Uzavřít záznam" : "Pokračovat"}
-              {step !== 3 && <ChevronRight className="ml-2 h-4 w-4" />}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+              <span className="text-[10px]
