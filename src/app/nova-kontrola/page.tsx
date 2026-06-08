@@ -39,7 +39,8 @@ export default function NewInspectionPage() {
     pracovisteId: '',
     typKontroly: '' as 'BOZPaPO' | 'PPP' | 'PBOZP',
     datum: new Date().toISOString().split('T')[0],
-    ucastnici: [{ jmeno: '', pozice: '' }]
+    ucastnici: [{ jmeno: '', pozice: '' }],
+    poznamka: ''
   });
 
   const [checklist, setChecklist] = useState<Record<number, KontrolniBod>>({});
@@ -79,11 +80,11 @@ export default function NewInspectionPage() {
 
   // Dynamicky vypocet poctu otazek podle vybraneho typu kontroly
   const currentChecklistFlat = useMemo(() => {
-  if (formData.typKontroly === 'PPP') return CHECKLIST_PPP || [];
-  if (formData.typKontroly === 'PBOZP') return CHECKLIST_PBOZP || [];
-  if (formData.typKontroly === 'BOZPaPO') return CHECKLIST_SECTIONS.flatMap(s => s.points);
-  return [];
-}, [formData.typKontroly]);
+    if (formData.typKontroly === 'PPP') return CHECKLIST_PPP || [];
+    if (formData.typKontroly === 'PBOZP') return CHECKLIST_PBOZP || [];
+    if (formData.typKontroly === 'BOZPaPO') return CHECKLIST_SECTIONS.flatMap(s => s.points);
+    return [];
+  }, [formData.typKontroly]);
 
   const totalPoints = currentChecklistFlat.length > 0 ? currentChecklistFlat.length : 1;
   const answeredPoints = Object.keys(checklist).length;
@@ -99,8 +100,8 @@ export default function NewInspectionPage() {
       unfilled: currentChecklistFlat.length - answeredPoints
     };
   }, [checklist, currentChecklistFlat.length, answeredPoints]);
-  
-// Pomocná funkce pro inteligentní AI návrhy textů na základě klíčových slov
+
+  // Pomocná funkce pro inteligentní AI návrhy textů na základě klíčových slov
   const ziskatAINavrh = (bodText: string, pole: 'popis' | 'opatreni') => {
     const txt = bodText.toLowerCase();
     if (pole === 'popis') {
@@ -120,8 +121,8 @@ export default function NewInspectionPage() {
       if (txt.includes('oopp')) return "Zajistit důslednou kontrolu používání OOPP vedoucími pracovníky a provést mimořádné poučení zaměstnanců.";
       return "Zjednat nápravu, odstranit zjištěné neshody a uvést stav pracoviště do souladu s platnými právními předpisy ČR.";
     }
-  };  
-  
+  };
+
   const handleRatingChange = (point: ChecklistPoint, rating: 'V' | 'N' | 'NA' | 'NK') => {
     let text = "";
     if (rating === 'V') text = "Bez zjištěných závad.";
@@ -211,7 +212,7 @@ export default function NewInspectionPage() {
 
     setZaznamy(prev => [...prev, newRecord as any]);
     localStorage.removeItem('bpyes_draft_kontrola');
-    toast({ title: isDraft ? "Uloženo jako koncept" : "Záznam vytvořen", description: `Kontrola ${newRecord.cislo} byla úspěšně založena.` });
+    toast({ title: isDraft ? "Uloženo jako otevřené" : "Záznam vytvořen", description: `Kontrola ${newRecord.cislo} byla úspěšně založena.` });
     router.push(`/zaznamy/${newRecord.id}`);
   };
 
@@ -332,6 +333,7 @@ export default function NewInspectionPage() {
                     </Select>
                   </div>
                 </div>
+              </div>
             )}
 
             <div className="flex items-center gap-2">
@@ -400,7 +402,171 @@ export default function NewInspectionPage() {
       </div>
 
       {step === 1 && (
-        {/* NOVÁ SEKCE: Celkové doporučení auditu (Bod 2) */}
+        <Card className="border-none shadow-sm">
+          <CardHeader>
+            <CardTitle>Základní parametry kontroly</CardTitle>
+            <CardDescription>Vyberte klienta, pracoviště a typ kontroly pro zahájení procesu.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label>Klient</Label>
+                <Select value={formData.klientId} onValueChange={(v) => setFormData({...formData, klientId: v, pracovisteId: ''})}>
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="Vyberte klienta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {klienti.map(k => <SelectItem key={k.id} value={k.id}>{k.nazev}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Pracoviště</Label>
+                <Select 
+                  disabled={!formData.klientId} 
+                  value={formData.pracovisteId} 
+                  onValueChange={(v) => setFormData({...formData, pracovisteId: v})}
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="Vyberte pracoviště" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selectedKlient?.pracoviste.map(p => <SelectItem key={p.id} value={p.id}>{p.nazev}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label>Typ kontroly</Label>
+                <Select value={formData.typKontroly} onValueChange={(v: any) => setFormData({...formData, typKontroly: v})}>
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="Zvolte typ kontroly" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="BOZPaPO">BOZPaPO — Prověrka / audit BOZP a PO</SelectItem>
+                    <SelectItem value="PPP">PPP — Preventivní požární prohlídka</SelectItem>
+                    <SelectItem value="PBOZP">PBOZP — Prověrka BOZP pracoviště</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Datum kontroly</Label>
+                <Input type="date" className="h-11" value={formData.datum} onChange={(e) => setFormData({...formData, datum: e.target.value})} />
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-4 border-t">
+              <div className="flex justify-between items-center">
+                <Label>Účastníci kontroly</Label>
+                <Button variant="ghost" size="sm" onClick={() => setFormData({...formData, ucastnici: [...formData.ucastnici, {jmeno: '', pozice: ''}]})}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Přidat řádek
+                </Button>
+              </div>
+              {formData.ucastnici.map((u, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input placeholder="Jméno a příjmení" value={u.jmeno} onChange={(e) => {
+                    const next = [...formData.ucastnici];
+                    next[i].jmeno = e.target.value;
+                    setFormData({...formData, ucastnici: next});
+                  }} />
+                  <Input placeholder="Pozice" value={u.pozice} onChange={(e) => {
+                    const next = [...formData.ucastnici];
+                    next[i].pozice = e.target.value;
+                    setFormData({...formData, ucastnici: next});
+                  }} />
+                  {formData.ucastnici.length > 1 && (
+                    <Button variant="ghost" size="icon" onClick={() => setFormData({...formData, ucastnici: formData.ucastnici.filter((_, idx) => idx !== i)})}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-6">
+          <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm pb-4 border-b">
+            <div className="flex justify-between items-center">
+              <h2 className="font-bold text-lg">Průběh auditování</h2>
+              <span className="px-3 py-1 rounded-full bg-secondary text-secondary-foreground text-xs font-bold">
+                Typ: {formData.typKontroly}
+              </span>
+            </div>
+          </div>
+
+          {formData.typKontroly === 'BOZPaPO' && (
+            <Accordion type="single" collapsible className="space-y-4" defaultValue="A">
+              {CHECKLIST_SECTIONS.map((section) => (
+                <AccordionItem key={section.id} value={section.id} className="border rounded-lg bg-white overflow-hidden shadow-sm">
+                  <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50">
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="text-xs font-bold uppercase text-muted-foreground">Oddíl {section.id}</span>
+                      <span className="text-base font-bold">{section.title}</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-6 pb-6 space-y-8 pt-4 divide-y">
+                    {section.points.map(renderPoint)}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          )}
+
+          {formData.typKontroly === 'PPP' && (
+            <div className="border rounded-lg bg-white overflow-hidden shadow-sm">
+              <div className="px-6 py-4 bg-muted/10 border-b">
+                <span className="text-base font-bold">Kontrolní list - Preventivní požární prohlídka</span>
+              </div>
+              <div className="px-6 pb-6 space-y-8 pt-4 divide-y">
+                {CHECKLIST_PPP.map(renderPoint)}
+              </div>
+            </div>
+          )}
+
+          {formData.typKontroly === 'PBOZP' && (
+            <div className="border rounded-lg bg-white overflow-hidden shadow-sm">
+              <div className="px-6 py-4 bg-muted/10 border-b">
+                <span className="text-base font-bold">Kontrolní list - Prověrka BOZP pracoviště</span>
+              </div>
+              <div className="px-6 pb-6 space-y-8 pt-4 divide-y">
+                {CHECKLIST_PBOZP.map(renderPoint)}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="space-y-8">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <Card className="p-4 flex flex-col items-center gap-1 border-green-200 bg-green-50">
+              <span className="text-2xl font-bold text-green-700">{stats.V}</span>
+              <span className="text-[10px] uppercase font-bold text-green-600">Vyhovuje</span>
+            </Card>
+            <Card className="p-4 flex flex-col items-center gap-1 border-red-200 bg-red-50">
+              <span className="text-2xl font-bold text-red-700">{stats.N}</span>
+              <span className="text-[10px] uppercase font-bold text-red-600">Nevyhovuje</span>
+            </Card>
+            <Card className="p-4 flex flex-col items-center gap-1 border-gray-200 bg-gray-50">
+              <span className="text-2xl font-bold text-gray-700">{stats.NA}</span>
+              <span className="text-[10px] uppercase font-bold text-gray-600">Neaplikováno</span>
+            </Card>
+            <Card className="p-4 flex flex-col items-center gap-1 border-gray-200 bg-gray-50">
+              <span className="text-2xl font-bold text-gray-700">{stats.NK}</span>
+              <span className="text-[10px] uppercase font-bold text-gray-600">Nekontrolováno</span>
+            </Card>
+            <Card className="p-4 flex flex-col items-center gap-1 border-amber-200 bg-amber-50">
+              <span className="text-2xl font-bold text-amber-700">{stats.unfilled}</span>
+              <span className="text-[10px] uppercase font-bold text-amber-600">Nevyplněno</span>
+            </Card>
+          </div>
+
           <Card className="border-none shadow-sm">
             <CardHeader>
               <CardTitle>Závěrečné hodnocení a doporučení</CardTitle>
@@ -410,12 +576,47 @@ export default function NewInspectionPage() {
               <Textarea 
                 placeholder="Napište celkové zhodnocení prověrky/prohlídky..." 
                 className="min-h-[120px] bg-white"
+                value={formData.poznamka}
                 onChange={(e) => setFormData(prev => ({ ...prev, poznamka: e.target.value }))}
               />
             </CardContent>
           </Card>
 
-          {/* OPRAVENÁ SEKCE: Ostatní závady s kompletními poli (Bod 3) */}
+          <Card className="border-none shadow-sm">
+            <CardHeader>
+              <CardTitle>Generované závady ({stats.N})</CardTitle>
+              <CardDescription>Tyto body budou automaticky zahrnuty v auditní zprávě.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {Object.entries(pointDefects).filter(([id]) => checklist[Number(id)]?.hodnoceni === 'N').map(([id, defect]) => (
+                <div key={id} className="p-4 border rounded-lg flex items-start gap-4 hover:bg-muted/20 transition-colors">
+                  <div className="bg-red-600 text-white font-mono text-xs h-6 w-6 rounded-full flex items-center justify-center shrink-0 mt-1">
+                    {id}
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <p className="font-bold">{defect.popis}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <CalendarIcon className="h-3 w-3" />
+                        {defect.terminOdstraneni ? new Date(defect.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neuvedeno'}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <UserIcon className="h-3 w-3" />
+                        {defect.odpovednaOsoba || 'Neuvedena'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              
+              {stats.N === 0 && (
+                <div className="py-12 text-center text-muted-foreground italic">
+                  Nebyly zjištěny žádné systémové závady.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card className="border-none shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
@@ -515,7 +716,6 @@ export default function NewInspectionPage() {
         </div>
       )}
 
-      {/* Spodní navigace - OPRAVA STAVU: Záznam se ukládá jako otevřený pro editaci (Bod 4) */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 z-50 flex justify-center">
         <div className="max-w-5xl w-full flex justify-between items-center px-4 md:px-8">
           <Button 
@@ -538,7 +738,7 @@ export default function NewInspectionPage() {
               </Button>
             )}
             <Button 
-              onClick={step === 3 ? () => handleFinish(true) : handleNext} // handleFinish(true) zajistí stav 'otevreny'
+              onClick={step === 3 ? () => handleFinish(true) : handleNext}
               className="h-11 px-8 shadow-sm"
             >
               {step === 3 ? "Uložit a dokončit" : "Pokračovat"}
