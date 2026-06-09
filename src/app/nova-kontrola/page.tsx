@@ -37,12 +37,11 @@ interface TypickaZavada {
   opatreni: string;
 }
 
-// Rozšířený stav pro formulář jedné závady (sjednocuje všechny naše novinky)
+// Rozšířený stav pro formulář jedné závady (již bez doporučení, to je přesunuto k bodu)
 interface DefectFormState {
   uid: string;
   popis: string;
   navrhOpatreni: string;
-  doporuceni: string;
   terminOdstraneni: string;
   odpovednaOsoba: string;
   odpovednaOsobaManualni: string;
@@ -59,7 +58,6 @@ const createEmptyDefect = (defaultPerson: string = ""): DefectFormState => ({
   uid: Math.random().toString(36).substring(7),
   popis: "",
   navrhOpatreni: "",
-  doporuceni: "",
   terminOdstraneni: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
   odpovednaOsoba: defaultPerson,
   odpovednaOsobaManualni: "",
@@ -107,10 +105,8 @@ export default function NewInspectionPage() {
     poznamka: ''
   });
 
-  const [checklist, setChecklist] = useState<Record<number, KontrolniBod>>({});
-  // Změněno na pole: Každý bod může mít X závad
+  const [checklist, setChecklist] = useState<Record<number, KontrolniBod & { foto?: string, doporuceni?: string, showDoporuceni?: boolean }>>({});
   const [pointDefects, setPointDefects] = useState<Record<number, DefectFormState[]>>({});
-  const [manualDefects, setManualDefects] = useState<DefectFormState[]>([]);
   const [googleZavady, setGoogleZavady] = useState<Record<string, Record<number, TypickaZavada[]>>>({});
   const [customPoints, setCustomPoints] = useState<ChecklistPoint[]>([]);
 
@@ -163,12 +159,12 @@ export default function NewInspectionPage() {
     const interval = setInterval(() => {
       if (formData.klientId) {
         localStorage.setItem('bpyes_draft_kontrola', JSON.stringify({
-          formData, checklist, pointDefects, manualDefects, customPoints
+          formData, checklist, pointDefects, customPoints
         }));
       }
     }, 30000);
     return () => clearInterval(interval);
-  }, [formData, checklist, pointDefects, manualDefects, customPoints]);
+  }, [formData, checklist, pointDefects, customPoints]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -207,7 +203,6 @@ export default function NewInspectionPage() {
     if (rating === 'NK') text = "V rámci prověrky, prohlídky nebo auditu nebyla tato část kontrolována.";
     if (rating === 'N') {
       text = point.nText || "Zjištěn nedostatek. Je nutné zjednat nápravu.";
-      // Pokud tam ještě nejsou závady, vytvoříme první
       setPointDefects(prev => ({
         ...prev,
         [point.id]: prev[point.id] && prev[point.id].length > 0 ? prev[point.id] : [createEmptyDefect(selectedKlient?.kontaktOsoba)]
@@ -217,28 +212,19 @@ export default function NewInspectionPage() {
     setChecklist(prev => ({
       ...prev,
       [point.id]: {
+        ...(prev[point.id] || {}), // Zachová případné D (Doporučení)
         bod: point.id,
         hodnoceni: rating,
         textHodnoceni: text,
-        poznamka: prev[point.id]?.poznamka
       }
     }));
   };
 
-  // Helpery pro bezpečný update stavu složitých polí
   const updateDefect = (pointId: number, index: number, field: keyof DefectFormState, value: any) => {
     setPointDefects(prev => {
       const arr = [...(prev[pointId] || [])];
       arr[index] = { ...arr[index], [field]: value };
       return { ...prev, [pointId]: arr };
-    });
-  };
-
-  const updateManualDefect = (index: number, field: keyof DefectFormState, value: any) => {
-    setManualDefects(prev => {
-      const next = [...prev];
-      next[index] = { ...next[index], [field]: value };
-      return next;
     });
   };
 
@@ -263,7 +249,7 @@ export default function NewInspectionPage() {
       cislo: defectCounter++,
       bodKontroly: pointId,
       popis: def.popis || "",
-      navrhOpatreni: def.doporuceni ? `${def.navrhOpatreni}\n\nDOPORUČENÍ: ${def.doporuceni}` : (def.navrhOpatreni || ""),
+      navrhOpatreni: def.navrhOpatreni || "",
       terminOdstraneni: def.terminOdstraneni || "",
       odpovednaOsoba: def.odpovednaOsoba === 'manual' ? def.odpovednaOsobaManualni : def.odpovednaOsoba,
       stavOdstraneni: def.odstraneno ? 'odstranena' : 'otevrena',
@@ -280,13 +266,11 @@ export default function NewInspectionPage() {
       }
     });
 
-    manualDefects.forEach(def => aggregatedZavady.push(buildZavadaAPI(def)));
-
     const newRecord = {
       id: Math.random().toString(36).substring(7),
       cislo: generateRecordNumber(year, countInYear, formData.typKontroly),
       ...formData,
-      kontrolniBody: Object.values(checklist),
+      kontrolniBody: Object.values(checklist), // Zde se uloží i D (Doporučení), i když je to "V"
       zavady: aggregatedZavady,
       stav: isDraft ? 'otevreny' : 'uzavreny' as any,
       createdAt: new Date().toISOString(),
@@ -299,17 +283,15 @@ export default function NewInspectionPage() {
     router.push(`/zaznamy/${newRecord.id}`);
   };
 
-  const renderDefectForm = (def: DefectFormState, idx: number, pointId: number | null, isManual: boolean) => {
+  const renderDefectForm = (def: DefectFormState, idx: number, pointId: number) => {
     const dostupneZavady = pointId ? (googleZavady[formData.typKontroly]?.[pointId] || []) : [];
-    const updateFn = isManual ? (f: any, v: any) => updateManualDefect(idx, f, v) : (f: any, v: any) => updateDefect(pointId as number, idx, f, v);
-    const removeFn = isManual ? () => setManualDefects(p => p.filter((_, i) => i !== idx)) : () => setPointDefects(p => ({ ...p, [pointId as number]: p[pointId as number].filter((_, i) => i !== idx) }));
-    
-    // Zjistíme, jestli má pointId šablony. Pro volné body to bude prázdné.
+    const updateFn = (f: any, v: any) => updateDefect(pointId, idx, f, v);
+    const removeFn = () => setPointDefects(p => ({ ...p, [pointId]: p[pointId].filter((_, i) => i !== idx) }));
     const ukazatSablony = !!pointId && pointId < 90000;
 
     return (
       <div key={def.uid} className="p-4 bg-white rounded-lg border border-amber-200/60 shadow-sm space-y-5 relative">
-        {(isManual || (pointDefects[pointId as number]?.length > 1)) && (
+        {pointDefects[pointId]?.length > 1 && (
           <Button variant="ghost" size="icon" className="absolute top-2 right-2 text-muted-foreground hover:bg-red-50 hover:text-red-600" onClick={removeFn}>
             <X className="h-4 w-4" />
           </Button>
@@ -365,11 +347,6 @@ export default function NewInspectionPage() {
           <div className="space-y-2">
             <Label className="text-xs">Návrh opatření *</Label>
             <Textarea value={def.navrhOpatreni} onChange={(e) => updateFn('navrhOpatreni', e.target.value)} placeholder="Co je nutné udělat..." className="bg-white min-h-[100px]" />
-          </div>
-
-          <div className="space-y-2 md:col-span-2">
-            <Label className="text-xs text-blue-700 font-semibold">Doporučení auditora (Volitelné)</Label>
-            <Textarea value={def.doporuceni} onChange={(e) => updateFn('doporuceni', e.target.value)} placeholder="Doporučujeme zvážit..." className="bg-blue-50/50 border-blue-200" />
           </div>
 
           <div className="space-y-2">
@@ -475,7 +452,7 @@ export default function NewInspectionPage() {
             )}
           </div>
           
-          <div className="grid grid-cols-4 gap-1 w-full md:w-auto">
+          <div className="grid grid-cols-5 gap-1 w-full md:w-auto">
             {[
               { label: 'V', rating: 'V', color: 'bg-green-100 text-green-700 hover:bg-green-200 border-green-200 data-[state=active]:bg-green-600 data-[state=active]:text-white' },
               { label: 'N', rating: 'N', color: 'bg-red-100 text-red-700 hover:bg-red-200 border-red-200 data-[state=active]:bg-red-600 data-[state=active]:text-white' },
@@ -490,8 +467,38 @@ export default function NewInspectionPage() {
                 {btn.label}
               </Button>
             ))}
+            
+            {/* Tlačítko D - Doporučení (Nezávislý přepínač) */}
+            <Button
+              key="D"
+              variant="outline"
+              data-state={state?.showDoporuceni ? 'active' : 'inactive'}
+              className={cn("h-12 min-w-[50px] font-bold shadow-none transition-all", "bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200 data-[state=active]:bg-blue-600 data-[state=active]:text-white")}
+              onClick={() => setChecklist(prev => ({
+                ...prev,
+                [point.id]: {
+                  ...(prev[point.id] || { bod: point.id, hodnoceni: '' }),
+                  showDoporuceni: !prev[point.id]?.showDoporuceni
+                }
+              }))}
+            >
+              D
+            </Button>
           </div>
         </div>
+
+        {/* Sekce pro Doporučení k celému bodu (zobrazí se po kliknutí na D) */}
+        {state?.showDoporuceni && (
+          <div className="space-y-2 mt-4 ml-8 animate-in fade-in slide-in-from-top-2">
+            <Label className="text-xs text-blue-700 font-semibold">Doporučení auditora k tomuto bodu</Label>
+            <Textarea 
+              value={state.doporuceni || ""} 
+              onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], doporuceni: e.target.value }}))}
+              placeholder="Zde můžete uvést doporučení pro klienta, i když je bod hodnocen jako vyhovující..." 
+              className="bg-blue-50/50 border-blue-200" 
+            />
+          </div>
+        )}
 
         {state?.hodnoceni && state.hodnoceni !== 'NA' && (
           <div className="space-y-4 ml-8 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -502,7 +509,7 @@ export default function NewInspectionPage() {
                 </div>
                 
                 <div className="space-y-6">
-                  {defects.map((def, idx) => renderDefectForm(def, idx, point.id, false))}
+                  {defects.map((def, idx) => renderDefectForm(def, idx, point.id))}
                 </div>
 
                 <Button 
@@ -518,11 +525,11 @@ export default function NewInspectionPage() {
             <div className="flex items-center gap-2">
               {!state.poznamka && (
                 <Button variant="ghost" size="sm" onClick={() => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: " " }}))} className="text-muted-foreground">
-                  <Plus className="h-3 w-3 mr-1" /> Přidat interní poznámku (nebude v závadách)
+                  <Plus className="h-3 w-3 mr-1" /> Přidat interní poznámku (nebude v reportu)
                 </Button>
               )}
               {state.poznamka && (
-                <div className="flex-1 space-y-2">
+                <div className="flex-1 space-y-2 mt-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1"><StickyNote className="h-3 w-3" /> Interní poznámka k hodnocení bodu</Label>
                   <Textarea value={state.poznamka} onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: e.target.value }}))} className="bg-muted/30" />
                 </div>
@@ -703,15 +710,39 @@ export default function NewInspectionPage() {
           </Card>
 
           <Card className="border-none shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div><CardTitle>Ostatní závady</CardTitle><CardDescription>Závady zjištěné absolutně nad rámec jakýchkoliv bodů.</CardDescription></div>
-              <Button variant="outline" size="sm" onClick={() => setManualDefects(prev => [...prev, createEmptyDefect(selectedKlient?.kontaktOsoba)])}>
-                <Plus className="h-4 w-4 mr-1" /> Přidat nezávislou závadu
-              </Button>
+            <CardHeader>
+              <CardTitle>Generované závady ({stats.N})</CardTitle>
+              <CardDescription>Tyto body budou automaticky zahrnuty v auditní zprávě.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {manualDefects.map((def, idx) => renderDefectForm(def, idx, null, true))}
-              {manualDefects.length === 0 && <div className="py-12 text-center text-muted-foreground italic">Žádné dodatečné závady nebyly přidány.</div>}
+            <CardContent className="space-y-4">
+              {Object.entries(pointDefects).filter(([id]) => checklist[Number(id)]?.hodnoceni === 'N').map(([id, defects]) => (
+                defects.map(defect => (
+                  <div key={defect.uid} className="p-4 border rounded-lg flex items-start gap-4 hover:bg-muted/20 transition-colors">
+                    <div className="bg-red-600 text-white font-mono text-xs h-6 w-6 rounded-full flex items-center justify-center shrink-0 mt-1">
+                      {Number(id) > 90000 ? '*' : id}
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <p className="font-bold">{defect.popis}</p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <CalendarIcon className="h-3 w-3" />
+                          {defect.terminOdstraneni ? new Date(defect.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neuvedeno'}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <UserIcon className="h-3 w-3" />
+                          {defect.odpovednaOsoba === 'manual' ? defect.odpovednaOsobaManualni : (defect.odpovednaOsoba || 'Neuvedena')}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ))}
+              
+              {stats.N === 0 && (
+                <div className="py-12 text-center text-muted-foreground italic">
+                  Nebyly zjištěny žádné systémové závady.
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
