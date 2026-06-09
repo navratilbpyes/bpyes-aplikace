@@ -61,7 +61,7 @@ const createEmptyDefect = (): DefectFormState => ({
   odpovednaOsoba: "",
   odpovednaOsobaManualni: "",
   lokalizace: "",
-  zavaznost: "none", // Ošetřeno pro stabilitu UI
+  zavaznost: "none", 
   odstraneno: false,
   datumOdstraneni: "",
   zaznamProvedl: "",
@@ -184,7 +184,7 @@ export default function NewInspectionPage() {
   }, [formData.klientId]);
 
   const currentChecklistFlat = useMemo(() => {
-    let base = [];
+    let base: ChecklistPoint[] = [];
     if (formData.typKontroly === 'PPP') base = CHECKLIST_PPP || [];
     else if (formData.typKontroly === 'PBOZP') base = CHECKLIST_PBOZP || [];
     else if (formData.typKontroly === 'BOZPaPO') base = CHECKLIST_SECTIONS.flatMap(s => s.points);
@@ -250,37 +250,69 @@ export default function NewInspectionPage() {
     const year = new Date(formData.datum).getFullYear();
     const countInYear = zaznamy.filter(z => new Date(z.datum).getFullYear() === year).length + 1;
     
+    // --- START CHIRURGICKÉHO ZÁSAHU PRO MAPOVÁNÍ DAT ---
+    const finalKontrolniBody: any[] = [];
     const aggregatedZavady: Zavada[] = [];
     let defectCounter = 1;
 
-    const buildZavadaAPI = (def: DefectFormState, pointId?: number): Zavada => ({
-      id: def.uid,
-      cislo: defectCounter++,
-      bodKontroly: pointId,
-      popis: def.popis || "",
-      navrhOpatreni: def.navrhOpatreni || "",
-      terminOdstraneni: def.terminOdstraneni || "",
-      odpovednaOsoba: def.odpovednaOsoba === 'manual' ? def.odpovednaOsobaManualni : def.odpovednaOsoba,
-      stavOdstraneni: def.odstraneno ? 'odstranena' : 'otevrena',
-      lokalizace: def.lokalizace,
-      zavaznost: def.zavaznost === 'none' ? "" : def.zavaznost, // Zde ošetřeno vymazání pro API a PDF
-      datumOdstraneni: def.odstraneno ? def.datumOdstraneni : undefined,
-      zaznamProvedl: def.odstraneno ? (def.zaznamProvedl === 'manual' ? def.zaznamProvedlManualni : def.zaznamProvedl) : undefined,
-      foto: def.foto
-    } as any);
+    // Projdeme všechny body z aktuální šablony, abychom znali jejich sekce a texty
+    currentChecklistFlat.forEach(basePoint => {
+      const pointState = checklist[basePoint.id];
+      // Ukládáme jen ty body, které uživatel nějak hodnotil (a odfiltroval si je tím z "Nevyplněno")
+      if (!pointState || !pointState.hodnoceni || pointState.hodnoceni === 'NK') return;
 
-    Object.entries(pointDefects).forEach(([pointId, defects]) => {
-      if (checklist[Number(pointId)]?.hodnoceni === 'N') {
-        defects.forEach(def => aggregatedZavady.push(buildZavadaAPI(def, Number(pointId))));
+      const isDefect = pointState.hodnoceni === 'N';
+      const defectsForThisPoint = pointDefects[basePoint.id] || [];
+      const primaryDefect = isDefect && defectsForThisPoint.length > 0 ? defectsForThisPoint[0] : null;
+
+      // Mapování dat pro Kontrolní bod
+      finalKontrolniBody.push({
+        bod: basePoint.id,
+        otazka: basePoint.text,
+        sekce: basePoint.sekce || basePoint.kategorie || "Ostatní", // Striktní zachování sekce
+        hodnoceni: pointState.hodnoceni,
+        doporuceni: pointState.doporuceni || "",
+        showDoporuceni: pointState.showDoporuceni || false,
+        poznamka: pointState.poznamka || "",
+        // Pokud jde o závadu, vtáhneme sem rovnou údaje z prvního formuláře závady (pro PDF tiskárnu)
+        popis: primaryDefect?.popis || "",
+        navrhOpatreni: primaryDefect?.navrhOpatreni || "",
+        lokalizace: primaryDefect?.lokalizace || "",
+        terminOdstraneni: primaryDefect?.terminOdstraneni || "",
+        odpovednaOsoba: primaryDefect?.odpovednaOsoba === 'manual' ? primaryDefect.odpovednaOsobaManualni : (primaryDefect?.odpovednaOsoba || ""),
+        foto: primaryDefect?.foto || ""
+      });
+
+      // Uložení všech závad do globálního registru (pokud si jich klient naklikal víc pod jeden bod)
+      if (isDefect) {
+        defectsForThisPoint.forEach(def => {
+          aggregatedZavady.push({
+            id: def.uid,
+            cislo: defectCounter++,
+            bodKontroly: basePoint.id,
+            sekce: basePoint.sekce || basePoint.kategorie || "Ostatní", // I závada musí znát svou sekci
+            popis: def.popis || "",
+            navrhOpatreni: def.navrhOpatreni || "",
+            terminOdstraneni: def.terminOdstraneni || "",
+            odpovednaOsoba: def.odpovednaOsoba === 'manual' ? def.odpovednaOsobaManualni : def.odpovednaOsoba,
+            stavOdstraneni: def.odstraneno ? 'odstranena' : 'otevrena',
+            lokalizace: def.lokalizace,
+            zavaznost: def.zavaznost === 'none' ? "" : def.zavaznost,
+            datumOdstraneni: def.odstraneno ? def.datumOdstraneni : undefined,
+            zaznamProvedl: def.odstraneno ? (def.zaznamProvedl === 'manual' ? def.zaznamProvedlManualni : def.zaznamProvedl) : undefined,
+            foto: def.foto
+          } as any);
+        });
       }
     });
+    // --- KONEC ZÁSAHU ---
 
     const newRecord = {
       id: Math.random().toString(36).substring(7),
       cislo: generateRecordNumber(year, countInYear, formData.typKontroly),
       revize: parseInt(revisionNumber) || 0,
       ...formData,
-      kontrolniBody: Object.values(checklist),
+      kontrolniBody: finalKontrolniBody, // Předáme naše čistě namapované body
       zavady: aggregatedZavady,
       stav: isDraft ? 'otevreny' : 'uzavreny' as any,
       createdAt: new Date().toISOString(),
@@ -662,7 +694,6 @@ export default function NewInspectionPage() {
               </div>
             </div>
 
-            {/* SEkce pro přidávání účastníků vrácena */}
             <div className="space-y-4 pt-6 border-t mt-6">
               <div className="flex justify-between items-center">
                 <Label>Účastníci kontroly (Uvedení v protokolu)</Label>
