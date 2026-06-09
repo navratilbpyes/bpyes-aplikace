@@ -35,23 +35,19 @@ export default function RecordDetailPage() {
   const klient = useMemo(() => klienti.find(k => k.id === record?.klientId), [klienti, record]);
   const pracoviste = useMemo(() => klient?.pracoviste.find(p => p.id === record?.pracovisteId), [klient, record]);
 
-  // Filtry v systému (ovlivňují obrazovku i tištěné PDF)
   const [filterPosition, setFilterPosition] = useState<string>("all");
   const [onlyDefects, setOnlyDefects] = useState<boolean>(true);
 
-  // Stav pro e-mailové okno
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailTo, setEmailTo] = useState("");
   const [emailText, setEmailText] = useState("");
 
-  // Získání unikátních pozic, které mají v tomto záznamu reálnou závadu
   const uniquePositionsInRecord = useMemo(() => {
     if (!record?.zavady) return [];
     const positions = record.zavady.map((z: any) => z.odpovednaOsoba).filter(Boolean);
     return Array.from(new Set(positions)) as string[];
   }, [record]);
 
-  // Filtrace závad na základě nastavených filtrů
   const filteredZavady = useMemo(() => {
     if (!record?.zavady) return [];
     return record.zavady.filter((z: any) => {
@@ -60,13 +56,11 @@ export default function RecordDetailPage() {
     });
   }, [record, filterPosition]);
 
-  // Filtrace vyhovujících bodů s doporučením (Tlačítko D)
   const filteredDoporuceni = useMemo(() => {
     if (!record?.kontrolniBody) return [];
     return record.kontrolniBody.filter((kb: any) => kb.showDoporuceni && kb.doporuceni && kb.doporuceni.trim() !== "");
   }, [record]);
 
-  // Dynamický název souboru pro tisk
   const pdfFileName = useMemo(() => {
     if (!record || !klient) return "export.pdf";
     const cleanKlient = klient.nazev.replace(/[^a-zA-Z0-9\s]/g, "").trim();
@@ -78,7 +72,6 @@ export default function RecordDetailPage() {
     return `${record.cislo.replace(/\//g, "-")}_${cleanType}_${cleanKlient}_${cleanDate}_${rev}${positionSuffix}`;
   }, [record, klient, filterPosition]);
 
-  // Nastavení titulku stránky v momentě změny filtru pro správné pojmenování při window.print()
   useEffect(() => {
     if (record) {
       document.title = pdfFileName;
@@ -97,7 +90,6 @@ export default function RecordDetailPage() {
     );
   }
 
-  // Převod zkratky typu kontroly na plný oficiální název pro nadpis PDF
   const getFullInspectionTitle = (type: string) => {
     switch (type) {
       case "BOZPaPO":
@@ -127,10 +119,25 @@ export default function RecordDetailPage() {
     setShowEmailModal(true);
   };
 
+  // Vylepšená, robustní funkce pro vyvolání tisku s nepatrným zpožděním pro stabilizaci DOMu
+  const handlePrint = () => {
+    try {
+      setTimeout(() => {
+        window.print();
+      }, 150);
+    } catch (error) {
+      console.error("Došlo k chybě při pokusu o tisk:", error);
+      toast({
+        title: "Chyba tisku",
+        description: "Váš prohlížeč zablokoval tiskové okno. Ujistěte se, že aplikaci nemáte otevřenou jen v náhledu.",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative">
       
-      {/* MODÁLNÍ OKNO PRO ODESLÁNÍ E-MAILU */}
       {showEmailModal && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in">
           <Card className="w-full max-w-lg shadow-2xl">
@@ -162,7 +169,6 @@ export default function RecordDetailPage() {
         </div>
       )}
 
-      {/* TISKOVÉ CSS STYLY PRO DOKONALÉ A4 STRÁNKY (Skryté na obrazovce) */}
       <style jsx global>{`
         @media print {
           body {
@@ -198,7 +204,6 @@ export default function RecordDetailPage() {
         }
       `}</style>
 
-      {/* 1. OBRAZOVKOVÝ PANEL (Ovládání a Dispečink filtrů) */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6 print-hidden">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -214,19 +219,18 @@ export default function RecordDetailPage() {
         </div>
 
         <div className="flex flex-wrap gap-2 w-full md:w-auto">
-          <Button variant="outline" className="h-11 shadow-sm" onClick={() => window.print()}>
+          <Button variant="outline" className="h-11 shadow-sm" onClick={handlePrint} type="button">
             <Printer className="h-4 w-4 mr-2" /> Tisk PDF reportu
           </Button>
-          <Button variant="outline" className="h-11 shadow-sm" onClick={triggerEmailModal}>
+          <Button variant="outline" className="h-11 shadow-sm" onClick={triggerEmailModal} type="button">
             <Mail className="h-4 w-4 mr-2" /> Distribuce e-mailem
           </Button>
-          <Button className="h-11 shadow-sm" onClick={() => toast({ title: "Informace", description: "Stránka úpravy (Možnost A) bude nasazena v další fází vývoje." })}>
+          <Button className="h-11 shadow-sm" onClick={() => toast({ title: "Informace", description: "Stránka úpravy (Možnost A) bude nasazena v další fází vývoje." })} type="button">
             Upravit záznam
           </Button>
         </div>
       </div>
 
-      {/* DISPEČINK FILTRŮ NA OBRAZOVCE */}
       <Card className="print-hidden border-blue-100 bg-blue-50/20">
         <CardHeader className="py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -257,7 +261,6 @@ export default function RecordDetailPage() {
         </CardHeader>
       </Card>
 
-      {/* 2. HLAVNÍ DIGITÁLNÍ NÁHLED NA OBRAZOVCE */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 print-hidden">
         <div className="md:col-span-2 space-y-6">
           <Card className="border-none shadow-sm">
@@ -297,7 +300,6 @@ export default function RecordDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Zobrazení doporučení z tlačítek "D" na obrazovce */}
           {!onlyDefects && filteredDoporuceni.length > 0 && (
             <Card className="border-none shadow-sm border-l-4 border-l-blue-500 bg-blue-50/10">
               <CardHeader><CardTitle className="text-lg text-blue-900">Doporučení k vyhovujícím bodům ({filteredDoporuceni.length})</CardTitle></CardHeader>
@@ -340,21 +342,13 @@ export default function RecordDetailPage() {
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* 3. OFICIÁLNÍ TISKOVÁ ŠABLONA PRO BPYES (Aktivní pouze při tisku / window.print) */}
-      {/* ========================================================================= */}
       <div className="hidden print:block font-sans text-black">
-        
-        {/* STRANA 1: OFICIÁLNÍ TITULNÍ LIST REPORTU */}
         <div className="print-cover flex flex-col justify-between" style={{ minHeight: '270mm', padding: '10mm 5mm 15mm 5mm' }}>
-          
-          {/* LOGO FIRMY BPYES PODLE DODANÉ ŠABLONY */}
           <div className="flex justify-between items-start border-b-2 border-black pb-6">
             <div>
               <span className="text-xs uppercase font-bold text-slate-500 tracking-widest block">BEZPEČNOST PRÁCE & POŽÁRNÍ OCHRANA</span>
               <span className="text-sm font-semibold tracking-wide text-slate-800">Profesionální auditorské a kontrolní systémy</span>
             </div>
-            {/* Vykreslení vašeho loga čistým a dokonale tisknutelným SVG (kopíruje oblouk a text z obrázku) */}
             <svg width="140" height="90" viewBox="0 0 140 90" className="shrink-0">
               <path d="M 10 50 A 55 50 0 0 1 125 55" fill="none" stroke="black" strokeWidth="6" strokeLinecap="round"/>
               <text x="15" y="62" fontFamily="Arial Black, Impact, sans-serif" fontSize="36" fontWeight="900" fill="black">BP</text>
@@ -363,7 +357,6 @@ export default function RecordDetailPage() {
             </svg>
           </div>
 
-          {/* DYNAMICKÝ NADPIS DLE ZADANÉHO KLÍČE */}
           <div className="my-12 space-y-4">
             <h1 className="text-2xl font-black tracking-tight leading-tight border-l-4 border-black pl-4">
               {getFullInspectionTitle(record.typKontroly)}
@@ -373,7 +366,6 @@ export default function RecordDetailPage() {
             </div>
           </div>
 
-          {/* IDENTIFIKAČNÍ ÚDAJE OBOU STRAN (POSKYTOVATEL VS SUBJEKT) */}
           <div className="grid grid-cols-2 gap-8 border-t border-b border-black py-8 my-6 bg-slate-50/50">
             <div className="space-y-2">
               <span className="text-xs uppercase font-bold text-slate-500 tracking-wider block">Zpracovatel / Poskytovatel:</span>
@@ -391,7 +383,6 @@ export default function RecordDetailPage() {
             </div>
           </div>
 
-          {/* KONSTATOVÁNÍ O SEZNÁMENÍ (ZÁVAZNÝ LEGISLATIVNÍ TEXT) */}
           <div className="p-4 border-2 border-black rounded-lg bg-slate-50 my-6">
             <span className="text-xs uppercase font-bold tracking-wider text-slate-900 block mb-1">Prohlášení a konstatování o seznámení:</span>
             <p className="text-xs text-slate-800 leading-relaxed text-justify">
@@ -399,7 +390,6 @@ export default function RecordDetailPage() {
             </p>
           </div>
 
-          {/* FORMÁLNÍ KOLONKY PRO PODPISY NA TITULNÍ STRANĚ PODLE POŽADAVKU */}
           <div className="grid grid-cols-2 gap-12 pt-12 mt-12 border-t border-slate-300">
             <div className="space-y-12">
               <div className="border-b border-black w-full h-12"></div>
@@ -420,7 +410,6 @@ export default function RecordDetailPage() {
           </div>
         </div>
 
-        {/* STRANA 2: MANAŽERSKÉ SHRNUTÍ A STATISTIKY (AUDITNÍ SEMAFOR) */}
         <div className="print-page py-6 space-y-6" style={{ padding: '10mm 5mm' }}>
           <h2 className="text-lg font-bold uppercase border-b-2 border-black pb-2 tracking-wide">1. Manažerské shrnutí a statistiky</h2>
           
@@ -456,7 +445,6 @@ export default function RecordDetailPage() {
           </div>
         </div>
 
-        {/* STRANA 3 A DALŠÍ: DETAILNÍ VÝPIS ZJIŠTĚNÝCH ZÁVAD A NESHOD */}
         <div className="print-page py-6 space-y-6" style={{ padding: '10mm 5mm' }}>
           <h2 className="text-lg font-bold uppercase border-b-2 border-black pb-2 tracking-wide flex justify-between items-center">
             <span>2. Registr zjištěných nedostatků a nápravných opatření</span>
@@ -525,7 +513,6 @@ export default function RecordDetailPage() {
           </div>
         </div>
 
-        {/* SAMOSTATNÁ KAPITOLA PRO SAMOTNÁ DOPORUČENÍ (Tlačítko D - Vyhovující body) */}
         {filteredDoporuceni.length > 0 && (
           <div className="print-page py-6 space-y-6" style={{ padding: '10mm 5mm' }}>
             <h2 className="text-lg font-bold uppercase border-b-2 border-black pb-2 tracking-wide text-blue-900">
