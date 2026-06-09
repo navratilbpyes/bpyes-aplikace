@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/app/lib/utils"; // <-- TOTO BYL TEN CHYBĚJÍCÍ IMPORT
 
 export default function RecordDetailPage() {
   const params = useParams();
@@ -63,7 +64,6 @@ export default function RecordDetailPage() {
     return record.kontrolniBody.filter((kb: any) => kb.showDoporuceni && kb.doporuceni && kb.doporuceni.trim() !== "");
   }, [record]);
 
-  // Výpočet statistik pro PDF semafor
   const stats = useMemo(() => {
     if (!record?.kontrolniBody) return { V: 0, N: 0, NA: 0, NK: 0, total: 0 };
     return {
@@ -293,8 +293,8 @@ export default function RecordDetailPage() {
           <Card className="border-none shadow-sm bg-white">
             <CardHeader><CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-bold">Detaily kontroly</CardTitle></CardHeader>
             <CardContent className="space-y-4 text-sm">
-              <div className="flex gap-3"><Building className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Klient</span><p className="font-bold">{klient?.nazev}</p><p className="text-xs text-muted-foreground">IČO: {klient?.ico}</p></div></div>
-              <div className="flex gap-3"><MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Pracoviště / Lokace</span><p className="font-bold">{pracoviste?.nazev}</p><p className="text-xs text-muted-foreground">{pracoviste?.adresa}</p></div></div>
+              <div className="flex gap-3"><Building className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Klient</span><p className="font-bold">{klient?.nazev || 'Neznámý'}</p><p className="text-xs text-muted-foreground">IČO: {klient?.ico || ''}</p></div></div>
+              <div className="flex gap-3"><MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Pracoviště / Lokace</span><p className="font-bold">{pracoviste?.nazev || 'Neznámé'}</p><p className="text-xs text-muted-foreground">{pracoviste?.adresa || ''}</p></div></div>
               <div className="flex gap-3"><Clock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Vytvořeno v systému</span><p className="font-medium">{record.createdAt ? new Date(record.createdAt).toLocaleString('cs-CZ') : 'Neznámé'}</p></div></div>
             </CardContent>
           </Card>
@@ -336,10 +336,10 @@ export default function RecordDetailPage() {
             </div>
             <div className="space-y-2">
               <span className="text-xs uppercase font-bold text-slate-500 tracking-wider block">Kontrolovaný subjekt / Klient:</span>
-              <p className="text-base font-black">{klient?.nazev}</p>
+              <p className="text-base font-black">{klient?.nazev || 'Neznámý'}</p>
               <p className="text-[11px] text-slate-700">IČO: {klient?.ico || 'Neuvedeno'}</p>
-              <p className="text-[11px] font-bold text-slate-900">Místo prověrky: {pracoviste?.nazev}</p>
-              <p className="text-[11px] text-slate-600">{pracoviste?.adresa}</p>
+              <p className="text-[11px] font-bold text-slate-900">Místo prověrky: {pracoviste?.nazev || 'Neznámé'}</p>
+              <p className="text-[11px] text-slate-600">{pracoviste?.adresa || ''}</p>
             </div>
           </div>
 
