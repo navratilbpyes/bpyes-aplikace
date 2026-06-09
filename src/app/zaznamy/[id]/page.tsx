@@ -241,28 +241,23 @@ export default function RecordDetailPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* FINÁLNÍ BEZPEČNÁ PDF ŠABLONA (Pevný viewport, font Arial, fixní texty) */}
+      {/* FINÁLNÍ BEZPEČNÁ PDF ŠABLONA */}
       {/* ========================================================================= */}
-      <div style={{ position: 'absolute', top: 0, left: 0, width: '800px', height: 0, overflow: 'hidden', zIndex: -1000 }}>
-        <div id="pdf-export-container" className="bg-white text-black" style={{ width: '800px', fontFamily: 'Arial, sans-serif', padding: '15px' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, width: '800px', height: '10px', overflow: 'hidden', zIndex: -1000 }}>
+        <div id="pdf-export-container" className="bg-white text-black" style={{ width: '800px', fontFamily: 'Arial, sans-serif', padding: '20px', boxSizing: 'border-box' }}>
           
           {/* ÚVODNÍ STRANA PROTOKOLU */}
-          <div style={{ minHeight: '1020px', position: 'relative', boxSizing: 'border-box' }}>
-            <table style={{ width: '100%', borderBottom: '2px solid #000', paddingBottom: '15px', marginBottom: '30px' }}>
-              <tbody>
-                <tr>
-                  <td style={{ textAlign: 'left' }}>
-                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', letterSpacing: '2px', display: 'block', textTransform: 'uppercase' }}>BEZPEČNOST PRÁCE & POŽÁRNÍ OCHRANA</span>
-                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>Profesionální auditorské a kontrolní systémy</span>
-                  </td>
-                  <td style={{ textAlign: 'right', width: '150px' }}>
-                    <div style={{ border: '3px solid #000', padding: '5px 10px', textAlign: 'center', fontWeight: 'black', fontSize: '24px', fontFamily: 'Arial Black, sans-serif' }}>
-                      BP<span style={{ fontSize: '16px', fontWeight: 'bold' }}>yes</span>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div style={{ position: 'relative', boxSizing: 'border-box', paddingBottom: '30px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '15px', marginBottom: '30px' }}>
+              <div>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', letterSpacing: '2px', display: 'block', textTransform: 'uppercase' }}>BEZPEČNOST PRÁCE & POŽÁRNÍ OCHRANA</span>
+                <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>Profesionální auditorské a kontrolní systémy</span>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                {/* Logo taháme z vaší domény ze složky public */}
+                <img src="/logo.png" alt="BPyes Logo" style={{ maxHeight: '45px', width: 'auto', objectFit: 'contain' }} />
+              </div>
+            </div>
 
             <div style={{ margin: '40px 0' }}>
               <h1 style={{ fontSize: '22px', fontWeight: '900', lineHeight: '1.3', borderLeft: '5px solid #000', paddingLeft: '15px', textTransform: 'uppercase', color: '#000' }}>
@@ -273,52 +268,44 @@ export default function RecordDetailPage() {
               </div>
             </div>
 
-            <table style={{ width: '100%', borderTop: '1px solid #000', borderBottom: '1px solid #000', padding: '20px 0', margin: '40px 0', backgroundColor: '#f8fafc' }}>
-              <tbody>
-                <tr>
-                  <td style={{ width: '50%', verticalAlign: 'top', paddingRight: '20px', fontSize: '11px', lineHeight: '1.5' }}>
-                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Zpracovatel / Poskytovatel:</span>
-                    <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>BPyes s.r.o.</strong>
-                    <span>Specializovaný poskytovatel služeb v oblasti rizik BOZP a PO</span><br />
-                    <strong>IČO: 04399421</strong><br />
-                    <span>E-mail: navratil@bpyes.cz | Web: www.bpyes.cz</span>
-                  </td>
-                  <td style={{ width: '50%', verticalAlign: 'top', paddingLeft: '20px', fontSize: '11px', lineHeight: '1.5', borderLeft: '1px solid #e2e8f0' }}>
-                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Kontrolovaný subjekt / Klient:</span>
-                    <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>{klient?.nazev || 'Neznámý subjekt'}</strong>
-                    <span>IČO: {klient?.ico || 'Neuvedeno'}</span><br />
-                    <strong style={{ color: '#0f172a', display: 'block', marginTop: '5px' }}>Místo prověrky: {pracoviste?.nazev || 'Celý areál'}</strong>
-                    <span style={{ color: '#475569' }}>{pracoviste?.adresa || ''}</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div style={{ display: 'flex', borderTop: '1px solid #000', borderBottom: '1px solid #000', padding: '20px 0', margin: '40px 0', backgroundColor: '#f8fafc' }}>
+              <div style={{ width: '50%', paddingRight: '20px', fontSize: '11px', lineHeight: '1.6' }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Zpracovatel / Poskytovatel:</span>
+                <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>BPyes s.r.o.</strong>
+                <span>Specializovaný poskytovatel služeb v oblasti rizik BOZP a PO</span><br />
+                <strong>IČO: 04399421</strong><br />
+                <span>E-mail: navratil@bpyes.cz | Web: www.bpyes.cz</span>
+              </div>
+              <div style={{ width: '50%', paddingLeft: '20px', fontSize: '11px', lineHeight: '1.6', borderLeft: '1px solid #e2e8f0' }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Kontrolovaný subjekt / Klient:</span>
+                <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>{klient?.nazev || 'Neznámý subjekt'}</strong>
+                <span>IČO: {klient?.ico || 'Neuvedeno'}</span><br />
+                <strong style={{ color: '#0f172a', display: 'block', marginTop: '10px' }}>Místo prověrky: {pracoviste?.nazev || 'Celý areál'}</strong>
+                <span style={{ color: '#475569', display: 'block' }}>{pracoviste?.adresa || ''}</span>
+              </div>
+            </div>
 
             <div style={{ border: '2px solid #000', padding: '15px', borderRadius: '6px', backgroundColor: '#f8fafc', margin: '40px 0' }}>
-              <span style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 'bold', color: '#0f172a', display: 'block', marginBottom: '4px' }}>Prohlášení a konstatování o seznámení:</span>
-              <p style={{ fontSize: '11px', color: '#334155', margin: 0, textAlign: 'justify', lineHeight: '1.5' }}>
+              <span style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 'bold', color: '#0f172a', display: 'block', marginBottom: '6px' }}>Prohlášení a konstatování o seznámení:</span>
+              <p style={{ fontSize: '11px', color: '#334155', margin: 0, textAlign: 'justify', lineHeight: '1.6' }}>
                 Kontrolovaný subjekt / zástupce klienta svým níže uvedeným podpisem stvrzuje, že byl v plném rozsahu, prokazatelně a jasně seznámen se všemi zjištěnými legislativními nedostatky, systémovými neshodami a doporučeními, která jsou detailně specifikována uvnitř této auditní zprávy. Souhlasí s navrženými nápravnými opatřeními a zavazuje se k jejich vyřešení a odstranění v definovaných zákonných či dohodnutých termínech.
               </p>
             </div>
 
-            <table style={{ width: '100%', marginTop: '80px', borderTop: '1px solid #cbd5e1', paddingTop: '30px' }}>
-              <tbody>
-                <tr>
-                  <td style={{ width: '50%', paddingRight: '30px', textAlign: 'center' }}>
-                    <div style={{ borderBottom: '1px solid #000', width: '80%', margin: '0 auto 15px auto', height: '40px' }}></div>
-                    <strong style={{ fontSize: '11px', textTransform: 'uppercase', display: 'block' }}>Provedl (Za BPyes):</strong>
-                    <span style={{ fontSize: '10px', color: '#64748b' }}>Oprávněný specialista BOZP a PO</span><br />
-                    <span style={{ fontSize: '9px', color: '#94a3b8' }}>Dne: {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : ''}</span>
-                  </td>
-                  <td style={{ width: '50%', paddingLeft: '30px', textAlign: 'center' }}>
-                    <div style={{ borderBottom: '1px solid #000', width: '80%', margin: '0 auto 15px auto', height: '40px' }}></div>
-                    <strong style={{ fontSize: '11px', textTransform: 'uppercase', display: 'block' }}>Zástupce klienta / subjektu:</strong>
-                    <span style={{ fontSize: '10px', color: '#64748b' }}>Odpovědná osoba seznámená s reportem</span><br />
-                    <span style={{ fontSize: '9px', color: '#94a3b8' }}>Podpis / Razítko převzetí</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '80px', paddingTop: '10px' }}>
+              <div style={{ width: '45%', textAlign: 'center' }}>
+                <div style={{ borderBottom: '1px solid #000', margin: '0 auto 15px auto', height: '40px' }}></div>
+                <strong style={{ fontSize: '11px', textTransform: 'uppercase', display: 'block' }}>Provedl (Za BPyes):</strong>
+                <span style={{ fontSize: '10px', color: '#64748b' }}>Oprávněný specialista BOZP a PO</span><br />
+                <span style={{ fontSize: '9px', color: '#94a3b8' }}>Dne: {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : ''}</span>
+              </div>
+              <div style={{ width: '45%', textAlign: 'center' }}>
+                <div style={{ borderBottom: '1px solid #000', margin: '0 auto 15px auto', height: '40px' }}></div>
+                <strong style={{ fontSize: '11px', textTransform: 'uppercase', display: 'block' }}>Zástupce klienta / subjektu:</strong>
+                <span style={{ fontSize: '10px', color: '#64748b' }}>Odpovědná osoba seznámená s reportem</span><br />
+                <span style={{ fontSize: '9px', color: '#94a3b8' }}>Podpis / Razítko převzetí</span>
+              </div>
+            </div>
           </div>
 
           <div style={{ pageBreakBefore: 'always' }}></div>
@@ -377,7 +364,7 @@ export default function RecordDetailPage() {
                       </tr>
                     ))
                   ) : (
-                    <tr><td colSpan={2} style={{ padding: '10px', textStyle: 'italic', color: '#64748b', textAlign: 'center' }}>Nebyly zapsány žádné osoby.</td></tr>
+                    <tr><td colSpan={2} style={{ padding: '10px', fontStyle: 'italic', color: '#64748b', textAlign: 'center' }}>Nebyly zapsány žádné osoby.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -396,7 +383,6 @@ export default function RecordDetailPage() {
               {filteredZavady.map((z: any) => (
                 <div key={z.id} style={{ border: '1px solid #cbd5e1', borderRadius: '4px', padding: '10px', backgroundColor: '#fff', pageBreakInside: 'avoid' }}>
                   
-                  {/* Horní úzká lišta indexu */}
                   <table style={{ width: '100%', borderBottom: '1px solid #f1f5f9', paddingBottom: '4px', marginBottom: '6px' }}>
                     <tbody>
                       <tr>
@@ -410,13 +396,11 @@ export default function RecordDetailPage() {
                     </tbody>
                   </table>
 
-                  {/* Obsah - Popis neshody */}
                   <div style={{ fontSize: '11px', marginBottom: '6px' }}>
                     <span style={{ fontSize: '9px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', display: 'block' }}>Popis zjištěné závady:</span>
                     <strong style={{ color: '#0f172a' }}>{z.popis}</strong>
                   </div>
 
-                  {/* Detaily a řešení */}
                   <table style={{ width: '100%', fontSize: '10px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '3px', marginBottom: '6px', borderCollapse: 'collapse' }}>
                     <tbody>
                       <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
@@ -432,7 +416,6 @@ export default function RecordDetailPage() {
                     </tbody>
                   </table>
 
-                  {/* Spodní řádek odpovědnosti a termínu */}
                   <table style={{ width: '100%', fontSize: '10px' }}>
                     <tbody>
                       <tr>
@@ -454,7 +437,6 @@ export default function RecordDetailPage() {
                     </tbody>
                   </table>
 
-                  {/* Kompaktní zobrazení fotografie */}
                   {z.foto && (
                     <div style={{ marginTop: '8px', borderTop: '1px dashed #cbd5e1', paddingTop: '6px' }}>
                       <span style={{ fontSize: '8px', color: '#94a3b8', display: 'block', marginBottom: '3px' }}>Fotodokumentace:</span>
