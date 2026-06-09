@@ -9,13 +9,9 @@ import {
   ChevronLeft, 
   Printer, 
   Mail, 
-  AlertTriangle, 
-  Calendar, 
   Building, 
   MapPin, 
   Clock, 
-  CheckCircle,
-  Eye,
   FileText,
   Loader2
 } from "lucide-react";
@@ -25,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/app/lib/utils"; // <-- TOTO BYL TEN CHYBĚJÍCÍ IMPORT
+import { cn } from "@/app/lib/utils";
 
 export default function RecordDetailPage() {
   const params = useParams();
@@ -75,9 +71,10 @@ export default function RecordDetailPage() {
     };
   }, [record]);
 
+  // OPRAVA 1: Inteligentní čistění názvu souboru (odstraní háčky a čárky, zachová písmena)
   const pdfFileName = useMemo(() => {
     if (!record || !klient) return "export.pdf";
-    const cleanKlient = klient.nazev.replace(/[^a-zA-Z0-9\s]/g, "").trim();
+    const cleanKlient = klient.nazev.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9\s]/g, "").trim();
     const cleanDate = (record.datum || "").replace(/-/g, "");
     const cleanType = record.typKontroly || "KONTROLA";
     const rev = record.revize !== undefined ? `R${record.revize}` : "R0";
@@ -97,14 +94,10 @@ export default function RecordDetailPage() {
 
   const getFullInspectionTitle = (type: string) => {
     switch (type) {
-      case "BOZPaPO":
-        return "PROVĚRKA BOZP A PREVENTIVNÍ POŽÁRNÍ PROHLÍDKA, KONTROLA DOKUMENTACE POŽÁRNÍ OCHRANY";
-      case "PBOZP":
-        return "PROVĚRKA BOZP";
-      case "PPP":
-        return "PREVENTIVNÍ POŽÁRNÍ PROHLÍDKA";
-      default:
-        return "ZPRÁVA Z KONTROLY BOZP A PO";
+      case "BOZPaPO": return "PROVĚRKA BOZP A PREVENTIVNÍ POŽÁRNÍ PROHLÍDKA, KONTROLA DOKUMENTACE POŽÁRNÍ OCHRANY";
+      case "PBOZP": return "PROVĚRKA BOZP";
+      case "PPP": return "PREVENTIVNÍ POŽÁRNÍ PROHLÍDKA";
+      default: return "ZPRÁVA Z KONTROLY BOZP A PO";
     }
   };
 
@@ -117,7 +110,7 @@ export default function RecordDetailPage() {
   };
 
   const handleSendEmail = () => {
-    toast({ title: "E-mail odeslán", description: `Report byl úspěšně vygenerován a odeslán na adresu ${emailTo || "technika"}.` });
+    toast({ title: "E-mail odeslán", description: `Report byl odeslán na adresu ${emailTo || "technika"}.` });
     setShowEmailModal(false);
   };
 
@@ -133,13 +126,12 @@ export default function RecordDetailPage() {
         margin:       [10, 10, 15, 10],
         filename:     pdfFileName,
         image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true, logging: false },
+        html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 800 },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['css', 'legacy'], before: '.page-break' }
+        pagebreak:    { mode: ['css'] } // Využíváme pouze stabilní CSS zalamování
       };
 
       await html2pdf().set(opt).from(element).save();
-      
       toast({ title: "Úspěch", description: "PDF bylo úspěšně staženo do vašeho počítače." });
     } catch (error) {
       console.error("Chyba PDF:", error);
@@ -152,28 +144,18 @@ export default function RecordDetailPage() {
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative overflow-hidden">
       
+      {/* E-mailový modál */}
       {showEmailModal && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in">
           <Card className="w-full max-w-lg shadow-2xl">
             <CardHeader>
               <CardTitle>Odeslat report e-mailem</CardTitle>
-              <CardDescription>
-                Distribuce vygenerovaného PDF {filterPosition !== "all" ? `pro pozici: ${filterPosition}` : "celkového reportu"}.
-              </CardDescription>
+              <CardDescription>Distribuce vygenerovaného PDF.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>E-mail příjemce</Label>
-                <Input type="email" placeholder="např. udrzba@firma.cz" value={emailTo} onChange={(e) => setEmailTo(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>Předmět e-mailu</Label>
-                <Input readOnly value={`BPyes Auditní zpráva: ${record.cislo} ${filterPosition !== "all" ? `(${filterPosition})` : ""}`} className="bg-muted" />
-              </div>
-              <div className="space-y-2">
-                <Label>Text zprávy</Label>
-                <Textarea rows={7} value={emailText} onChange={(e) => setEmailText(e.target.value)} />
-              </div>
+              <div className="space-y-2"><Label>E-mail příjemce</Label><Input type="email" value={emailTo} onChange={(e) => setEmailTo(e.target.value)} /></div>
+              <div className="space-y-2"><Label>Předmět e-mailu</Label><Input readOnly value={`BPyes Auditní zpráva: ${record.cislo} ${filterPosition !== "all" ? `(${filterPosition})` : ""}`} className="bg-muted" /></div>
+              <div className="space-y-2"><Label>Text zprávy</Label><Textarea rows={7} value={emailText} onChange={(e) => setEmailText(e.target.value)} /></div>
             </CardContent>
             <div className="p-4 border-t flex justify-end gap-2 bg-muted/20">
               <Button variant="outline" onClick={() => setShowEmailModal(false)}>Zrušit</Button>
@@ -183,56 +165,40 @@ export default function RecordDetailPage() {
         </div>
       )}
 
+      {/* Horní panel */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="p-0 h-auto text-muted-foreground" onClick={() => router.push("/")}>
-              <ChevronLeft className="h-4 w-4" /> Zpět na seznam
-            </Button>
-            <span className="text-xs font-bold uppercase tracking-wider text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">
-              {record.stav === 'uzavreny' ? 'Uzavřený report' : 'Koncept'}
-            </span>
+            <Button variant="ghost" size="sm" className="p-0 h-auto text-muted-foreground" onClick={() => router.push("/")}><ChevronLeft className="h-4 w-4" /> Zpět na seznam</Button>
+            <span className="text-xs font-bold uppercase tracking-wider text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">{record.stav === 'uzavreny' ? 'Uzavřený report' : 'Koncept'}</span>
           </div>
           <h1 className="text-3xl font-bold tracking-tight">{record.cislo} <span className="text-muted-foreground font-normal text-xl">R{record.revize || 0}</span></h1>
           <p className="text-sm text-muted-foreground">Provedeno dne {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : 'Neuvedeno'}</p>
         </div>
-
         <div className="flex flex-wrap gap-2 w-full md:w-auto">
           <Button variant="default" className="h-11 shadow-sm font-bold bg-blue-600 hover:bg-blue-700 text-white" onClick={handleDownloadPDF} disabled={isGeneratingPDF}>
-            {isGeneratingPDF ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Printer className="h-4 w-4 mr-2" />}
-            {isGeneratingPDF ? "Generuji PDF..." : "Stáhnout PDF report"}
+            {isGeneratingPDF ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Printer className="h-4 w-4 mr-2" />} {isGeneratingPDF ? "Generuji PDF..." : "Stáhnout PDF report"}
           </Button>
-          <Button variant="outline" className="h-11 shadow-sm" onClick={triggerEmailModal}>
-            <Mail className="h-4 w-4 mr-2" /> Distribuce e-mailem
-          </Button>
-          <Button variant="secondary" className="h-11 shadow-sm" onClick={() => toast({ title: "Informace", description: "Stránka úpravy bude nasazena v další fází vývoje." })}>
-            Upravit záznam
-          </Button>
+          <Button variant="outline" className="h-11 shadow-sm" onClick={triggerEmailModal}><Mail className="h-4 w-4 mr-2" /> Distribuce e-mailem</Button>
+          <Button variant="secondary" className="h-11 shadow-sm" onClick={() => toast({ title: "Informace", description: "Stránka úpravy bude nasazena v další fází vývoje." })}>Upravit záznam</Button>
         </div>
       </div>
 
+      {/* Dispečink */}
       <Card className="border-blue-100 bg-blue-50/20">
         <CardHeader className="py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <CardTitle className="text-sm font-bold flex items-center gap-2 text-blue-900">
-              <FileText className="h-4 w-4" /> Manažerský dispečink pro exporty a údržbu
-            </CardTitle>
-            <CardDescription className="text-xs">Vyfiltrujte si data. Výsledný PDF export se tomuto filtru plně přizpůsobí.</CardDescription>
-          </div>
+          <div><CardTitle className="text-sm font-bold flex items-center gap-2 text-blue-900"><FileText className="h-4 w-4" /> Manažerský dispečink</CardTitle><CardDescription className="text-xs">Filtry ovlivňují i tištěné PDF.</CardDescription></div>
           <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
             <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-md border shadow-sm w-full md:w-64">
               <span className="text-xs font-bold text-muted-foreground shrink-0">Pozice:</span>
               <Select value={filterPosition} onValueChange={setFilterPosition}>
-                <SelectTrigger className="h-7 border-none p-0 focus:ring-0 shadow-none text-xs font-bold">
-                  <SelectValue placeholder="Filtrovat pozici" />
-                </SelectTrigger>
+                <SelectTrigger className="h-7 border-none p-0 focus:ring-0 shadow-none text-xs font-bold"><SelectValue placeholder="Filtrovat pozici" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Zobrazit vše (Kompletní audit)</SelectItem>
                   {uniquePositionsInRecord.map(pos => <SelectItem key={pos} value={pos}>{pos}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            
             <div className="flex items-center space-x-2 bg-white px-3 py-2 rounded-md border shadow-sm h-10">
               <Checkbox id="onlyDefects" checked={onlyDefects} onCheckedChange={(checked) => setOnlyDefects(!!checked)} />
               <label id="onlyDefects" className="text-xs font-bold text-slate-700 cursor-pointer select-none">Pouze neshody a závady</label>
@@ -241,48 +207,37 @@ export default function RecordDetailPage() {
         </CardHeader>
       </Card>
 
+      {/* Digitální náhled na webu */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
           <Card className="border-none shadow-sm">
-            <CardHeader><CardTitle className="text-lg">Zjištěné závady, neshody a doporučení ({filteredZavady.length})</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-lg">Zjištěné závady a neshody ({filteredZavady.length})</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               {filteredZavady.map((z: any) => (
-                <div key={z.id} className="p-4 border rounded-xl space-y-3 bg-white shadow-sm hover:border-amber-200 transition-colors">
+                <div key={z.id} className="p-4 border rounded-xl space-y-3 bg-white shadow-sm">
                   <div className="flex justify-between items-start gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono bg-red-100 text-red-800 text-xs font-bold h-6 w-6 rounded-full flex items-center justify-center shrink-0">
-                        {z.bodKontroly || '*'}
-                      </span>
-                      <h4 className="font-bold text-[15px]">{z.popis}</h4>
-                    </div>
-                    <span className={cn("text-[10px] font-bold uppercase px-2 py-0.5 rounded border shrink-0", z.stavOdstraneni === 'odstranena' ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200")}>
-                      {z.stavOdstraneni === 'odstranena' ? 'Odstraněno' : 'Otevřeno'}
-                    </span>
+                    <div className="flex items-center gap-2"><span className="font-mono bg-red-100 text-red-800 text-xs font-bold h-6 w-6 rounded-full flex items-center justify-center shrink-0">{z.bodKontroly || '*'}</span><h4 className="font-bold text-[15px]">{z.popis}</h4></div>
+                    <span className={cn("text-[10px] font-bold uppercase px-2 py-0.5 rounded border shrink-0", z.stavOdstraneni === 'odstranena' ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200")}>{z.stavOdstraneni === 'odstranena' ? 'Odstraněno' : 'Otevřeno'}</span>
                   </div>
-
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-muted/30 p-3 rounded-lg border">
                     <div><span className="text-muted-foreground block mb-0.5">Návrh opatření:</span><p className="font-medium">{z.navrhOpatreni}</p></div>
                     {z.lokalizace && <div><span className="text-muted-foreground block mb-0.5">Místo zjištění:</span><p className="font-medium text-blue-900">{z.lokalizace}</p></div>}
                     <div><span className="text-muted-foreground block mb-0.5">Termín odstranění:</span><p className="font-medium">{z.terminOdstraneni ? new Date(z.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</p></div>
                     <div><span className="text-muted-foreground block mb-0.5">Odpovědná pracovní pozice:</span><p className="font-bold text-black">{z.odpovednaOsoba || 'Neuvedena'}</p></div>
                   </div>
-
                   {z.foto && <img src={z.foto} alt="Důkaz" className="h-32 w-auto object-cover rounded-lg border mt-2 shadow-inner" />}
                 </div>
               ))}
-              {filteredZavady.length === 0 && <p className="text-muted-foreground italic text-center py-12">Pro zvolenou pozici nebyly nalezeny žádné neshody.</p>}
+              {filteredZavady.length === 0 && <p className="text-muted-foreground italic text-center py-12">Žádné neshody k zobrazení.</p>}
             </CardContent>
           </Card>
 
           {!onlyDefects && filteredDoporuceni.length > 0 && (
             <Card className="border-none shadow-sm border-l-4 border-l-blue-500 bg-blue-50/10">
-              <CardHeader><CardTitle className="text-lg text-blue-900">Doporučení k vyhovujícím bodům ({filteredDoporuceni.length})</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-lg text-blue-900">Doporučení ({filteredDoporuceni.length})</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 {filteredDoporuceni.map((kb: any) => (
-                  <div key={kb.bod} className="p-3 bg-white border border-blue-100 rounded-lg text-sm space-y-1">
-                    <p className="font-bold text-blue-900">Bod {kb.bod}.</p>
-                    <p className="text-muted-foreground italic">"{kb.doporuceni}"</p>
-                  </div>
+                  <div key={kb.bod} className="p-3 bg-white border border-blue-100 rounded-lg text-sm space-y-1"><p className="font-bold text-blue-900">Bod {kb.bod}.</p><p className="text-muted-foreground italic">"{kb.doporuceni}"</p></div>
                 ))}
               </CardContent>
             </Card>
@@ -294,204 +249,209 @@ export default function RecordDetailPage() {
             <CardHeader><CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-bold">Detaily kontroly</CardTitle></CardHeader>
             <CardContent className="space-y-4 text-sm">
               <div className="flex gap-3"><Building className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Klient</span><p className="font-bold">{klient?.nazev || 'Neznámý'}</p><p className="text-xs text-muted-foreground">IČO: {klient?.ico || ''}</p></div></div>
-              <div className="flex gap-3"><MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Pracoviště / Lokace</span><p className="font-bold">{pracoviste?.nazev || 'Neznámé'}</p><p className="text-xs text-muted-foreground">{pracoviste?.adresa || ''}</p></div></div>
-              <div className="flex gap-3"><Clock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Vytvořeno v systému</span><p className="font-medium">{record.createdAt ? new Date(record.createdAt).toLocaleString('cs-CZ') : 'Neznámé'}</p></div></div>
+              <div className="flex gap-3"><MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Pracoviště</span><p className="font-bold">{pracoviste?.nazev || 'Neznámé'}</p><p className="text-xs text-muted-foreground">{pracoviste?.adresa || ''}</p></div></div>
+              <div className="flex gap-3"><Clock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Vytvořeno</span><p className="font-medium">{record.createdAt ? new Date(record.createdAt).toLocaleString('cs-CZ') : 'Neznámé'}</p></div></div>
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* Skrytá šablona pro tvorbu PDF */}
-      <div className="absolute top-[-9999px] left-[-9999px] w-[800px] bg-white text-black font-sans pointer-events-none" id="pdf-export-container">
-        <div className="p-8" style={{ minHeight: '1050px' }}>
-          <div className="flex justify-between items-start border-b-2 border-black pb-6">
-            <div>
-              <span className="text-[10px] uppercase font-bold text-slate-500 tracking-widest block">BEZPEČNOST PRÁCE & POŽÁRNÍ OCHRANA</span>
-              <span className="text-sm font-semibold tracking-wide text-slate-800">Profesionální auditorské a kontrolní systémy</span>
-            </div>
-            <svg width="120" height="70" viewBox="0 0 140 90">
-              <path d="M 10 50 A 55 50 0 0 1 125 55" fill="none" stroke="black" strokeWidth="6" strokeLinecap="round"/>
-              <text x="15" y="62" fontFamily="Arial Black, Impact, sans-serif" fontSize="36" fontWeight="900" fill="black">BP</text>
-              <text x="70" y="72" fontFamily="Arial, sans-serif" fontSize="20" fontWeight="bold" fill="black">yes</text>
-              <path d="M 68 78 A 30 15 0 0 0 135 68" fill="none" stroke="black" strokeWidth="3" strokeLinecap="round"/>
-            </svg>
-          </div>
-
-          <div className="my-12 space-y-4">
-            <h1 className="text-2xl font-black tracking-tight leading-tight border-l-4 border-black pl-4">
-              {getFullInspectionTitle(record.typKontroly)}
-            </h1>
-            <div className="text-sm font-mono bg-slate-100 p-2 inline-block rounded border">
-              ČÍSLO ZPRÁVY: {record.cislo} | REVIZE: R{record.revize || 0}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-8 border-t border-b border-black py-8 my-6 bg-slate-50/50">
-            <div className="space-y-2">
-              <span className="text-xs uppercase font-bold text-slate-500 tracking-wider block">Zpracovatel / Poskytovatel:</span>
-              <p className="text-base font-black">BPyes s.r.o.</p>
-              <p className="text-[11px] text-slate-700">Specializovaný poskytovatel služeb v oblasti rizik BOZP a PO</p>
-              <p className="text-[11px] text-slate-700">IČO: 87654321</p>
-              <p className="text-[11px] text-slate-700">E-mail: info@bpyes.cz | Web: www.bpyes.cz</p>
-            </div>
-            <div className="space-y-2">
-              <span className="text-xs uppercase font-bold text-slate-500 tracking-wider block">Kontrolovaný subjekt / Klient:</span>
-              <p className="text-base font-black">{klient?.nazev || 'Neznámý'}</p>
-              <p className="text-[11px] text-slate-700">IČO: {klient?.ico || 'Neuvedeno'}</p>
-              <p className="text-[11px] font-bold text-slate-900">Místo prověrky: {pracoviste?.nazev || 'Neznámé'}</p>
-              <p className="text-[11px] text-slate-600">{pracoviste?.adresa || ''}</p>
-            </div>
-          </div>
-
-          <div className="p-4 border-2 border-black rounded-lg bg-slate-50 my-6">
-            <span className="text-[11px] uppercase font-bold tracking-wider text-slate-900 block mb-1">Prohlášení a konstatování o seznámení:</span>
-            <p className="text-[11px] text-slate-800 leading-relaxed text-justify">
-              Kontrolovaný subjekt / zástupce klienta svým níže uvedeným podpisem stvrzuje, že byl v plném rozsahu, prokazatelně a jasně seznámen se všemi zjištěnými legislativními nedostatky, systémovými neshodami a doporučeními, která jsou detailně specifikována uvnitř této auditní zprávy. Souhlasí s navrženými nápravnými opatřeními a zavazuje se k jejich vyřešení a odstranění v definovaných zákonných či dohodnutých termínech.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-12 pt-12 mt-12 border-t border-slate-300">
-            <div className="space-y-12">
-              <div className="border-b border-black w-full h-8"></div>
-              <div className="text-center">
-                <p className="font-bold text-[12px] uppercase">Provedl (Za BPyes):</p>
-                <p className="text-[10px] text-slate-500">Oprávněný specialista BOZP a PO</p>
-                <p className="text-[9px] text-slate-400">Dne: {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : 'Neuvedeno'}</p>
-              </div>
-            </div>
-            <div className="space-y-12">
-              <div className="border-b border-black w-full h-8"></div>
-              <div className="text-center">
-                <p className="font-bold text-[12px] uppercase">Zástupce klienta / subjektu:</p>
-                <p className="text-[10px] text-slate-500">Odpovědná osoba seznámená s reportem</p>
-                <p className="text-[9px] text-slate-400">Podpis / Razítko převzetí</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="page-break"></div>
-
-        <div className="p-8">
-          <h2 className="text-base font-bold uppercase border-b-2 border-black pb-2 mb-4 tracking-wide">1. Manažerské shrnutí a statistiky</h2>
+      {/* ========================================================================= */}
+      {/* OPRAVA 2: TISKOVÁ ŠABLONA PRO PDF (Zajištěna viditelnost pro canvas) */}
+      {/* ========================================================================= */}
+      <div style={{ position: 'absolute', top: 0, left: 0, width: 0, height: 0, overflow: 'hidden', zIndex: -1000 }}>
+        <div id="pdf-export-container" className="bg-white text-black font-sans" style={{ width: '800px', paddingBottom: '50px' }}>
           
-          <div className="grid grid-cols-4 gap-2 text-center text-[11px] mb-6">
-            <div className="p-3 border bg-slate-50 font-bold"><span className="text-lg block font-black">{stats.total}</span>CELKEM BODŮ</div>
-            <div className="p-3 border border-green-300 bg-green-50 text-green-900 font-bold"><span className="text-lg block font-black">{stats.V}</span>VYHOVUJE</div>
-            <div className="p-3 border border-red-300 bg-red-50 text-red-900 font-bold"><span className="text-lg block font-black">{stats.N}</span>NESHODY (N)</div>
-            <div className="p-3 border bg-slate-50 text-slate-700 font-bold"><span className="text-lg block font-black">{stats.NK + stats.NA}</span>NEHODNOCENO</div>
-          </div>
-
-          <div className="space-y-2 mb-6">
-            <h3 className="text-xs font-bold uppercase text-slate-700">Závěrečné vyhodnocení specialisty:</h3>
-            <div className="p-4 border bg-slate-50/50 rounded-lg text-[11px] text-justify italic leading-relaxed">
-              {record.poznamka || "Při prověrce nebylo vloženo žádné doprovodné textové hodnocení."}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <h3 className="text-xs font-bold uppercase text-slate-700">Účastníci prověrky uvedení v protokolu:</h3>
-            <table className="w-full text-left text-[11px] border-collapse border">
-              <thead>
-                <tr className="bg-slate-100 border-b"><th className="p-2 font-bold border-r">Jméno a příjmení</th><th className="p-2 font-bold">Pracovní pozice / Vztah k subjektu</th></tr>
-              </thead>
-              <tbody>
-                {record.ucastnici?.map((u: any, i: number) => (
-                  <tr key={i} className="border-b">
-                    <td className="p-2 font-medium border-r">{u.jmeno || 'Neuvedeno'}</td>
-                    <td className="p-2">{u.pozice || 'Bez zařazení'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="page-break"></div>
-
-        <div className="p-8">
-          <h2 className="text-base font-bold uppercase border-b-2 border-black pb-2 mb-4 tracking-wide flex justify-between items-center">
-            <span>2. Registr zjištěných nedostatků a nápravných opatření</span>
-            {filterPosition !== "all" && <span className="text-[10px] font-normal lowercase bg-slate-100 px-2 py-1 rounded border">Filtr pozice: {filterPosition}</span>}
-          </h2>
-
-          <div className="space-y-6">
-            {filteredZavady.map((z: any) => (
-              <div key={z.id} className="border border-slate-300 rounded-lg p-4 bg-white" style={{ pageBreakInside: 'avoid' }}>
-                <div className="flex justify-between items-start border-b pb-2 mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold bg-black text-white text-[11px] h-5 w-5 rounded-full flex items-center justify-center">
-                      {z.bodKontroly || '*'}
-                    </span>
-                    <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Neshoda v kontrolním bodu</span>
-                  </div>
-                  {z.zavaznost && (
-                    <span className="text-[9px] font-bold uppercase border px-2 py-0.5 rounded bg-slate-50">
-                      Priorita: {z.zavaznost === 'critical' ? 'KRITICKÁ' : z.zavaznost === 'high' ? 'VYSOKÁ' : 'STŘEDNÍ'}
-                    </span>
-                  )}
-                </div>
-
-                <div className="space-y-3 text-[11px]">
-                  <div>
-                    <span className="text-[10px] text-slate-500 uppercase font-bold block">Popis zjištěné závady:</span>
-                    <p className="font-bold text-slate-900">{z.popis}</p>
-                  </div>
-
-                  <div className="flex gap-4 bg-slate-50 p-3 rounded border">
-                    <div className="flex-1">
-                      <span className="text-[9px] text-slate-500 uppercase font-bold block mb-0.5">Návrh opatření:</span>
-                      <p className="font-medium text-slate-800">{z.navrhOpatreni}</p>
-                    </div>
-                    <div className="flex-1">
-                      <span className="text-[9px] text-slate-500 uppercase font-bold block mb-0.5">Místo zjištění:</span>
-                      <p className="font-bold text-blue-950">{z.lokalizace || 'Celá společnost'}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between pt-1">
-                    <div><span className="text-[9px] text-slate-400 block">Termín:</span><p className="font-mono font-bold">{z.terminOdstraneni ? new Date(z.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</p></div>
-                    <div><span className="text-[9px] text-slate-400 block">Odpovědná pozice:</span><p className="font-bold uppercase text-slate-900">{z.odpovednaOsoba || 'Neuvedena'}</p></div>
-                    <div className="text-right"><span className="text-[9px] text-slate-400 block">Stav:</span><p className="font-bold text-slate-800">{z.stavOdstraneni === 'odstranena' ? '✅ ODSTRANĚNO' : '❌ NEVYŘEŠENO'}</p></div>
-                  </div>
-
-                  {z.foto && (
-                    <div className="pt-2 mt-2 border-t">
-                      <span className="text-[9px] text-slate-400 block mb-1">Fotodokumentace:</span>
-                      <img src={z.foto} alt="Závada" className="h-40 w-auto object-cover rounded border border-slate-300" />
-                    </div>
-                  )}
-                </div>
+          <div className="p-8" style={{ minHeight: '1050px' }}>
+            <div className="flex justify-between items-start border-b-2 border-black pb-6">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-500 tracking-widest block">BEZPEČNOST PRÁCE & POŽÁRNÍ OCHRANA</span>
+                <span className="text-sm font-semibold tracking-wide text-slate-800">Profesionální auditorské a kontrolní systémy</span>
               </div>
-            ))}
+              <svg width="120" height="70" viewBox="0 0 140 90">
+                <path d="M 10 50 A 55 50 0 0 1 125 55" fill="none" stroke="black" strokeWidth="6" strokeLinecap="round"/>
+                <text x="15" y="62" fontFamily="Arial Black, Impact, sans-serif" fontSize="36" fontWeight="900" fill="black">BP</text>
+                <text x="70" y="72" fontFamily="Arial, sans-serif" fontSize="20" fontWeight="bold" fill="black">yes</text>
+                <path d="M 68 78 A 30 15 0 0 0 135 68" fill="none" stroke="black" strokeWidth="3" strokeLinecap="round"/>
+              </svg>
+            </div>
 
-            {filteredZavady.length === 0 && (
-              <p className="text-[11px] text-slate-500 italic text-center py-8 border rounded-lg border-dashed">
-                Žádné neshody k zobrazení.
+            <div className="my-12 space-y-4">
+              <h1 className="text-2xl font-black tracking-tight leading-tight border-l-4 border-black pl-4">
+                {getFullInspectionTitle(record.typKontroly)}
+              </h1>
+              <div className="text-sm font-mono bg-slate-100 p-2 inline-block rounded border">
+                ČÍSLO ZPRÁVY: {record.cislo} | REVIZE: R{record.revize || 0}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-8 border-t border-b border-black py-8 my-6 bg-slate-50/50">
+              <div className="space-y-2">
+                <span className="text-xs uppercase font-bold text-slate-500 tracking-wider block">Zpracovatel / Poskytovatel:</span>
+                <p className="text-base font-black">BPyes s.r.o.</p>
+                <p className="text-[11px] text-slate-700">Specializovaný poskytovatel služeb v oblasti rizik BOZP a PO</p>
+                <p className="text-[11px] text-slate-700">IČO: 87654321</p>
+                <p className="text-[11px] text-slate-700">E-mail: info@bpyes.cz | Web: www.bpyes.cz</p>
+              </div>
+              <div className="space-y-2">
+                <span className="text-xs uppercase font-bold text-slate-500 tracking-wider block">Kontrolovaný subjekt / Klient:</span>
+                <p className="text-base font-black">{klient?.nazev || 'Neznámý'}</p>
+                <p className="text-[11px] text-slate-700">IČO: {klient?.ico || 'Neuvedeno'}</p>
+                <p className="text-[11px] font-bold text-slate-900">Místo prověrky: {pracoviste?.nazev || 'Neznámé'}</p>
+                <p className="text-[11px] text-slate-600">{pracoviste?.adresa || ''}</p>
+              </div>
+            </div>
+
+            <div className="p-4 border-2 border-black rounded-lg bg-slate-50 my-6">
+              <span className="text-[11px] uppercase font-bold tracking-wider text-slate-900 block mb-1">Prohlášení a konstatování o seznámení:</span>
+              <p className="text-[11px] text-slate-800 leading-relaxed text-justify">
+                Kontrolovaný subjekt / zástupce klienta svým níže uvedeným podpisem stvrzuje, že byl v plném rozsahu, prokazatelně a jasně seznámen se všemi zjištěnými legislativními nedostatky, systémovými neshodami a doporučeními, která jsou detailně specifikována uvnitř této auditní zprávy. Souhlasí s navrženými nápravnými opatřeními a zavazuje se k jejich vyřešení a odstranění v definovaných zákonných či dohodnutých termínech.
               </p>
-            )}
-          </div>
-        </div>
+            </div>
 
-        {filteredDoporuceni.length > 0 && (
-          <>
-            <div className="page-break"></div>
-            <div className="p-8">
-              <h2 className="text-base font-bold uppercase border-b-2 border-black pb-2 mb-4 tracking-wide text-blue-900">
-                3. Doporučení pro zvýšení úrovně bezpečnosti
-              </h2>
-              <div className="space-y-3">
-                {filteredDoporuceni.map((kb: any) => (
-                  <div key={kb.bod} className="p-3 border border-blue-200 bg-blue-50/20 rounded-md text-[11px] space-y-1" style={{ pageBreakInside: 'avoid' }}>
-                    <p className="font-bold text-blue-900">Kontrolní bod č. {kb.bod}</p>
-                    <p className="text-slate-800 italic">"{kb.doporuceni}"</p>
-                  </div>
-                ))}
+            <div className="grid grid-cols-2 gap-12 pt-12 mt-12 border-t border-slate-300">
+              <div className="space-y-12">
+                <div className="border-b border-black w-full h-8"></div>
+                <div className="text-center">
+                  <p className="font-bold text-[12px] uppercase">Provedl (Za BPyes):</p>
+                  <p className="text-[10px] text-slate-500">Oprávněný specialista BOZP a PO</p>
+                  <p className="text-[9px] text-slate-400">Dne: {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : 'Neuvedeno'}</p>
+                </div>
+              </div>
+              <div className="space-y-12">
+                <div className="border-b border-black w-full h-8"></div>
+                <div className="text-center">
+                  <p className="font-bold text-[12px] uppercase">Zástupce klienta / subjektu:</p>
+                  <p className="text-[10px] text-slate-500">Odpovědná osoba seznámená s reportem</p>
+                  <p className="text-[9px] text-slate-400">Podpis / Razítko převzetí</p>
+                </div>
               </div>
             </div>
-          </>
-        )}
+          </div>
 
+          <div style={{ pageBreakBefore: 'always' }}></div>
+
+          <div className="p-8">
+            <h2 className="text-base font-bold uppercase border-b-2 border-black pb-2 mb-4 tracking-wide">1. Manažerské shrnutí a statistiky</h2>
+            
+            <div className="grid grid-cols-4 gap-2 text-center text-[11px] mb-6">
+              <div className="p-3 border bg-slate-50 font-bold"><span className="text-lg block font-black">{stats.total}</span>CELKEM BODŮ</div>
+              <div className="p-3 border border-green-300 bg-green-50 text-green-900 font-bold"><span className="text-lg block font-black">{stats.V}</span>VYHOVUJE</div>
+              <div className="p-3 border border-red-300 bg-red-50 text-red-900 font-bold"><span className="text-lg block font-black">{stats.N}</span>NESHODY (N)</div>
+              <div className="p-3 border bg-slate-50 text-slate-700 font-bold"><span className="text-lg block font-black">{stats.NK + stats.NA}</span>NEHODNOCENO</div>
+            </div>
+
+            <div className="space-y-2 mb-6">
+              <h3 className="text-xs font-bold uppercase text-slate-700">Závěrečné vyhodnocení specialisty:</h3>
+              <div className="p-4 border bg-slate-50/50 rounded-lg text-[11px] text-justify italic leading-relaxed">
+                {record.poznamka || "Při prověrce nebylo vloženo žádné doprovodné textové hodnocení."}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold uppercase text-slate-700">Účastníci prověrky uvedení v protokolu:</h3>
+              <table className="w-full text-left text-[11px] border-collapse border">
+                <thead>
+                  <tr className="bg-slate-100 border-b"><th className="p-2 font-bold border-r">Jméno a příjmení</th><th className="p-2 font-bold">Pracovní pozice / Vztah k subjektu</th></tr>
+                </thead>
+                <tbody>
+                  {record.ucastnici?.map((u: any, i: number) => (
+                    <tr key={i} className="border-b">
+                      <td className="p-2 font-medium border-r">{u.jmeno || 'Neuvedeno'}</td>
+                      <td className="p-2">{u.pozice || 'Bez zařazení'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style={{ pageBreakBefore: 'always' }}></div>
+
+          <div className="p-8">
+            <h2 className="text-base font-bold uppercase border-b-2 border-black pb-2 mb-4 tracking-wide flex justify-between items-center">
+              <span>2. Registr zjištěných nedostatků a nápravných opatření</span>
+              {filterPosition !== "all" && <span className="text-[10px] font-normal lowercase bg-slate-100 px-2 py-1 rounded border">Filtr pozice: {filterPosition}</span>}
+            </h2>
+
+            <div className="space-y-6">
+              {filteredZavady.map((z: any) => (
+                <div key={z.id} className="border border-slate-300 rounded-lg p-4 bg-white" style={{ pageBreakInside: 'avoid' }}>
+                  <div className="flex justify-between items-start border-b pb-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold bg-black text-white text-[11px] h-5 w-5 rounded-full flex items-center justify-center">
+                        {z.bodKontroly || '*'}
+                      </span>
+                      <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Neshoda v kontrolním bodu</span>
+                    </div>
+                    {z.zavaznost && (
+                      <span className="text-[9px] font-bold uppercase border px-2 py-0.5 rounded bg-slate-50">
+                        Priorita: {z.zavaznost === 'critical' ? 'KRITICKÁ' : z.zavaznost === 'high' ? 'VYSOKÁ' : 'STŘEDNÍ'}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-3 text-[11px]">
+                    <div>
+                      <span className="text-[10px] text-slate-500 uppercase font-bold block">Popis zjištěné závady:</span>
+                      <p className="font-bold text-slate-900">{z.popis}</p>
+                    </div>
+
+                    <div className="flex gap-4 bg-slate-50 p-3 rounded border">
+                      <div className="flex-1">
+                        <span className="text-[9px] text-slate-500 uppercase font-bold block mb-0.5">Návrh opatření:</span>
+                        <p className="font-medium text-slate-800">{z.navrhOpatreni}</p>
+                      </div>
+                      <div className="flex-1">
+                        <span className="text-[9px] text-slate-500 uppercase font-bold block mb-0.5">Místo zjištění:</span>
+                        <p className="font-bold text-blue-950">{z.lokalizace || 'Celá společnost'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between pt-1">
+                      <div><span className="text-[9px] text-slate-400 block">Termín:</span><p className="font-mono font-bold">{z.terminOdstraneni ? new Date(z.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</p></div>
+                      <div><span className="text-[9px] text-slate-400 block">Odpovědná pozice:</span><p className="font-bold uppercase text-slate-900">{z.odpovednaOsoba || 'Neuvedena'}</p></div>
+                      <div className="text-right"><span className="text-[9px] text-slate-400 block">Stav:</span><p className="font-bold text-slate-800">{z.stavOdstraneni === 'odstranena' ? '✅ ODSTRANĚNO' : '❌ NEVYŘEŠENO'}</p></div>
+                    </div>
+
+                    {z.foto && (
+                      <div className="pt-2 mt-2 border-t">
+                        <span className="text-[9px] text-slate-400 block mb-1">Fotodokumentace:</span>
+                        <img src={z.foto} alt="Závada" className="h-40 w-auto object-cover rounded border border-slate-300" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {filteredZavady.length === 0 && (
+                <p className="text-[11px] text-slate-500 italic text-center py-8 border rounded-lg border-dashed">
+                  Žádné neshody k zobrazení.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {filteredDoporuceni.length > 0 && (
+            <>
+              <div style={{ pageBreakBefore: 'always' }}></div>
+              <div className="p-8">
+                <h2 className="text-base font-bold uppercase border-b-2 border-black pb-2 mb-4 tracking-wide text-blue-900">
+                  3. Doporučení pro zvýšení úrovně bezpečnosti
+                </h2>
+                <div className="space-y-3">
+                  {filteredDoporuceni.map((kb: any) => (
+                    <div key={kb.bod} className="p-3 border border-blue-200 bg-blue-50/20 rounded-md text-[11px] space-y-1" style={{ pageBreakInside: 'avoid' }}>
+                      <p className="font-bold text-blue-900">Kontrolní bod č. {kb.bod}</p>
+                      <p className="text-slate-800 italic">"{kb.doporuceni}"</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+        </div>
       </div>
     </div>
   );
