@@ -11,7 +11,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronDown, ChevronUp, Check, AlertTriangle, HelpCircle } from "lucide-react";
-import { cn } from "@/app/lib/utils"; // <-- TOTO BYL TEN CHYBĚJÍCÍ IMPORT
 
 // Kompletní auditní osnova s fixně nadefinovanými sekcemi (Oddíl B, C, D...)
 const PRESET_QUESTIONS = [
