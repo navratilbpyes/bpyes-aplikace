@@ -3,7 +3,7 @@
 import { useData } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { 
   ChevronLeft, 
@@ -109,24 +109,21 @@ export default function RecordDetailPage() {
     setShowEmailModal(false);
   };
 
-  // Profi generování PDF přes html2pdf.js (přímé stažení souboru)
   const handleDownloadPDF = async () => {
     setIsGeneratingPDF(true);
     toast({ title: "Připravuji PDF", description: "Dokument se generuje, čekejte prosím..." });
     
     try {
-      // Dynamický import (nutný pro Next.js, aby to nespadlo na serveru)
       const html2pdf = (await import('html2pdf.js')).default;
-      
       const element = document.getElementById('pdf-export-container');
       
       const opt = {
-        margin:       [10, 10, 15, 10], // Okraje
+        margin:       [10, 10, 15, 10],
         filename:     pdfFileName,
         image:        { type: 'jpeg', quality: 0.98 },
         html2canvas:  { scale: 2, useCORS: true, logging: false },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['css', 'legacy'], before: '.page-break' } // Zalamování stránek
+        pagebreak:    { mode: ['css', 'legacy'], before: '.page-break' }
       };
 
       await html2pdf().set(opt).from(element).save();
@@ -174,7 +171,6 @@ export default function RecordDetailPage() {
         </div>
       )}
 
-      {/* NAVIGAČNÍ A OVLÁDACÍ PANEL NA OBRAZOVCE */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -233,7 +229,6 @@ export default function RecordDetailPage() {
         </CardHeader>
       </Card>
 
-      {/* DIGITÁLNÍ NÁHLED NA OBRAZOVCE (Webové rozhraní) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
           <Card className="border-none shadow-sm">
@@ -294,13 +289,7 @@ export default function RecordDetailPage() {
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* SKRYTÁ TISKOVÁ ŠABLONA (Vykresluje se pouze do PDF pomocí html2pdf.js) */}
-      {/* Umístěna absolutně mimo obrazovku, aby nekazila webový vzhled */}
-      {/* ========================================================================= */}
       <div className="absolute top-[-9999px] left-[-9999px] w-[800px] bg-white text-black font-sans pointer-events-none" id="pdf-export-container">
-        
-        {/* TITULNÍ STRANA */}
         <div className="p-8" style={{ minHeight: '1050px' }}>
           <div className="flex justify-between items-start border-b-2 border-black pb-6">
             <div>
@@ -368,18 +357,16 @@ export default function RecordDetailPage() {
           </div>
         </div>
 
-        {/* TŘÍDA PRO ZALOMENÍ STRÁNKY V PDF */}
         <div className="page-break"></div>
 
-        {/* STRANA 2: STATISTIKA */}
         <div className="p-8">
           <h2 className="text-base font-bold uppercase border-b-2 border-black pb-2 mb-4 tracking-wide">1. Manažerské shrnutí a statistiky</h2>
           
           <div className="grid grid-cols-4 gap-2 text-center text-[11px] mb-6">
-            <div className="p-3 border bg-slate-50 font-bold"><span className="text-lg block font-black">{totalPoints}</span>CELKEM BODŮ</div>
-            <div className="p-3 border border-green-300 bg-green-50 text-green-900 font-bold"><span className="text-lg block font-black">?</span>VYHOVUJE</div>
+            <div className="p-3 border bg-slate-50 font-bold"><span className="text-lg block font-black">--</span>CELKEM BODŮ</div>
+            <div className="p-3 border border-green-300 bg-green-50 text-green-900 font-bold"><span className="text-lg block font-black">--</span>VYHOVUJE</div>
             <div className="p-3 border border-red-300 bg-red-50 text-red-900 font-bold"><span className="text-lg block font-black">{filteredZavady.length}</span>NESHODY (N)</div>
-            <div className="p-3 border bg-slate-50 text-slate-700 font-bold"><span className="text-lg block font-black">?</span>NEKONTROLOVÁNO</div>
+            <div className="p-3 border bg-slate-50 text-slate-700 font-bold"><span className="text-lg block font-black">--</span>NEKONTROLOVÁNO</div>
           </div>
 
           <div className="space-y-2 mb-6">
@@ -409,7 +396,6 @@ export default function RecordDetailPage() {
 
         <div className="page-break"></div>
 
-        {/* STRANA 3: VÝPIS ZÁVAD */}
         <div className="p-8">
           <h2 className="text-base font-bold uppercase border-b-2 border-black pb-2 mb-4 tracking-wide flex justify-between items-center">
             <span>2. Registr zjištěných nedostatků a nápravných opatření</span>
@@ -474,7 +460,6 @@ export default function RecordDetailPage() {
           </div>
         </div>
 
-        {/* STRANA 4: DOPORUČENÍ */}
         {filteredDoporuceni.length > 0 && (
           <>
             <div className="page-break"></div>
