@@ -118,7 +118,7 @@ export default function NewInspectionPage() {
 
   const uniquePositions = useMemo(() => {
     if (!selectedKlient) return [];
-    const positions = selectedKlient.odpovedneOsoby.map(o => o.pozice).filter(Boolean);
+    const positions = (selectedKlient.odpovedneOsoby || []).map(o => o.pozice).filter(Boolean);
     return Array.from(new Set(positions));
   }, [selectedKlient]);
 
@@ -289,9 +289,13 @@ export default function NewInspectionPage() {
       }
     });
 
+    // ROBUSTNÍ ZABEZPEČENÍ ČÍSLA KONTROLY (Už nespadne)
+    const generatedCislo = generateRecordNumber(year, countInYear, formData.typKontroly);
+    const safeCislo = generatedCislo ? generatedCislo : `2026/000/${formData.typKontroly}`;
+
     const newRecord = {
       id: Math.random().toString(36).substring(7),
-      cislo: generateRecordNumber(year, countInYear, formData.typKontroly),
+      cislo: safeCislo,
       revize: parseInt(revisionNumber) || 0,
       ...formData,
       kontrolniBody: finalKontrolniBody,
@@ -304,7 +308,7 @@ export default function NewInspectionPage() {
     setZaznamy(prev => [...prev, newRecord as any]);
     localStorage.removeItem('bpyes_draft_kontrola');
     setShowSaveModal(false);
-    toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola ${newRecord.cislo} uložena.` });
+    toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola uložena.` });
     router.push(`/zaznamy/${newRecord.id}`);
   };
 
@@ -322,7 +326,6 @@ export default function NewInspectionPage() {
           </Button>
         )}
 
-        {/* NÁVRAT ŠABLON */}
         {ukazatSablony && (
           <div className="bg-amber-50/50 -mx-4 -mt-4 p-4 rounded-t-lg border-b border-amber-100 mb-4">
             <Label className="text-xs font-bold text-amber-900 mb-2 block">Rychlý výběr ze šablony zjištění</Label>
@@ -416,7 +419,6 @@ export default function NewInspectionPage() {
           )}
         </div>
 
-        {/* NÁVRAT FUNKCE PRO ODŠKRTNUTÍ */}
         <div className="pt-4 mt-2 border-t border-amber-200/60 bg-amber-50/30 -mx-4 -mb-4 p-4 rounded-b-lg">
           <div className="flex items-center gap-2 cursor-pointer select-none" 
                onClick={() => {
@@ -656,7 +658,7 @@ export default function NewInspectionPage() {
                   <div className="h-11 bg-muted rounded-md flex items-center px-3 text-sm text-muted-foreground italic">Nejprve zvolte klienta</div>
                 ) : (
                   <div className="grid grid-cols-1 gap-2 p-3 border rounded-md bg-white max-h-[150px] overflow-y-auto">
-                    {selectedKlient?.pracoviste.map(p => (
+                    {(selectedKlient?.pracoviste || []).map(p => (
                       <label key={p.id} className="flex items-center gap-3 cursor-pointer">
                         <Checkbox 
                           checked={formData.pracovisteIds.includes(p.id)} 
