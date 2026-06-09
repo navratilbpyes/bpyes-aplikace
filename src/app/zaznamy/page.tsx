@@ -31,18 +31,17 @@ export default function RecordDetailPage() {
   const record = useMemo(() => zaznamy.find(z => z.id === params.id), [zaznamy, params.id]);
   const klient = useMemo(() => klienti.find(k => k.id === record?.klientId), [klienti, record]);
   
-  // ROBUSTNÍ VERZE: Zvládne staré záznamy (pracovisteId) i nové záznamy (pracovisteIds)
+  // ROBUSTNÍ VERZE: Zvládne staré záznamy (pracovisteId) i nové záznamy s více pracovišti (pracovisteIds)
   const pracovisteList = useMemo(() => {
     if (!klient || !record) return [];
+    const prac = klient.pracoviste || []; // Fallback proti pádu
     
-    // Pokud je to nový záznam s polem pracovišť
     if (record.pracovisteIds && Array.isArray(record.pracovisteIds)) {
-      return klient.pracoviste.filter(p => record.pracovisteIds.includes(p.id));
+      return prac.filter(p => record.pracovisteIds.includes(p.id));
     }
     
-    // Pokud je to starý záznam s jedním pracovištěm
     if (record.pracovisteId) {
-      const oldPrac = klient.pracoviste.find(p => p.id === record.pracovisteId);
+      const oldPrac = prac.find(p => p.id === record.pracovisteId);
       return oldPrac ? [oldPrac] : [];
     }
 
@@ -111,14 +110,16 @@ export default function RecordDetailPage() {
     };
   }, [record]);
 
+  // SUPER BEZPEČNÝ NÁZEV PDF - už nikdy nespadne
   const pdfFileName = useMemo(() => {
     if (!record || !klient) return "export.pdf";
-    const cleanKlient = klient.nazev.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9\s]/g, "").trim();
+    const cleanKlient = (klient.nazev || "Neznamy").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9\s]/g, "").trim();
     const cleanDate = (record.datum || "").replace(/-/g, "");
     const cleanType = record.typKontroly || "KONTROLA";
     const rev = record.revize !== undefined ? `R${record.revize}` : "R0";
     const positionSuffix = filterPosition !== "all" ? `_${filterPosition.replace(/\s+/g, "")}` : "";
-    return `${record.cislo.replace(/\//g, "-")}_${cleanType}_${cleanKlient}_${cleanDate}_${rev}${positionSuffix}.pdf`;
+    const safeCislo = (record.cislo || "zaznam").replace(/\//g, "-");
+    return `${safeCislo}_${cleanType}_${cleanKlient}_${cleanDate}_${rev}${positionSuffix}.pdf`;
   }, [record, klient, filterPosition]);
 
   const getFullInspectionTitle = (type: string) => {
@@ -292,7 +293,7 @@ export default function RecordDetailPage() {
         </div>
       </div>
 
-      {/* TISKOVÁ ŠABLONA PDF (Stacked layout s fixními pracovišti a scroll ošetřením) */}
+      {/* TISKOVÁ ŠABLONA PDF */}
       <div style={{ position: 'absolute', left: '-9999px', top: '0px', width: '794px', overflow: 'hidden', zIndex: -1000, backgroundColor: '#fff' }}>
         <div id="pdf-export-container" style={{ width: '794px', maxWidth: '794px', fontFamily: 'Arial, sans-serif', padding: '24px', boxSizing: 'border-box', backgroundColor: '#fff' }}>
           
