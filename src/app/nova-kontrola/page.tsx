@@ -16,7 +16,8 @@ import {
   User as UserIcon,
   StickyNote,
   Camera,
-  Image as ImageIcon
+  CheckSquare,
+  Square
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -35,6 +36,40 @@ interface TypickaZavada {
   popis: string;
   opatreni: string;
 }
+
+// Rozšířený stav pro formulář jedné závady (sjednocuje všechny naše novinky)
+interface DefectFormState {
+  uid: string;
+  popis: string;
+  navrhOpatreni: string;
+  doporuceni: string;
+  terminOdstraneni: string;
+  odpovednaOsoba: string;
+  odpovednaOsobaManualni: string;
+  lokalizace: string;
+  zavaznost: string;
+  odstraneno: boolean;
+  datumOdstraneni: string;
+  zaznamProvedl: string;
+  zaznamProvedlManualni: string;
+  foto?: string;
+}
+
+const createEmptyDefect = (defaultPerson: string = ""): DefectFormState => ({
+  uid: Math.random().toString(36).substring(7),
+  popis: "",
+  navrhOpatreni: "",
+  doporuceni: "",
+  terminOdstraneni: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+  odpovednaOsoba: defaultPerson,
+  odpovednaOsobaManualni: "",
+  lokalizace: "",
+  zavaznost: "",
+  odstraneno: false,
+  datumOdstraneni: "",
+  zaznamProvedl: "",
+  zaznamProvedlManualni: ""
+});
 
 const GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTqBDqcv7REG4fkbLQHUqOQP13KzwB-wAAEaotZldSvZMvTpzfc8OlJvo8isBWkmQBpjYTm-I_X6Lls/pub?output=csv";
 
@@ -72,12 +107,11 @@ export default function NewInspectionPage() {
     poznamka: ''
   });
 
-  const [checklist, setChecklist] = useState<Record<number, KontrolniBod & { foto?: string }>>({});
-  const [pointDefects, setPointDefects] = useState<Record<number, Partial<Zavada> & { doporuceni?: string }>>({});
-  const [manualDefects, setManualDefects] = useState<(Partial<Zavada> & { doporuceni?: string })[]>([]);
+  const [checklist, setChecklist] = useState<Record<number, KontrolniBod>>({});
+  // Změněno na pole: Každý bod může mít X závad
+  const [pointDefects, setPointDefects] = useState<Record<number, DefectFormState[]>>({});
+  const [manualDefects, setManualDefects] = useState<DefectFormState[]>([]);
   const [googleZavady, setGoogleZavady] = useState<Record<string, Record<number, TypickaZavada[]>>>({});
-  
-  // Stát pro vlastní volné body přidávané na konci checklistu
   const [customPoints, setCustomPoints] = useState<ChecklistPoint[]>([]);
 
   const selectedKlient = klienti.find(k => k.id === formData.klientId);
@@ -104,7 +138,6 @@ export default function NewInspectionPage() {
           for (let i = 1; i < rows.length; i++) {
             const r = rows[i];
             if (!r || r.length < 3) continue;
-            
             const typ = iTyp >= 0 ? r[iTyp]?.trim() : r[0]?.trim();
             const id = parseInt(iId >= 0 ? r[iId] : r[2]);
             const nazev = (iKratky >= 0 ? r[iKratky] : r[3])?.trim();
@@ -114,12 +147,7 @@ export default function NewInspectionPage() {
             if (typ && !isNaN(id) && nazev) {
               if (!parsedDefects[typ]) parsedDefects[typ] = {};
               if (!parsedDefects[typ][id]) parsedDefects[typ][id] = [];
-              
-              parsedDefects[typ][id].push({
-                nazev: nazev,
-                popis: popis || "",
-                opatreni: opatreni || ""
-              });
+              parsedDefects[typ][id].push({ nazev, popis: popis || "", opatreni: opatreni || "" });
             }
           }
           setGoogleZavady(parsedDefects);
@@ -135,11 +163,7 @@ export default function NewInspectionPage() {
     const interval = setInterval(() => {
       if (formData.klientId) {
         localStorage.setItem('bpyes_draft_kontrola', JSON.stringify({
-          formData,
-          checklist,
-          pointDefects,
-          manualDefects,
-          customPoints
+          formData, checklist, pointDefects, manualDefects, customPoints
         }));
       }
     }, 30000);
@@ -148,10 +172,7 @@ export default function NewInspectionPage() {
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (formData.klientId) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
+      if (formData.klientId) { e.preventDefault(); e.returnValue = ''; }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
@@ -186,16 +207,10 @@ export default function NewInspectionPage() {
     if (rating === 'NK') text = "V rámci prověrky, prohlídky nebo auditu nebyla tato část kontrolována.";
     if (rating === 'N') {
       text = point.nText || "Zjištěn nedostatek. Je nutné zjednat nápravu.";
-      
+      // Pokud tam ještě nejsou závady, vytvoříme první
       setPointDefects(prev => ({
         ...prev,
-        [point.id]: {
-          popis: "",
-          navrhOpatreni: "",
-          doporuceni: "",
-          terminOdstraneni: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          odpovednaOsoba: selectedKlient?.kontaktOsoba || ""
-        }
+        [point.id]: prev[point.id] && prev[point.id].length > 0 ? prev[point.id] : [createEmptyDefect(selectedKlient?.kontaktOsoba)]
       }));
     }
 
@@ -205,26 +220,26 @@ export default function NewInspectionPage() {
         bod: point.id,
         hodnoceni: rating,
         textHodnoceni: text,
-        poznamka: prev[point.id]?.poznamka,
-        foto: prev[point.id]?.foto
+        poznamka: prev[point.id]?.poznamka
       }
     }));
   };
 
-  const handlePhotoUpload = (pointId: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setChecklist(prev => ({
-        ...prev,
-        [pointId]: {
-          ...prev[pointId],
-          foto: reader.result as string
-        }
-      }));
-    };
-    reader.readAsDataURL(file);
+  // Helpery pro bezpečný update stavu složitých polí
+  const updateDefect = (pointId: number, index: number, field: keyof DefectFormState, value: any) => {
+    setPointDefects(prev => {
+      const arr = [...(prev[pointId] || [])];
+      arr[index] = { ...arr[index], [field]: value };
+      return { ...prev, [pointId]: arr };
+    });
+  };
+
+  const updateManualDefect = (index: number, field: keyof DefectFormState, value: any) => {
+    setManualDefects(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
   };
 
   const handleNext = () => {
@@ -243,35 +258,29 @@ export default function NewInspectionPage() {
     const aggregatedZavady: Zavada[] = [];
     let defectCounter = 1;
 
-    Object.entries(pointDefects).forEach(([pointId, defect]) => {
+    const buildZavadaAPI = (def: DefectFormState, pointId?: number): Zavada => ({
+      id: def.uid,
+      cislo: defectCounter++,
+      bodKontroly: pointId,
+      popis: def.popis || "",
+      navrhOpatreni: def.doporuceni ? `${def.navrhOpatreni}\n\nDOPORUČENÍ: ${def.doporuceni}` : (def.navrhOpatreni || ""),
+      terminOdstraneni: def.terminOdstraneni || "",
+      odpovednaOsoba: def.odpovednaOsoba === 'manual' ? def.odpovednaOsobaManualni : def.odpovednaOsoba,
+      stavOdstraneni: def.odstraneno ? 'odstranena' : 'otevrena',
+      lokalizace: def.lokalizace,
+      zavaznost: def.zavaznost,
+      datumOdstraneni: def.odstraneno ? def.datumOdstraneni : undefined,
+      zaznamProvedl: def.odstraneno ? (def.zaznamProvedl === 'manual' ? def.zaznamProvedlManualni : def.zaznamProvedl) : undefined,
+      foto: def.foto
+    } as any);
+
+    Object.entries(pointDefects).forEach(([pointId, defects]) => {
       if (checklist[Number(pointId)]?.hodnoceni === 'N') {
-        aggregatedZavady.push({
-          id: Math.random().toString(36).substring(7),
-          cislo: defectCounter++,
-          bodKontroly: Number(pointId),
-          popis: defect.popis || "",
-          navrhOpatreni: defect.navrhOpatreni || "",
-          terminOdstraneni: defect.terminOdstraneni || "",
-          odpovednaOsoba: defect.odpovednaOsoba || "",
-          stavOdstraneni: 'otevrena',
-          // Ukládáme i doporučení do popisu nebo speciálního pole, pokud by systém měl (zatím lepíme k opatření)
-          ...(defect.doporuceni ? { navrhOpatreni: `${defect.navrhOpatreni}\n\nDOPORUČENÍ: ${defect.doporuceni}` } : {})
-        });
+        defects.forEach(def => aggregatedZavady.push(buildZavadaAPI(def, Number(pointId))));
       }
     });
 
-    manualDefects.forEach((defect) => {
-      aggregatedZavady.push({
-        id: Math.random().toString(36).substring(7),
-        cislo: defectCounter++,
-        popis: defect.popis || "",
-        navrhOpatreni: defect.navrhOpatreni || "",
-        terminOdstraneni: defect.terminOdstraneni || "",
-        odpovednaOsoba: defect.odpovednaOsoba || "",
-        stavOdstraneni: 'otevrena',
-        ...(defect.doporuceni ? { navrhOpatreni: `${defect.navrhOpatreni}\n\nDOPORUČENÍ: ${defect.doporuceni}` } : {})
-      });
-    });
+    manualDefects.forEach(def => aggregatedZavady.push(buildZavadaAPI(def)));
 
     const newRecord = {
       id: Math.random().toString(36).substring(7),
@@ -290,20 +299,168 @@ export default function NewInspectionPage() {
     router.push(`/zaznamy/${newRecord.id}`);
   };
 
+  const renderDefectForm = (def: DefectFormState, idx: number, pointId: number | null, isManual: boolean) => {
+    const dostupneZavady = pointId ? (googleZavady[formData.typKontroly]?.[pointId] || []) : [];
+    const updateFn = isManual ? (f: any, v: any) => updateManualDefect(idx, f, v) : (f: any, v: any) => updateDefect(pointId as number, idx, f, v);
+    const removeFn = isManual ? () => setManualDefects(p => p.filter((_, i) => i !== idx)) : () => setPointDefects(p => ({ ...p, [pointId as number]: p[pointId as number].filter((_, i) => i !== idx) }));
+    
+    // Zjistíme, jestli má pointId šablony. Pro volné body to bude prázdné.
+    const ukazatSablony = !!pointId && pointId < 90000;
+
+    return (
+      <div key={def.uid} className="p-4 bg-white rounded-lg border border-amber-200/60 shadow-sm space-y-5 relative">
+        {(isManual || (pointDefects[pointId as number]?.length > 1)) && (
+          <Button variant="ghost" size="icon" className="absolute top-2 right-2 text-muted-foreground hover:bg-red-50 hover:text-red-600" onClick={removeFn}>
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+
+        {ukazatSablony && (
+          <div className="bg-amber-50/50 -mx-4 -mt-4 p-4 rounded-t-lg border-b border-amber-100 mb-4">
+            <Label className="text-xs font-bold text-amber-900 mb-2 block">Rychlý výběr ze šablony zjištění</Label>
+            <Select 
+              disabled={dostupneZavady.length === 0}
+              onValueChange={(v) => {
+                const vybrana = dostupneZavady[parseInt(v)];
+                if (vybrana) {
+                  updateFn('popis', vybrana.popis);
+                  updateFn('navrhOpatreni', vybrana.opatreni);
+                }
+              }}
+            >
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder={dostupneZavady.length > 0 ? "-- Vyberte typický nedostatek --" : `Žádné šablony pro bod ID ${pointId}. (Doplňte do Tabulky)`} />
+              </SelectTrigger>
+              <SelectContent>
+                {dostupneZavady.map((tz, i) => <SelectItem key={i} value={i.toString()}>{tz.nazev}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-xs">Místo zjištění (Lokalizace)</Label>
+            <Input value={def.lokalizace} onChange={(e) => updateFn('lokalizace', e.target.value)} placeholder="Např. Hala B, 1. patro..." className="bg-white h-10" />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs">Závažnost (Priorita)</Label>
+            <Select value={def.zavaznost} onValueChange={(v) => updateFn('zavaznost', v)}>
+              <SelectTrigger className="bg-white h-10">
+                <SelectValue placeholder="Nevyplněno (Volitelné)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Nízká</SelectItem>
+                <SelectItem value="medium">Střední</SelectItem>
+                <SelectItem value="high">Vysoká</SelectItem>
+                <SelectItem value="critical">Kritická (Ihned řešit!)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs">Popis závady *</Label>
+            <Textarea value={def.popis} onChange={(e) => updateFn('popis', e.target.value)} placeholder="Detailní popis nedostatku..." className="bg-white min-h-[100px]" />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs">Návrh opatření *</Label>
+            <Textarea value={def.navrhOpatreni} onChange={(e) => updateFn('navrhOpatreni', e.target.value)} placeholder="Co je nutné udělat..." className="bg-white min-h-[100px]" />
+          </div>
+
+          <div className="space-y-2 md:col-span-2">
+            <Label className="text-xs text-blue-700 font-semibold">Doporučení auditora (Volitelné)</Label>
+            <Textarea value={def.doporuceni} onChange={(e) => updateFn('doporuceni', e.target.value)} placeholder="Doporučujeme zvážit..." className="bg-blue-50/50 border-blue-200" />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs">Termín odstranění</Label>
+            <Input type="date" value={def.terminOdstraneni} onChange={(e) => updateFn('terminOdstraneni', e.target.value)} className="bg-white h-10" />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs">Odpovědná osoba k řešení</Label>
+            <Select value={def.odpovednaOsoba} onValueChange={(v) => updateFn('odpovednaOsoba', v)}>
+              <SelectTrigger className="bg-white h-10"><SelectValue placeholder="Vyberte osobu" /></SelectTrigger>
+              <SelectContent>
+                {selectedKlient?.odpovedneOsoby.map(o => <SelectItem key={o.id} value={`${o.jmeno} ${o.prijmeni}`}>{o.jmeno} {o.prijmeni} ({o.pozice})</SelectItem>)}
+                <SelectItem value="manual">-- Zadat manuálně --</SelectItem>
+              </SelectContent>
+            </Select>
+            {def.odpovednaOsoba === 'manual' && (
+              <Input placeholder="Vepište jméno a pozici..." value={def.odpovednaOsobaManualni} onChange={(e) => updateFn('odpovednaOsobaManualni', e.target.value)} className="mt-2 h-10 bg-white border-dashed" />
+            )}
+          </div>
+        </div>
+
+        {/* Správa fotografie */}
+        <div className="pt-2">
+          <div className="relative inline-block">
+            <Button variant="outline" size="sm" className="text-muted-foreground cursor-pointer">
+              <Camera className="h-4 w-4 mr-2" /> {def.foto ? "Změnit fotku" : "Přidat fotodokumentaci"}
+            </Button>
+            <Input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const r = new FileReader();
+                r.onloadend = () => updateFn('foto', r.result as string);
+                r.readAsDataURL(file);
+              }}
+            />
+          </div>
+          {def.foto && (
+            <div className="relative mt-3 inline-block border rounded-md p-1 bg-muted/30">
+              <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow" onClick={() => updateFn('foto', '')}><X className="h-3 w-3" /></Button>
+              <img src={def.foto} alt="Závada" className="h-40 w-auto object-cover rounded shadow-sm" />
+            </div>
+          )}
+        </div>
+
+        {/* Historie a řešení (Odstraněno) */}
+        <div className="pt-4 mt-2 border-t border-amber-200/60 bg-amber-50/30 -mx-4 -mb-4 p-4 rounded-b-lg">
+          <div className="flex items-center gap-2 cursor-pointer select-none" 
+               onClick={() => {
+                 updateFn('odstraneno', !def.odstraneno);
+                 if (!def.odstraneno && !def.datumOdstraneni) updateFn('datumOdstraneni', new Date().toISOString().split('T')[0]);
+               }}>
+            {def.odstraneno ? <CheckSquare className="h-5 w-5 text-green-600" /> : <Square className="h-5 w-5 text-muted-foreground" />}
+            <span className={cn("font-bold text-sm", def.odstraneno ? "text-green-700" : "text-muted-foreground")}>Nedostatek byl odstraněn</span>
+          </div>
+          
+          {def.odstraneno && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 animate-in slide-in-from-top-2">
+              <div className="space-y-2">
+                <Label className="text-xs">Datum odstranění</Label>
+                <Input type="date" value={def.datumOdstraneni} onChange={(e) => updateFn('datumOdstraneni', e.target.value)} className="bg-white h-10" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Záznam o odstranění provedl</Label>
+                <Select value={def.zaznamProvedl} onValueChange={(v) => updateFn('zaznamProvedl', v)}>
+                  <SelectTrigger className="bg-white h-10"><SelectValue placeholder="Vyberte osobu" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Auditor BPyes">Auditor (My / BPyes)</SelectItem>
+                    {selectedKlient?.odpovedneOsoby.map(o => <SelectItem key={o.id} value={`${o.jmeno} ${o.prijmeni}`}>{o.jmeno} {o.prijmeni}</SelectItem>)}
+                    <SelectItem value="manual">-- Zadat manuálně --</SelectItem>
+                  </SelectContent>
+                </Select>
+                {def.zaznamProvedl === 'manual' && (
+                  <Input placeholder="Vepište jméno a pozici..." value={def.zaznamProvedlManualni} onChange={(e) => updateFn('zaznamProvedlManualni', e.target.value)} className="mt-2 h-10 bg-white border-dashed" />
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderPoint = (point: ChecklistPoint, isCustom: boolean = false) => {
     const state = checklist[point.id];
-    const defect = pointDefects[point.id];
-    const dostupneZavady = googleZavady[formData.typKontroly]?.[point.id] || point.typickeZavady || [];
+    const defects = pointDefects[point.id] || [];
     
     return (
       <div key={point.id} className="pt-8 first:pt-0 space-y-4 relative group">
         {isCustom && (
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="absolute top-2 right-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-            onClick={() => setCustomPoints(prev => prev.filter(p => p.id !== point.id))}
-          >
+          <Button variant="ghost" size="icon" className="absolute top-2 right-0 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setCustomPoints(prev => prev.filter(p => p.id !== point.id))}>
             <X className="h-4 w-4" />
           </Button>
         )}
@@ -312,12 +469,7 @@ export default function NewInspectionPage() {
           <div className="flex gap-3 flex-1 w-full">
             <span className="font-mono text-muted-foreground font-bold">{isCustom ? '*' : point.id}.</span>
             {isCustom ? (
-              <Input 
-                value={point.text} 
-                onChange={(e) => setCustomPoints(prev => prev.map(p => p.id === point.id ? { ...p, text: e.target.value } : p))}
-                placeholder="Zadejte název vlastního bodu zjištění..."
-                className="font-medium text-[15px] h-8"
-              />
+              <Input value={point.text} onChange={(e) => setCustomPoints(prev => prev.map(p => p.id === point.id ? { ...p, text: e.target.value } : p))} placeholder="Zadejte název vlastního bodu zjištění..." className="font-medium text-[15px] h-8" />
             ) : (
               <p className="font-medium text-[15px]">{point.text}</p>
             )}
@@ -331,9 +483,7 @@ export default function NewInspectionPage() {
               { label: 'NK', rating: 'NK', color: 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200 data-[state=active]:bg-gray-600 data-[state=active]:text-white' }
             ].map((btn) => (
               <Button
-                key={btn.label}
-                variant="outline"
-                data-state={state?.hodnoceni === btn.rating ? 'active' : 'inactive'}
+                key={btn.label} variant="outline" data-state={state?.hodnoceni === btn.rating ? 'active' : 'inactive'}
                 className={cn("h-12 min-w-[50px] font-bold shadow-none transition-all", btn.color)}
                 onClick={() => handleRatingChange(point, btn.rating as any)}
               >
@@ -346,159 +496,38 @@ export default function NewInspectionPage() {
         {state?.hodnoceni && state.hodnoceni !== 'NA' && (
           <div className="space-y-4 ml-8 animate-in fade-in slide-in-from-top-2 duration-300">
             {state.hodnoceni === 'N' && (
-              <div className="p-4 bg-amber-50 rounded-lg border border-amber-200 space-y-4 shadow-inner">
+              <div className="p-4 bg-amber-50/50 rounded-xl border border-amber-200 space-y-6 shadow-inner">
                 <div className="flex items-center gap-2 text-amber-800 font-bold text-sm uppercase">
-                  <AlertTriangle className="h-4 w-4" />
-                  Definice závady
+                  <AlertTriangle className="h-4 w-4" /> Evidence zjištěných nedostatků k tomuto bodu
                 </div>
                 
-                {dostupneZavady.length > 0 && !isCustom && (
-                  <div className="p-3 bg-white/60 border border-amber-200/60 rounded-md space-y-2">
-                    <Label className="text-xs font-bold text-amber-900">Rychlý výběr závady ze šablony</Label>
-                    <Select 
-                      onValueChange={(v) => {
-                        const vybrana = dostupneZavady[parseInt(v)];
-                        if (vybrana) {
-                          setPointDefects(prev => ({
-                            ...prev,
-                            [point.id]: {
-                              ...prev[point.id],
-                              popis: vybrana.popis,
-                              navrhOpatreni: vybrana.opatreni
-                            }
-                          }));
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="-- Vyberte štítek nedostatku --" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {dostupneZavady.map((tz, idx) => (
-                          <SelectItem key={idx} value={idx.toString()}>{tz.nazev}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-xs">Popis závady</Label>
-                    <Textarea 
-                      value={defect?.popis} 
-                      onChange={(e) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], popis: e.target.value }}))}
-                      placeholder="Popište zjištěný nedostatek..."
-                      className="bg-white min-h-[100px]"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Návrh opatření</Label>
-                    <Textarea 
-                      value={defect?.navrhOpatreni} 
-                      onChange={(e) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], navrhOpatreni: e.target.value }}))}
-                      placeholder="Navrhněte řešení..."
-                      className="bg-white min-h-[100px]"
-                    />
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <Label className="text-xs text-blue-700 font-semibold">Doporučení ke zjištění (volitelné)</Label>
-                    <Textarea 
-                      value={defect?.doporuceni || ""} 
-                      onChange={(e) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], doporuceni: e.target.value }}))}
-                      placeholder="Např.: Doporučujeme zvážit instalaci ochranných nárazníků pro zamezení budoucího poškození..."
-                      className="bg-blue-50/50 border-blue-200"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Termín odstranění</Label>
-                    <Input 
-                      type="date"
-                      value={defect?.terminOdstraneni} 
-                      onChange={(e) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], terminOdstraneni: e.target.value }}))}
-                      className="bg-white h-11"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Odpovědná osoba</Label>
-                    <Select 
-                      value={defect?.odpovednaOsoba} 
-                      onValueChange={(v) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], odpovednaOsoba: v }}))}
-                    >
-                      <SelectTrigger className="bg-white h-11">
-                        <SelectValue placeholder="Vyberte osobu" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {selectedKlient?.odpovedneOsoby.map(o => (
-                          <SelectItem key={o.id} value={`${o.jmeno} ${o.prijmeni}`}>{o.jmeno} {o.prijmeni} ({o.pozice})</SelectItem>
-                        ))}
-                        <SelectItem value="manual">-- Zadat manuálně --</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="space-y-6">
+                  {defects.map((def, idx) => renderDefectForm(def, idx, point.id, false))}
                 </div>
+
+                <Button 
+                  variant="outline" 
+                  className="w-full border-dashed border-amber-300 text-amber-800 hover:bg-amber-100"
+                  onClick={() => setPointDefects(prev => ({ ...prev, [point.id]: [...(prev[point.id] || []), createEmptyDefect(selectedKlient?.kontaktOsoba)] }))}
+                >
+                  <Plus className="h-4 w-4 mr-2" /> Přidat další, nesouvisející závadu pod tento stejný bod
+                </Button>
               </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative">
-                <Button variant="outline" size="sm" className="text-muted-foreground cursor-pointer">
-                  <Camera className="h-3 w-3 mr-1" />
-                  {state.foto ? "Změnit fotku" : "Přidat fotku"}
-                </Button>
-                <Input 
-                  type="file" 
-                  accept="image/*" 
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
-                  onChange={(e) => handlePhotoUpload(point.id, e)}
-                />
-              </div>
-
+            <div className="flex items-center gap-2">
               {!state.poznamka && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: " " }}))}
-                  className="text-muted-foreground"
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Přidat interní poznámku
+                <Button variant="ghost" size="sm" onClick={() => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: " " }}))} className="text-muted-foreground">
+                  <Plus className="h-3 w-3 mr-1" /> Přidat interní poznámku (nebude v závadách)
                 </Button>
               )}
+              {state.poznamka && (
+                <div className="flex-1 space-y-2">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1"><StickyNote className="h-3 w-3" /> Interní poznámka k hodnocení bodu</Label>
+                  <Textarea value={state.poznamka} onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: e.target.value }}))} className="bg-muted/30" />
+                </div>
+              )}
             </div>
-
-            {state.foto && (
-              <div className="relative mt-2 inline-block border rounded-md p-1 bg-muted/30">
-                <Button 
-                  variant="destructive" 
-                  size="icon" 
-                  className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
-                  onClick={() => setChecklist(prev => {
-                    const next = {...prev};
-                    delete next[point.id].foto;
-                    return next;
-                  })}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-                <img src={state.foto} alt="Fotodokumentace" className="h-32 w-auto object-cover rounded shadow-sm" />
-              </div>
-            )}
-
-            {state.poznamka && (
-              <div className="flex-1 space-y-2 mt-2">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                  <StickyNote className="h-3 w-3" />
-                  Interní poznámka k bodu
-                </Label>
-                <Textarea 
-                  value={state.poznamka} 
-                  onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: e.target.value }}))}
-                  placeholder="Libovolný doprovodný text k bodu..."
-                  className="bg-muted/30"
-                />
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -520,20 +549,13 @@ export default function NewInspectionPage() {
         <div className="flex items-center gap-2">
           {[1, 2, 3].map((i) => (
             <div key={i} className="flex items-center gap-2">
-              <div 
-                className={cn(
-                  "h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold",
-                  step === i ? "bg-primary text-white" : step > i ? "bg-muted text-muted-foreground" : "bg-green-100 text-green-700"
-                )}
-              >
+              <div className={cn("h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold", step === i ? "bg-primary text-white" : step > i ? "bg-muted text-muted-foreground" : "bg-green-100 text-green-700")}>
                 {step > i ? <CheckCircle2 className="h-5 w-5" /> : i}
               </div>
               {i < 3 && <div className={cn("h-px w-8 bg-muted", step > i && "bg-green-200")} />}
             </div>
           ))}
-          <span className="ml-4 text-sm font-medium text-muted-foreground">
-            {step === 1 ? "Výběr klienta a typu" : step === 2 ? "Kontrolní list" : "Shrnutí"}
-          </span>
+          <span className="ml-4 text-sm font-medium text-muted-foreground">{step === 1 ? "Výběr klienta a typu" : step === 2 ? "Kontrolní list" : "Shrnutí"}</span>
         </div>
       </div>
 
@@ -548,9 +570,7 @@ export default function NewInspectionPage() {
               <div className="space-y-2">
                 <Label>Klient</Label>
                 <Select value={formData.klientId} onValueChange={(v) => setFormData({...formData, klientId: v, pracovisteId: ''})}>
-                  <SelectTrigger className="h-11">
-                    <SelectValue placeholder="Vyberte klienta" />
-                  </SelectTrigger>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="Vyberte klienta" /></SelectTrigger>
                   <SelectContent>
                     {klienti.map(k => <SelectItem key={k.id} value={k.id}>{k.nazev}</SelectItem>)}
                   </SelectContent>
@@ -559,14 +579,8 @@ export default function NewInspectionPage() {
 
               <div className="space-y-2">
                 <Label>Pracoviště</Label>
-                <Select 
-                  disabled={!formData.klientId} 
-                  value={formData.pracovisteId} 
-                  onValueChange={(v) => setFormData({...formData, pracovisteId: v})}
-                >
-                  <SelectTrigger className="h-11">
-                    <SelectValue placeholder="Vyberte pracoviště" />
-                  </SelectTrigger>
+                <Select disabled={!formData.klientId} value={formData.pracovisteId} onValueChange={(v) => setFormData({...formData, pracovisteId: v})}>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="Vyberte pracoviště" /></SelectTrigger>
                   <SelectContent>
                     {selectedKlient?.pracoviste.map(p => <SelectItem key={p.id} value={p.id}>{p.nazev}</SelectItem>)}
                   </SelectContent>
@@ -576,9 +590,7 @@ export default function NewInspectionPage() {
               <div className="space-y-2 md:col-span-2">
                 <Label>Typ kontroly</Label>
                 <Select value={formData.typKontroly} onValueChange={(v: any) => setFormData({...formData, typKontroly: v})}>
-                  <SelectTrigger className="h-11">
-                    <SelectValue placeholder="Zvolte typ kontroly" />
-                  </SelectTrigger>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="Zvolte typ kontroly" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="BOZPaPO">BOZPaPO — Prověrka / audit BOZP a PO</SelectItem>
                     <SelectItem value="PPP">PPP — Preventivní požární prohlídka</SelectItem>
@@ -596,28 +608,13 @@ export default function NewInspectionPage() {
             <div className="space-y-4 pt-4 border-t">
               <div className="flex justify-between items-center">
                 <Label>Účastníci kontroly</Label>
-                <Button variant="ghost" size="sm" onClick={() => setFormData({...formData, ucastnici: [...formData.ucastnici, {jmeno: '', pozice: ''}]})}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Přidat řádek
-                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setFormData({...formData, ucastnici: [...formData.ucastnici, {jmeno: '', pozice: ''}]})}><Plus className="mr-2 h-4 w-4" /> Přidat řádek</Button>
               </div>
               {formData.ucastnici.map((u, i) => (
                 <div key={i} className="flex gap-2">
-                  <Input placeholder="Jméno a příjmení" value={u.jmeno} onChange={(e) => {
-                    const next = [...formData.ucastnici];
-                    next[i].jmeno = e.target.value;
-                    setFormData({...formData, ucastnici: next});
-                  }} />
-                  <Input placeholder="Pozice" value={u.pozice} onChange={(e) => {
-                    const next = [...formData.ucastnici];
-                    next[i].pozice = e.target.value;
-                    setFormData({...formData, ucastnici: next});
-                  }} />
-                  {formData.ucastnici.length > 1 && (
-                    <Button variant="ghost" size="icon" onClick={() => setFormData({...formData, ucastnici: formData.ucastnici.filter((_, idx) => idx !== i)})}>
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
+                  <Input placeholder="Jméno a příjmení" value={u.jmeno} onChange={(e) => { const next = [...formData.ucastnici]; next[i].jmeno = e.target.value; setFormData({...formData, ucastnici: next}); }} />
+                  <Input placeholder="Pozice" value={u.pozice} onChange={(e) => { const next = [...formData.ucastnici]; next[i].pozice = e.target.value; setFormData({...formData, ucastnici: next}); }} />
+                  {formData.ucastnici.length > 1 && <Button variant="ghost" size="icon" onClick={() => setFormData({...formData, ucastnici: formData.ucastnici.filter((_, idx) => idx !== i)})}><X className="h-4 w-4" /></Button>}
                 </div>
               ))}
             </div>
@@ -630,9 +627,7 @@ export default function NewInspectionPage() {
           <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm pb-4 border-b">
             <div className="flex justify-between items-center">
               <h2 className="font-bold text-lg">Průběh auditování</h2>
-              <span className="px-3 py-1 rounded-full bg-secondary text-secondary-foreground text-xs font-bold">
-                Typ: {formData.typKontroly}
-              </span>
+              <span className="px-3 py-1 rounded-full bg-secondary text-secondary-foreground text-xs font-bold">Typ: {formData.typKontroly}</span>
             </div>
           </div>
 
@@ -656,9 +651,7 @@ export default function NewInspectionPage() {
 
           {formData.typKontroly === 'PPP' && (
             <div className="border rounded-lg bg-white overflow-hidden shadow-sm">
-              <div className="px-6 py-4 bg-muted/10 border-b">
-                <span className="text-base font-bold">Kontrolní list - Preventivní požární prohlídka</span>
-              </div>
+              <div className="px-6 py-4 bg-muted/10 border-b"><span className="text-base font-bold">Kontrolní list - Preventivní požární prohlídka</span></div>
               <div className="px-6 pb-6 space-y-8 pt-4 divide-y">
                 {CHECKLIST_PPP.map(p => renderPoint(p, false))}
               </div>
@@ -667,25 +660,18 @@ export default function NewInspectionPage() {
 
           {formData.typKontroly === 'PBOZP' && (
             <div className="border rounded-lg bg-white overflow-hidden shadow-sm">
-              <div className="px-6 py-4 bg-muted/10 border-b">
-                <span className="text-base font-bold">Kontrolní list - Prověrka BOZP pracoviště</span>
-              </div>
+              <div className="px-6 py-4 bg-muted/10 border-b"><span className="text-base font-bold">Kontrolní list - Prověrka BOZP pracoviště</span></div>
               <div className="px-6 pb-6 space-y-8 pt-4 divide-y">
                 {CHECKLIST_PBOZP.map(p => renderPoint(p, false))}
               </div>
             </div>
           )}
 
-          {/* NOVÁ SEKCE: Volné body zjištění */}
           <div className="border rounded-lg bg-white overflow-hidden shadow-sm border-blue-200">
             <div className="px-6 py-4 bg-blue-50 border-b border-blue-100 flex justify-between items-center">
               <span className="text-base font-bold text-blue-900">Vlastní zjištění (Volné body)</span>
-              <Button 
-                size="sm" 
-                onClick={() => setCustomPoints(prev => [...prev, { id: 99000 + prev.length, text: "" }])}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Přidat vlastní bod
+              <Button size="sm" onClick={() => setCustomPoints(prev => [...prev, { id: 99000 + prev.length, text: "" }])}>
+                <Plus className="h-4 w-4 mr-2" /> Přidat vlastní bod
               </Button>
             </div>
             {customPoints.length > 0 ? (
@@ -693,227 +679,50 @@ export default function NewInspectionPage() {
                 {customPoints.map(p => renderPoint(p, true))}
               </div>
             ) : (
-              <div className="p-8 text-center text-muted-foreground text-sm italic">
-                Zatím nebyly přidány žádné volné body zjištění.
-              </div>
+              <div className="p-8 text-center text-muted-foreground text-sm italic">Zatím nebyly přidány žádné volné body zjištění.</div>
             )}
           </div>
-
         </div>
       )}
 
       {step === 3 && (
         <div className="space-y-8">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <Card className="p-4 flex flex-col items-center gap-1 border-green-200 bg-green-50">
-              <span className="text-2xl font-bold text-green-700">{stats.V}</span>
-              <span className="text-[10px] uppercase font-bold text-green-600">Vyhovuje</span>
-            </Card>
-            <Card className="p-4 flex flex-col items-center gap-1 border-red-200 bg-red-50">
-              <span className="text-2xl font-bold text-red-700">{stats.N}</span>
-              <span className="text-[10px] uppercase font-bold text-red-600">Nevyhovuje</span>
-            </Card>
-            <Card className="p-4 flex flex-col items-center gap-1 border-gray-200 bg-gray-50">
-              <span className="text-2xl font-bold text-gray-700">{stats.NA}</span>
-              <span className="text-[10px] uppercase font-bold text-gray-600">Neaplikováno</span>
-            </Card>
-            <Card className="p-4 flex flex-col items-center gap-1 border-gray-200 bg-gray-50">
-              <span className="text-2xl font-bold text-gray-700">{stats.NK}</span>
-              <span className="text-[10px] uppercase font-bold text-gray-600">Nekontrolováno</span>
-            </Card>
-            <Card className="p-4 flex flex-col items-center gap-1 border-amber-200 bg-amber-50">
-              <span className="text-2xl font-bold text-amber-700">{stats.unfilled}</span>
-              <span className="text-[10px] uppercase font-bold text-amber-600">Nevyplněno</span>
-            </Card>
+            <Card className="p-4 flex flex-col items-center gap-1 border-green-200 bg-green-50"><span className="text-2xl font-bold text-green-700">{stats.V}</span><span className="text-[10px] uppercase font-bold text-green-600">Vyhovuje</span></Card>
+            <Card className="p-4 flex flex-col items-center gap-1 border-red-200 bg-red-50"><span className="text-2xl font-bold text-red-700">{stats.N}</span><span className="text-[10px] uppercase font-bold text-red-600">Nevyhovuje</span></Card>
+            <Card className="p-4 flex flex-col items-center gap-1 border-gray-200 bg-gray-50"><span className="text-2xl font-bold text-gray-700">{stats.NA}</span><span className="text-[10px] uppercase font-bold text-gray-600">Neaplikováno</span></Card>
+            <Card className="p-4 flex flex-col items-center gap-1 border-gray-200 bg-gray-50"><span className="text-2xl font-bold text-gray-700">{stats.NK}</span><span className="text-[10px] uppercase font-bold text-gray-600">Nekontrolováno</span></Card>
+            <Card className="p-4 flex flex-col items-center gap-1 border-amber-200 bg-amber-50"><span className="text-2xl font-bold text-amber-700">{stats.unfilled}</span><span className="text-[10px] uppercase font-bold text-amber-600">Nevyplněno</span></Card>
           </div>
 
           <Card className="border-none shadow-sm">
-            <CardHeader>
-              <CardTitle>Závěrečné hodnocení a doporučení</CardTitle>
-              <CardDescription>Zde můžete uvést celkové shrnutí kontroly nebo hlavní doporučení pro klienta.</CardDescription>
-            </CardHeader>
+            <CardHeader><CardTitle>Závěrečné hodnocení a doporučení</CardTitle><CardDescription>Celkové shrnutí kontroly nebo hlavní doporučení pro klienta.</CardDescription></CardHeader>
             <CardContent>
-              <Textarea 
-                placeholder="Napište celkové zhodnocení prověrky/prohlídky..." 
-                className="min-h-[120px] bg-white"
-                value={formData.poznamka}
-                onChange={(e) => setFormData(prev => ({ ...prev, poznamka: e.target.value }))}
-              />
-            </CardContent>
-          </Card>
-
-          <Card className="border-none shadow-sm">
-            <CardHeader>
-              <CardTitle>Generované závady ({stats.N})</CardTitle>
-              <CardDescription>Tyto body budou automaticky zahrnuty v auditní zprávě.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {Object.entries(pointDefects).filter(([id]) => checklist[Number(id)]?.hodnoceni === 'N').map(([id, defect]) => (
-                <div key={id} className="p-4 border rounded-lg flex items-start gap-4 hover:bg-muted/20 transition-colors">
-                  <div className="bg-red-600 text-white font-mono text-xs h-6 w-6 rounded-full flex items-center justify-center shrink-0 mt-1">
-                    {id > 99000 ? '*' : id}
-                  </div>
-                  <div className="flex-1 space-y-2">
-                    <p className="font-bold">{defect.popis}</p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <CalendarIcon className="h-3 w-3" />
-                        {defect.terminOdstraneni ? new Date(defect.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neuvedeno'}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <UserIcon className="h-3 w-3" />
-                        {defect.odpovednaOsoba || 'Neuvedena'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              
-              {stats.N === 0 && (
-                <div className="py-12 text-center text-muted-foreground italic">
-                  Nebyly zjištěny žádné systémové závady.
-                </div>
-              )}
+              <Textarea placeholder="Napište celkové zhodnocení prověrky/prohlídky..." className="min-h-[120px] bg-white" value={formData.poznamka} onChange={(e) => setFormData(prev => ({ ...prev, poznamka: e.target.value }))} />
             </CardContent>
           </Card>
 
           <Card className="border-none shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Ostatní závady</CardTitle>
-                <CardDescription>Závady zjištěné nad rámec checklistu.</CardDescription>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => setManualDefects(prev => [...prev, {
-                popis: '',
-                navrhOpatreni: '',
-                terminOdstraneni: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                odpovednaOsoba: selectedKlient?.kontaktOsoba || ''
-              }])}>
-                <Plus className="h-4 w-4 mr-1" />
-                Přidat závadu
+              <div><CardTitle>Ostatní závady</CardTitle><CardDescription>Závady zjištěné absolutně nad rámec jakýchkoliv bodů.</CardDescription></div>
+              <Button variant="outline" size="sm" onClick={() => setManualDefects(prev => [...prev, createEmptyDefect(selectedKlient?.kontaktOsoba)])}>
+                <Plus className="h-4 w-4 mr-1" /> Přidat nezávislou závadu
               </Button>
             </CardHeader>
             <CardContent className="space-y-6">
-              {manualDefects.map((def, idx) => (
-                <div key={idx} className="p-6 border rounded-lg space-y-4 relative bg-white">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="absolute top-2 right-2 text-muted-foreground"
-                    onClick={() => setManualDefects(prev => prev.filter((_, i) => i !== idx))}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Popis závady</Label>
-                      <Textarea 
-                        value={def.popis} 
-                        placeholder="Popis zjištěného nedostatku..."
-                        onChange={(e) => {
-                          const next = [...manualDefects];
-                          next[idx].popis = e.target.value;
-                          setManualDefects(next);
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Návrh opatření</Label>
-                      <Textarea 
-                        value={def.navrhOpatreni} 
-                        placeholder="Návrh na odstranění..."
-                        onChange={(e) => {
-                          const next = [...manualDefects];
-                          next[idx].navrhOpatreni = e.target.value;
-                          setManualDefects(next);
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <Label className="text-xs text-blue-700 font-semibold">Doporučení ke zjištění (volitelné)</Label>
-                      <Textarea 
-                        value={def.doporuceni || ""} 
-                        onChange={(e) => {
-                          const next = [...manualDefects];
-                          next[idx].doporuceni = e.target.value;
-                          setManualDefects(next);
-                        }}
-                        placeholder="Např.: Doporučujeme zvážit..."
-                        className="bg-blue-50/50 border-blue-200"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Termín odstranění</Label>
-                      <Input 
-                        type="date"
-                        value={def.terminOdstraneni}
-                        onChange={(e) => {
-                          const next = [...manualDefects];
-                          next[idx].terminOdstraneni = e.target.value;
-                          setManualDefects(next);
-                        }}
-                        className="h-11"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Odpovědná osoba</Label>
-                      <Select 
-                        value={def.odpovednaOsoba} 
-                        onValueChange={(v) => {
-                          const next = [...manualDefects];
-                          next[idx].odpovednaOsoba = v;
-                          setManualDefects(next);
-                        }}
-                      >
-                        <SelectTrigger className="h-11 bg-white">
-                          <SelectValue placeholder="Vyberte osobu" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {selectedKlient?.odpovedneOsoby.map(o => (
-                            <SelectItem key={o.id} value={`${o.jmeno} ${o.prijmeni}`}>{o.jmeno} {o.prijmeni} ({o.pozice})</SelectItem>
-                          ))}
-                          <SelectItem value="manual">-- Zadat manuálně --</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {manualDefects.length === 0 && (
-                <div className="py-12 text-center text-muted-foreground italic">
-                  Žádné dodatečné závady nebyly přidány.
-                </div>
-              )}
+              {manualDefects.map((def, idx) => renderDefectForm(def, idx, null, true))}
+              {manualDefects.length === 0 && <div className="py-12 text-center text-muted-foreground italic">Žádné dodatečné závady nebyly přidány.</div>}
             </CardContent>
           </Card>
         </div>
       )}
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 z-50 flex justify-center">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 z-50 flex justify-center shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
         <div className="max-w-5xl w-full flex justify-between items-center px-4 md:px-8">
-          <Button 
-            variant="ghost" 
-            disabled={step === 1} 
-            onClick={() => {
-              setStep(s => s - 1);
-              window.scrollTo(0, 0);
-            }}
-            className="h-11 px-6"
-          >
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Zpět
-          </Button>
-          
+          <Button variant="ghost" disabled={step === 1} onClick={() => { setStep(s => s - 1); window.scrollTo(0, 0); }} className="h-11 px-6"><ChevronLeft className="mr-2 h-4 w-4" /> Zpět</Button>
           <div className="flex gap-2">
-            {step === 3 && (
-              <Button variant="outline" className="h-11 px-6" onClick={() => handleFinish(true)}>
-                Uložit jako koncept
-              </Button>
-            )}
-            <Button 
-              onClick={step === 3 ? () => handleFinish(true) : handleNext}
-              className="h-11 px-8 shadow-sm"
-            >
+            {step === 3 && <Button variant="outline" className="h-11 px-6" onClick={() => handleFinish(true)}>Uložit rozpracované</Button>}
+            <Button onClick={step === 3 ? () => handleFinish(true) : handleNext} className="h-11 px-8 shadow-sm">
               {step === 3 ? "Uložit a dokončit" : "Pokračovat"}
               {step !== 3 && <ChevronRight className="ml-2 h-4 w-4" />}
             </Button>
