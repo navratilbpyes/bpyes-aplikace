@@ -71,7 +71,6 @@ export default function RecordDetailPage() {
     };
   }, [record]);
 
-  // OPRAVA 1: Inteligentní čistění názvu souboru (odstraní háčky a čárky, zachová písmena)
   const pdfFileName = useMemo(() => {
     if (!record || !klient) return "export.pdf";
     const cleanKlient = klient.nazev.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9\s]/g, "").trim();
@@ -123,12 +122,12 @@ export default function RecordDetailPage() {
       const element = document.getElementById('pdf-export-container');
       
       const opt = {
-        margin:       [10, 10, 15, 10],
+        margin:       [12, 12, 15, 12],
         filename:     pdfFileName,
         image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 800 },
+        html2canvas:  { scale: 4, useCORS: true, logging: false, windowWidth: 800 },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['css'] } // Využíváme pouze stabilní CSS zalamování
+        pagebreak:    { mode: ['css'] }
       };
 
       await html2pdf().set(opt).from(element).save();
@@ -144,7 +143,6 @@ export default function RecordDetailPage() {
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative overflow-hidden">
       
-      {/* E-mailový modál */}
       {showEmailModal && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in">
           <Card className="w-full max-w-lg shadow-2xl">
@@ -165,7 +163,6 @@ export default function RecordDetailPage() {
         </div>
       )}
 
-      {/* Horní panel */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -184,7 +181,6 @@ export default function RecordDetailPage() {
         </div>
       </div>
 
-      {/* Dispečink */}
       <Card className="border-blue-100 bg-blue-50/20">
         <CardHeader className="py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div><CardTitle className="text-sm font-bold flex items-center gap-2 text-blue-900"><FileText className="h-4 w-4" /> Manažerský dispečink</CardTitle><CardDescription className="text-xs">Filtry ovlivňují i tištěné PDF.</CardDescription></div>
@@ -207,7 +203,7 @@ export default function RecordDetailPage() {
         </CardHeader>
       </Card>
 
-      {/* Digitální náhled na webu */}
+      {/* Webový náhled aplikace */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
           <Card className="border-none shadow-sm">
@@ -231,17 +227,6 @@ export default function RecordDetailPage() {
               {filteredZavady.length === 0 && <p className="text-muted-foreground italic text-center py-12">Žádné neshody k zobrazení.</p>}
             </CardContent>
           </Card>
-
-          {!onlyDefects && filteredDoporuceni.length > 0 && (
-            <Card className="border-none shadow-sm border-l-4 border-l-blue-500 bg-blue-50/10">
-              <CardHeader><CardTitle className="text-lg text-blue-900">Doporučení ({filteredDoporuceni.length})</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                {filteredDoporuceni.map((kb: any) => (
-                  <div key={kb.bod} className="p-3 bg-white border border-blue-100 rounded-lg text-sm space-y-1"><p className="font-bold text-blue-900">Bod {kb.bod}.</p><p className="text-muted-foreground italic">"{kb.doporuceni}"</p></div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
         </div>
 
         <div className="space-y-6">
@@ -250,117 +235,150 @@ export default function RecordDetailPage() {
             <CardContent className="space-y-4 text-sm">
               <div className="flex gap-3"><Building className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Klient</span><p className="font-bold">{klient?.nazev || 'Neznámý'}</p><p className="text-xs text-muted-foreground">IČO: {klient?.ico || ''}</p></div></div>
               <div className="flex gap-3"><MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Pracoviště</span><p className="font-bold">{pracoviste?.nazev || 'Neznámé'}</p><p className="text-xs text-muted-foreground">{pracoviste?.adresa || ''}</p></div></div>
-              <div className="flex gap-3"><Clock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Vytvořeno</span><p className="font-medium">{record.createdAt ? new Date(record.createdAt).toLocaleString('cs-CZ') : 'Neznámé'}</p></div></div>
             </CardContent>
           </Card>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* OPRAVA 2: TISKOVÁ ŠABLONA PRO PDF (Zajištěna viditelnost pro canvas) */}
+      {/* FINÁLNÍ BEZPEČNÁ PDF ŠABLONA (Pevný viewport, font Arial, fixní texty) */}
       {/* ========================================================================= */}
-      <div style={{ position: 'absolute', top: 0, left: 0, width: 0, height: 0, overflow: 'hidden', zIndex: -1000 }}>
-        <div id="pdf-export-container" className="bg-white text-black font-sans" style={{ width: '800px', paddingBottom: '50px' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, width: '800px', height: 0, overflow: 'hidden', zIndex: -1000 }}>
+        <div id="pdf-export-container" className="bg-white text-black" style={{ width: '800px', fontFamily: 'Arial, sans-serif', padding: '15px' }}>
           
-          <div className="p-8" style={{ minHeight: '1050px' }}>
-            <div className="flex justify-between items-start border-b-2 border-black pb-6">
-              <div>
-                <span className="text-[10px] uppercase font-bold text-slate-500 tracking-widest block">BEZPEČNOST PRÁCE & POŽÁRNÍ OCHRANA</span>
-                <span className="text-sm font-semibold tracking-wide text-slate-800">Profesionální auditorské a kontrolní systémy</span>
-              </div>
-              <svg width="120" height="70" viewBox="0 0 140 90">
-                <path d="M 10 50 A 55 50 0 0 1 125 55" fill="none" stroke="black" strokeWidth="6" strokeLinecap="round"/>
-                <text x="15" y="62" fontFamily="Arial Black, Impact, sans-serif" fontSize="36" fontWeight="900" fill="black">BP</text>
-                <text x="70" y="72" fontFamily="Arial, sans-serif" fontSize="20" fontWeight="bold" fill="black">yes</text>
-                <path d="M 68 78 A 30 15 0 0 0 135 68" fill="none" stroke="black" strokeWidth="3" strokeLinecap="round"/>
-              </svg>
-            </div>
+          {/* ÚVODNÍ STRANA PROTOKOLU */}
+          <div style={{ minHeight: '1020px', position: 'relative', boxSizing: 'border-box' }}>
+            <table style={{ width: '100%', borderBottom: '2px solid #000', paddingBottom: '15px', marginBottom: '30px' }}>
+              <tbody>
+                <tr>
+                  <td style={{ textAlign: 'left' }}>
+                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', letterSpacing: '2px', display: 'block', textTransform: 'uppercase' }}>BEZPEČNOST PRÁCE & POŽÁRNÍ OCHRANA</span>
+                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>Profesionální auditorské a kontrolní systémy</span>
+                  </td>
+                  <td style={{ textAlign: 'right', width: '150px' }}>
+                    <div style={{ border: '3px solid #000', padding: '5px 10px', textAlign: 'center', fontWeight: 'black', fontSize: '24px', fontFamily: 'Arial Black, sans-serif' }}>
+                      BP<span style={{ fontSize: '16px', fontWeight: 'bold' }}>yes</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
 
-            <div className="my-12 space-y-4">
-              <h1 className="text-2xl font-black tracking-tight leading-tight border-l-4 border-black pl-4">
+            <div style={{ margin: '40px 0' }}>
+              <h1 style={{ fontSize: '22px', fontWeight: '900', lineHeight: '1.3', borderLeft: '5px solid #000', paddingLeft: '15px', textTransform: 'uppercase', color: '#000' }}>
                 {getFullInspectionTitle(record.typKontroly)}
               </h1>
-              <div className="text-sm font-mono bg-slate-100 p-2 inline-block rounded border">
+              <div style={{ marginTop: '15px', fontSize: '12px', fontFamily: 'monospace', backgroundColor: '#f1f5f9', padding: '6px 12px', display: 'inline-block', border: '1px solid #cbd5e1', borderRadius: '4px' }}>
                 ČÍSLO ZPRÁVY: {record.cislo} | REVIZE: R{record.revize || 0}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-8 border-t border-b border-black py-8 my-6 bg-slate-50/50">
-              <div className="space-y-2">
-                <span className="text-xs uppercase font-bold text-slate-500 tracking-wider block">Zpracovatel / Poskytovatel:</span>
-                <p className="text-base font-black">BPyes s.r.o.</p>
-                <p className="text-[11px] text-slate-700">Specializovaný poskytovatel služeb v oblasti rizik BOZP a PO</p>
-                <p className="text-[11px] text-slate-700">IČO: 87654321</p>
-                <p className="text-[11px] text-slate-700">E-mail: info@bpyes.cz | Web: www.bpyes.cz</p>
-              </div>
-              <div className="space-y-2">
-                <span className="text-xs uppercase font-bold text-slate-500 tracking-wider block">Kontrolovaný subjekt / Klient:</span>
-                <p className="text-base font-black">{klient?.nazev || 'Neznámý'}</p>
-                <p className="text-[11px] text-slate-700">IČO: {klient?.ico || 'Neuvedeno'}</p>
-                <p className="text-[11px] font-bold text-slate-900">Místo prověrky: {pracoviste?.nazev || 'Neznámé'}</p>
-                <p className="text-[11px] text-slate-600">{pracoviste?.adresa || ''}</p>
-              </div>
-            </div>
+            <table style={{ width: '100%', borderTop: '1px solid #000', borderBottom: '1px solid #000', padding: '20px 0', margin: '40px 0', backgroundColor: '#f8fafc' }}>
+              <tbody>
+                <tr>
+                  <td style={{ width: '50%', verticalAlign: 'top', paddingRight: '20px', fontSize: '11px', lineHeight: '1.5' }}>
+                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Zpracovatel / Poskytovatel:</span>
+                    <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>BPyes s.r.o.</strong>
+                    <span>Specializovaný poskytovatel služeb v oblasti rizik BOZP a PO</span><br />
+                    <strong>IČO: 04399421</strong><br />
+                    <span>E-mail: navratil@bpyes.cz | Web: www.bpyes.cz</span>
+                  </td>
+                  <td style={{ width: '50%', verticalAlign: 'top', paddingLeft: '20px', fontSize: '11px', lineHeight: '1.5', borderLeft: '1px solid #e2e8f0' }}>
+                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Kontrolovaný subjekt / Klient:</span>
+                    <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>{klient?.nazev || 'Neznámý subjekt'}</strong>
+                    <span>IČO: {klient?.ico || 'Neuvedeno'}</span><br />
+                    <strong style={{ color: '#0f172a', display: 'block', marginTop: '5px' }}>Místo prověrky: {pracoviste?.nazev || 'Celý areál'}</strong>
+                    <span style={{ color: '#475569' }}>{pracoviste?.adresa || ''}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
 
-            <div className="p-4 border-2 border-black rounded-lg bg-slate-50 my-6">
-              <span className="text-[11px] uppercase font-bold tracking-wider text-slate-900 block mb-1">Prohlášení a konstatování o seznámení:</span>
-              <p className="text-[11px] text-slate-800 leading-relaxed text-justify">
+            <div style={{ border: '2px solid #000', padding: '15px', borderRadius: '6px', backgroundColor: '#f8fafc', margin: '40px 0' }}>
+              <span style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 'bold', color: '#0f172a', display: 'block', marginBottom: '4px' }}>Prohlášení a konstatování o seznámení:</span>
+              <p style={{ fontSize: '11px', color: '#334155', margin: 0, textAlign: 'justify', lineHeight: '1.5' }}>
                 Kontrolovaný subjekt / zástupce klienta svým níže uvedeným podpisem stvrzuje, že byl v plném rozsahu, prokazatelně a jasně seznámen se všemi zjištěnými legislativními nedostatky, systémovými neshodami a doporučeními, která jsou detailně specifikována uvnitř této auditní zprávy. Souhlasí s navrženými nápravnými opatřeními a zavazuje se k jejich vyřešení a odstranění v definovaných zákonných či dohodnutých termínech.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-12 pt-12 mt-12 border-t border-slate-300">
-              <div className="space-y-12">
-                <div className="border-b border-black w-full h-8"></div>
-                <div className="text-center">
-                  <p className="font-bold text-[12px] uppercase">Provedl (Za BPyes):</p>
-                  <p className="text-[10px] text-slate-500">Oprávněný specialista BOZP a PO</p>
-                  <p className="text-[9px] text-slate-400">Dne: {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : 'Neuvedeno'}</p>
-                </div>
-              </div>
-              <div className="space-y-12">
-                <div className="border-b border-black w-full h-8"></div>
-                <div className="text-center">
-                  <p className="font-bold text-[12px] uppercase">Zástupce klienta / subjektu:</p>
-                  <p className="text-[10px] text-slate-500">Odpovědná osoba seznámená s reportem</p>
-                  <p className="text-[9px] text-slate-400">Podpis / Razítko převzetí</p>
-                </div>
-              </div>
-            </div>
+            <table style={{ width: '100%', marginTop: '80px', borderTop: '1px solid #cbd5e1', paddingTop: '30px' }}>
+              <tbody>
+                <tr>
+                  <td style={{ width: '50%', paddingRight: '30px', textAlign: 'center' }}>
+                    <div style={{ borderBottom: '1px solid #000', width: '80%', margin: '0 auto 15px auto', height: '40px' }}></div>
+                    <strong style={{ fontSize: '11px', textTransform: 'uppercase', display: 'block' }}>Provedl (Za BPyes):</strong>
+                    <span style={{ fontSize: '10px', color: '#64748b' }}>Oprávněný specialista BOZP a PO</span><br />
+                    <span style={{ fontSize: '9px', color: '#94a3b8' }}>Dne: {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : ''}</span>
+                  </td>
+                  <td style={{ width: '50%', paddingLeft: '30px', textAlign: 'center' }}>
+                    <div style={{ borderBottom: '1px solid #000', width: '80%', margin: '0 auto 15px auto', height: '40px' }}></div>
+                    <strong style={{ fontSize: '11px', textTransform: 'uppercase', display: 'block' }}>Zástupce klienta / subjektu:</strong>
+                    <span style={{ fontSize: '10px', color: '#64748b' }}>Odpovědná osoba seznámená s reportem</span><br />
+                    <span style={{ fontSize: '9px', color: '#94a3b8' }}>Podpis / Razítko převzetí</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           <div style={{ pageBreakBefore: 'always' }}></div>
 
-          <div className="p-8">
-            <h2 className="text-base font-bold uppercase border-b-2 border-black pb-2 mb-4 tracking-wide">1. Manažerské shrnutí a statistiky</h2>
+          {/* SEKCE 1: SHRNUTÍ A STATISTIKY */}
+          <div style={{ padding: '10px 0' }}>
+            <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '20px', color: '#000' }}>
+              1. Shrnutí a statistiky
+            </h2>
             
-            <div className="grid grid-cols-4 gap-2 text-center text-[11px] mb-6">
-              <div className="p-3 border bg-slate-50 font-bold"><span className="text-lg block font-black">{stats.total}</span>CELKEM BODŮ</div>
-              <div className="p-3 border border-green-300 bg-green-50 text-green-900 font-bold"><span className="text-lg block font-black">{stats.V}</span>VYHOVUJE</div>
-              <div className="p-3 border border-red-300 bg-red-50 text-red-900 font-bold"><span className="text-lg block font-black">{stats.N}</span>NESHODY (N)</div>
-              <div className="p-3 border bg-slate-50 text-slate-700 font-bold"><span className="text-lg block font-black">{stats.NK + stats.NA}</span>NEHODNOCENO</div>
-            </div>
+            <table style={{ width: '100%', textAlign: 'center', borderCollapse: 'collapse', marginBottom: '25px' }}>
+              <tbody>
+                <tr>
+                  <td style={{ width: '25%', padding: '10px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc' }}>
+                    <strong style={{ fontSize: '18px', display: 'block', color: '#000' }}>{stats.total}</strong>
+                    <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#475569' }}>CELKEM BODŮ</span>
+                  </td>
+                  <td style={{ width: '25%', padding: '10px', border: '1px solid #cbd5e1', backgroundColor: '#f0fdf4', color: '#166534' }}>
+                    <strong style={{ fontSize: '18px', display: 'block' }}>{stats.V}</strong>
+                    <span style={{ fontSize: '9px', fontWeight: 'bold' }}>VYHOVUJE</span>
+                  </td>
+                  <td style={{ width: '25%', padding: '10px', border: '1px solid #cbd5e1', backgroundColor: '#fef2f2', color: '#991b1b' }}>
+                    <strong style={{ fontSize: '18px', display: 'block' }}>{stats.N}</strong>
+                    <span style={{ fontSize: '9px', fontWeight: 'bold' }}>NESHODY (N)</span>
+                  </td>
+                  <td style={{ width: '25%', padding: '10px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', color: '#64748b' }}>
+                    <strong style={{ fontSize: '18px', display: 'block' }}>{stats.NK + stats.NA}</strong>
+                    <span style={{ fontSize: '9px', fontWeight: 'bold' }}>NEHODNOCENO</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
 
-            <div className="space-y-2 mb-6">
-              <h3 className="text-xs font-bold uppercase text-slate-700">Závěrečné vyhodnocení specialisty:</h3>
-              <div className="p-4 border bg-slate-50/50 rounded-lg text-[11px] text-justify italic leading-relaxed">
+            <div style={{ marginBottom: '25px' }}>
+              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Závěrečné vyhodnocení:</span>
+              <div style={{ padding: '12px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', borderRadius: '4px', fontSize: '11px', fontStyle: 'italic', lineHeight: '1.5', textAlign: 'justify' }}>
                 {record.poznamka || "Při prověrce nebylo vloženo žádné doprovodné textové hodnocení."}
               </div>
             </div>
 
-            <div className="space-y-2">
-              <h3 className="text-xs font-bold uppercase text-slate-700">Účastníci prověrky uvedení v protokolu:</h3>
-              <table className="w-full text-left text-[11px] border-collapse border">
+            <div>
+              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Zúčastněné osoby:</span>
+              <table style={{ width: '100%', textLeft: 'left', fontSize: '11px', borderCollapse: 'collapse', border: '1px solid #e2e8f0' }}>
                 <thead>
-                  <tr className="bg-slate-100 border-b"><th className="p-2 font-bold border-r">Jméno a příjmení</th><th className="p-2 font-bold">Pracovní pozice / Vztah k subjektu</th></tr>
+                  <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1px solid #e2e8f0' }}>
+                    <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 'bold', borderRight: '1px solid #e2e8f0' }}>Jméno a příjmení</th>
+                    <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 'bold' }}>Pracovní pozice / Vztah k subjektu</th>
+                  </tr>
                 </thead>
                 <tbody>
-                  {record.ucastnici?.map((u: any, i: number) => (
-                    <tr key={i} className="border-b">
-                      <td className="p-2 font-medium border-r">{u.jmeno || 'Neuvedeno'}</td>
-                      <td className="p-2">{u.pozice || 'Bez zařazení'}</td>
-                    </tr>
-                  ))}
+                  {record.ucastnici && record.ucastnici.length > 0 ? (
+                    record.ucastnici.map((u: any, i: number) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                        <td style={{ padding: '6px 10px', fontWeight: 'medium', borderRight: '1px solid #e2e8f0' }}>{u.jmeno || 'Neuvedeno'}</td>
+                        <td style={{ padding: '6px 10px', color: '#475569' }}>{u.pozice || 'Bez zařazení'}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr><td colSpan={2} style={{ padding: '10px', textStyle: 'italic', color: '#64748b', textAlign: 'center' }}>Nebyly zapsány žádné osoby.</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -368,82 +386,105 @@ export default function RecordDetailPage() {
 
           <div style={{ pageBreakBefore: 'always' }}></div>
 
-          <div className="p-8">
-            <h2 className="text-base font-bold uppercase border-b-2 border-black pb-2 mb-4 tracking-wide flex justify-between items-center">
-              <span>2. Registr zjištěných nedostatků a nápravných opatření</span>
-              {filterPosition !== "all" && <span className="text-[10px] font-normal lowercase bg-slate-100 px-2 py-1 rounded border">Filtr pozice: {filterPosition}</span>}
+          {/* SEKCE 2: REGISTR ZJIŠTĚNÝCH NEDOSTATKŮ (Kompaktní design) */}
+          <div style={{ padding: '10px 0' }}>
+            <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '20px', color: '#000' }}>
+              2. Registr zjištěných nedostatků a nápravných opatření
             </h2>
 
-            <div className="space-y-6">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
               {filteredZavady.map((z: any) => (
-                <div key={z.id} className="border border-slate-300 rounded-lg p-4 bg-white" style={{ pageBreakInside: 'avoid' }}>
-                  <div className="flex justify-between items-start border-b pb-2 mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold bg-black text-white text-[11px] h-5 w-5 rounded-full flex items-center justify-center">
-                        {z.bodKontroly || '*'}
-                      </span>
-                      <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Neshoda v kontrolním bodu</span>
-                    </div>
-                    {z.zavaznost && (
-                      <span className="text-[9px] font-bold uppercase border px-2 py-0.5 rounded bg-slate-50">
-                        Priorita: {z.zavaznost === 'critical' ? 'KRITICKÁ' : z.zavaznost === 'high' ? 'VYSOKÁ' : 'STŘEDNÍ'}
-                      </span>
-                    )}
+                <div key={z.id} style={{ border: '1px solid #cbd5e1', borderRadius: '4px', padding: '10px', backgroundColor: '#fff', pageBreakInside: 'avoid' }}>
+                  
+                  {/* Horní úzká lišta indexu */}
+                  <table style={{ width: '100%', borderBottom: '1px solid #f1f5f9', paddingBottom: '4px', marginBottom: '6px' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ textAlign: 'left', fontSize: '11px', fontWeight: 'bold', color: '#000' }}>
+                          <span style={{ color: '#991b1b', marginRight: '6px' }}>[{z.bodKontroly || '*'}]</span> NESHODA V KONTROLNÍM BODU
+                        </td>
+                        <td style={{ textAlign: 'right', fontSize: '9px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase' }}>
+                          {z.zavaznost === 'critical' ? '🔴 KRITICKÁ' : z.zavaznost === 'high' ? '🟠 VYSOKÁ' : '🟡 STŘEDNÍ'} PRIORITY
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* Obsah - Popis neshody */}
+                  <div style={{ fontSize: '11px', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '9px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', display: 'block' }}>Popis zjištěné závady:</span>
+                    <strong style={{ color: '#0f172a' }}>{z.popis}</strong>
                   </div>
 
-                  <div className="space-y-3 text-[11px]">
-                    <div>
-                      <span className="text-[10px] text-slate-500 uppercase font-bold block">Popis zjištěné závady:</span>
-                      <p className="font-bold text-slate-900">{z.popis}</p>
-                    </div>
+                  {/* Detaily a řešení */}
+                  <table style={{ width: '100%', fontSize: '10px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '3px', marginBottom: '6px', borderCollapse: 'collapse' }}>
+                    <tbody>
+                      <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                        <td style={{ padding: '5px', width: '60%', verticalAlign: 'top', borderRight: '1px solid #e2e8f0' }}>
+                          <span style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Návrh opatření:</span>
+                          <span style={{ color: '#334155' }}>{z.navrhOpatreni}</span>
+                        </td>
+                        <td style={{ padding: '5px', width: '40%', verticalAlign: 'top' }}>
+                          <span style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Místo zjištění:</span>
+                          <strong style={{ color: '#1e3a8a' }}>{z.lokalizace || 'Areál společnosti'}</strong>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
 
-                    <div className="flex gap-4 bg-slate-50 p-3 rounded border">
-                      <div className="flex-1">
-                        <span className="text-[9px] text-slate-500 uppercase font-bold block mb-0.5">Návrh opatření:</span>
-                        <p className="font-medium text-slate-800">{z.navrhOpatreni}</p>
-                      </div>
-                      <div className="flex-1">
-                        <span className="text-[9px] text-slate-500 uppercase font-bold block mb-0.5">Místo zjištění:</span>
-                        <p className="font-bold text-blue-950">{z.lokalizace || 'Celá společnost'}</p>
-                      </div>
-                    </div>
+                  {/* Spodní řádek odpovědnosti a termínu */}
+                  <table style={{ width: '100%', fontSize: '10px' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ width: '33%' }}>
+                          <span style={{ fontSize: '8px', color: '#94a3b8', display: 'block' }}>Termín nápravy:</span>
+                          <strong style={{ fontFamily: 'monospace' }}>{z.terminOdstraneni ? new Date(z.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</strong>
+                        </td>
+                        <td style={{ width: '33%' }}>
+                          <span style={{ fontSize: '8px', color: '#94a3b8', display: 'block' }}>Odpovědná pozice:</span>
+                          <strong style={{ textTransform: 'uppercase' }}>{z.odpovednaOsoba || 'Neuvedena'}</strong>
+                        </td>
+                        <td style={{ width: '33%', textAlign: 'right' }}>
+                          <span style={{ fontSize: '8px', color: '#94a3b8', display: 'block' }}>Stav řešení:</span>
+                          <strong style={{ color: z.stavOdstraneni === 'odstranena' ? '#166534' : '#991b1b' }}>
+                            {z.stavOdstraneni === 'odstranena' ? '✅ ODSTRANĚNO' : '❌ NEVYŘEŠENO'}
+                          </strong>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
 
-                    <div className="flex justify-between pt-1">
-                      <div><span className="text-[9px] text-slate-400 block">Termín:</span><p className="font-mono font-bold">{z.terminOdstraneni ? new Date(z.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</p></div>
-                      <div><span className="text-[9px] text-slate-400 block">Odpovědná pozice:</span><p className="font-bold uppercase text-slate-900">{z.odpovednaOsoba || 'Neuvedena'}</p></div>
-                      <div className="text-right"><span className="text-[9px] text-slate-400 block">Stav:</span><p className="font-bold text-slate-800">{z.stavOdstraneni === 'odstranena' ? '✅ ODSTRANĚNO' : '❌ NEVYŘEŠENO'}</p></div>
+                  {/* Kompaktní zobrazení fotografie */}
+                  {z.foto && (
+                    <div style={{ marginTop: '8px', borderTop: '1px dashed #cbd5e1', paddingTop: '6px' }}>
+                      <span style={{ fontSize: '8px', color: '#94a3b8', display: 'block', marginBottom: '3px' }}>Fotodokumentace:</span>
+                      <img src={z.foto} alt="Důkaz neshody" style={{ maxHeight: '140px', width: 'auto', borderRadius: '3px', border: '1px solid #cbd5e1' }} />
                     </div>
-
-                    {z.foto && (
-                      <div className="pt-2 mt-2 border-t">
-                        <span className="text-[9px] text-slate-400 block mb-1">Fotodokumentace:</span>
-                        <img src={z.foto} alt="Závada" className="h-40 w-auto object-cover rounded border border-slate-300" />
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
               ))}
 
               {filteredZavady.length === 0 && (
-                <p className="text-[11px] text-slate-500 italic text-center py-8 border rounded-lg border-dashed">
-                  Žádné neshody k zobrazení.
+                <p style={{ fontSize: '11px', color: '#64748b', fontStyle: 'italic', textAlign: 'center', padding: '30px', border: '1px dashed #cbd5e1', borderRadius: '4px' }}>
+                  Nebyly nalezeny žádné neshody.
                 </p>
               )}
             </div>
           </div>
 
+          {/* SEKCE 3: DOPORUČENÍ */}
           {filteredDoporuceni.length > 0 && (
             <>
               <div style={{ pageBreakBefore: 'always' }}></div>
-              <div className="p-8">
-                <h2 className="text-base font-bold uppercase border-b-2 border-black pb-2 mb-4 tracking-wide text-blue-900">
+              <div style={{ padding: '10px 0' }}>
+                <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '20px', color: '#1e3a8a' }}>
                   3. Doporučení pro zvýšení úrovně bezpečnosti
                 </h2>
-                <div className="space-y-3">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {filteredDoporuceni.map((kb: any) => (
-                    <div key={kb.bod} className="p-3 border border-blue-200 bg-blue-50/20 rounded-md text-[11px] space-y-1" style={{ pageBreakInside: 'avoid' }}>
-                      <p className="font-bold text-blue-900">Kontrolní bod č. {kb.bod}</p>
-                      <p className="text-slate-800 italic">"{kb.doporuceni}"</p>
+                    <div key={kb.bod} style={{ padding: '8px 12px', border: '1px solid #bfdbfe', backgroundColor: '#eff6ff', borderRadius: '4px', fontSize: '11px', pageBreakInside: 'avoid' }}>
+                      <strong style={{ color: '#1e40af', display: 'block', marginBottom: '2px' }}>Kontrolní bod č. {kb.bod}</strong>
+                      <span style={{ color: '#1e293b', fontStyle: 'italic' }}>"{kb.doporuceni}"</span>
                     </div>
                   ))}
                 </div>
