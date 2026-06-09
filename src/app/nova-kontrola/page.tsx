@@ -29,6 +29,7 @@ import { generateRecordNumber, cn } from "@/app/lib/utils";
 import { CHECKLIST_SECTIONS, CHECKLIST_PPP, CHECKLIST_PBOZP, ChecklistPoint } from "./checklist-data";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
+import { Checkbox } from "@/components/ui/checkbox";
 import { KontrolniBod, Zavada } from "@/app/lib/types";
 
 interface TypickaZavada {
@@ -61,7 +62,7 @@ const createEmptyDefect = (): DefectFormState => ({
   odpovednaOsoba: "",
   odpovednaOsobaManualni: "",
   lokalizace: "",
-  zavaznost: "none", 
+  zavaznost: "none",
   odstraneno: false,
   datumOdstraneni: "",
   zaznamProvedl: "",
@@ -97,8 +98,8 @@ export default function NewInspectionPage() {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     klientId: '',
-    pracovisteId: '',
-    typKontroly: '' as 'BOZPaPO' | 'PPP' | 'PBOZP',
+    pracovisteIds: [] as string[], // Změněno na pole pro více pracovišť
+    typKontroly: 'BOZPaPO' as 'BOZPaPO' | 'PPP' | 'PBOZP',
     datum: new Date().toISOString().split('T')[0],
     ucastnici: [{ jmeno: '', pozice: '' }],
     poznamka: ''
@@ -108,13 +109,12 @@ export default function NewInspectionPage() {
   const [pointDefects, setPointDefects] = useState<Record<number, DefectFormState[]>>({});
   const [googleZavady, setGoogleZavady] = useState<Record<string, Record<number, TypickaZavada[]>>>({});
   const [customPoints, setCustomPoints] = useState<ChecklistPoint[]>([]);
-  const [manualDefects, setManualDefects] = useState<DefectFormState[]>([]);
+  const [disabledSections, setDisabledSections] = useState<string[]>([]); // Nový stav pro vypnuté oddíly
   const [filterPosition, setFilterPosition] = useState<string>("all");
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [revisionNumber, setRevisionNumber] = useState("0");
 
   const selectedKlient = klienti.find(k => k.id === formData.klientId);
-  const selectedPrac = selectedKlient?.pracoviste.find(p => p.id === formData.pracovisteId);
 
   const uniquePositions = useMemo(() => {
     if (!selectedKlient) return [];
@@ -164,47 +164,37 @@ export default function NewInspectionPage() {
     fetchZavady();
   }, []);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (formData.klientId) {
-        localStorage.setItem('bpyes_draft_kontrola', JSON.stringify({
-          formData, checklist, pointDefects, customPoints
-        }));
-      }
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [formData, checklist, pointDefects, customPoints]);
-
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (formData.klientId) { e.preventDefault(); e.returnValue = ''; }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [formData.klientId]);
-
+  // Propojení bodů se správnými názvy sekcí, aby nezmizely do "Ostatní"
   const currentChecklistFlat = useMemo(() => {
-    let base: ChecklistPoint[] = [];
-    if (formData.typKontroly === 'PPP') base = CHECKLIST_PPP || [];
-    else if (formData.typKontroly === 'PBOZP') base = CHECKLIST_PBOZP || [];
-    else if (formData.typKontroly === 'BOZPaPO') base = CHECKLIST_SECTIONS.flatMap(s => s.points);
-    return [...base, ...customPoints];
+    let base: any[] = [];
+    if (formData.typKontroly === 'PPP') base = (CHECKLIST_PPP || []).map(p => ({ ...p, sekce: 'PPP' }));
+    else if (formData.typKontroly === 'PBOZP') base = (CHECKLIST_PBOZP || []).map(p => ({ ...p, sekce: 'PBOZP' }));
+    else if (formData.typKontroly === 'BOZPaPO') {
+      base = (CHECKLIST_SECTIONS || []).flatMap(s => 
+        s.points.map(p => ({ ...p, sekce: `ODDÍL ${s.id}: ${s.title}` }))
+      );
+    }
+    return [...base, ...customPoints.map(p => ({ ...p, sekce: 'Vlastní zjištění' }))];
   }, [formData.typKontroly, customPoints]);
 
-  const totalPoints = currentChecklistFlat.length > 0 ? currentChecklistFlat.length : 1;
-  const answeredPoints = Object.keys(checklist).length;
+  const activeChecklistFlat = useMemo(() => {
+    return currentChecklistFlat.filter(p => !disabledSections.includes(p.sekce));
+  }, [currentChecklistFlat, disabledSections]);
+
+  const totalPoints = activeChecklistFlat.length > 0 ? activeChecklistFlat.length : 1;
+  const answeredPoints = activeChecklistFlat.filter(p => checklist[p.id] && checklist[p.id].hodnoceni !== '').length;
   const progressPercent = Math.round((answeredPoints / totalPoints) * 100);
 
   const stats = useMemo(() => {
-    const vals = Object.values(checklist);
+    const vals = activeChecklistFlat.map(p => checklist[p.id]).filter(Boolean);
     return {
       V: vals.filter(v => v.hodnoceni === 'V').length,
       N: vals.filter(v => v.hodnoceni === 'N').length,
       NA: vals.filter(v => v.hodnoceni === 'NA').length,
       NK: vals.filter(v => v.hodnoceni === 'NK').length,
-      unfilled: currentChecklistFlat.length - answeredPoints
+      unfilled: totalPoints - answeredPoints
     };
-  }, [checklist, currentChecklistFlat.length, answeredPoints]);
+  }, [checklist, activeChecklistFlat, totalPoints, answeredPoints]);
 
   const handleRatingChange = (point: ChecklistPoint, rating: 'V' | 'N' | 'NA' | 'NK') => {
     let text = "";
@@ -238,8 +228,8 @@ export default function NewInspectionPage() {
   };
 
   const handleNext = () => {
-    if (step === 1 && (!formData.klientId || !formData.pracovisteId || !formData.typKontroly)) {
-      toast({ title: "Chyba", description: "Prosím vyplňte základní údaje.", variant: "destructive" });
+    if (step === 1 && (!formData.klientId || formData.pracovisteIds.length === 0 || !formData.typKontroly)) {
+      toast({ title: "Chyba", description: "Prosím vyberte klienta a alespoň jedno pracoviště.", variant: "destructive" });
       return;
     }
     setStep(s => s + 1);
@@ -250,31 +240,26 @@ export default function NewInspectionPage() {
     const year = new Date(formData.datum).getFullYear();
     const countInYear = zaznamy.filter(z => new Date(z.datum).getFullYear() === year).length + 1;
     
-    // --- START CHIRURGICKÉHO ZÁSAHU PRO MAPOVÁNÍ DAT ---
     const finalKontrolniBody: any[] = [];
     const aggregatedZavady: Zavada[] = [];
     let defectCounter = 1;
 
-    // Projdeme všechny body z aktuální šablony, abychom znali jejich sekce a texty
-    currentChecklistFlat.forEach(basePoint => {
+    activeChecklistFlat.forEach(basePoint => {
       const pointState = checklist[basePoint.id];
-      // Ukládáme jen ty body, které uživatel nějak hodnotil (a odfiltroval si je tím z "Nevyplněno")
       if (!pointState || !pointState.hodnoceni || pointState.hodnoceni === 'NK') return;
 
       const isDefect = pointState.hodnoceni === 'N';
       const defectsForThisPoint = pointDefects[basePoint.id] || [];
       const primaryDefect = isDefect && defectsForThisPoint.length > 0 ? defectsForThisPoint[0] : null;
 
-      // Mapování dat pro Kontrolní bod
       finalKontrolniBody.push({
         bod: basePoint.id,
-        otazka: basePoint.text,
-        sekce: basePoint.sekce || basePoint.kategorie || "Ostatní", // Striktní zachování sekce
+        otazka: basePoint.text || "Nepopsaný bod",
+        sekce: basePoint.sekce,
         hodnoceni: pointState.hodnoceni,
         doporuceni: pointState.doporuceni || "",
         showDoporuceni: pointState.showDoporuceni || false,
         poznamka: pointState.poznamka || "",
-        // Pokud jde o závadu, vtáhneme sem rovnou údaje z prvního formuláře závady (pro PDF tiskárnu)
         popis: primaryDefect?.popis || "",
         navrhOpatreni: primaryDefect?.navrhOpatreni || "",
         lokalizace: primaryDefect?.lokalizace || "",
@@ -283,14 +268,13 @@ export default function NewInspectionPage() {
         foto: primaryDefect?.foto || ""
       });
 
-      // Uložení všech závad do globálního registru (pokud si jich klient naklikal víc pod jeden bod)
       if (isDefect) {
         defectsForThisPoint.forEach(def => {
           aggregatedZavady.push({
             id: def.uid,
             cislo: defectCounter++,
             bodKontroly: basePoint.id,
-            sekce: basePoint.sekce || basePoint.kategorie || "Ostatní", // I závada musí znát svou sekci
+            sekce: basePoint.sekce,
             popis: def.popis || "",
             navrhOpatreni: def.navrhOpatreni || "",
             terminOdstraneni: def.terminOdstraneni || "",
@@ -305,14 +289,13 @@ export default function NewInspectionPage() {
         });
       }
     });
-    // --- KONEC ZÁSAHU ---
 
     const newRecord = {
       id: Math.random().toString(36).substring(7),
       cislo: generateRecordNumber(year, countInYear, formData.typKontroly),
       revize: parseInt(revisionNumber) || 0,
       ...formData,
-      kontrolniBody: finalKontrolniBody, // Předáme naše čistě namapované body
+      kontrolniBody: finalKontrolniBody,
       zavady: aggregatedZavady,
       stav: isDraft ? 'otevreny' : 'uzavreny' as any,
       createdAt: new Date().toISOString(),
@@ -322,7 +305,7 @@ export default function NewInspectionPage() {
     setZaznamy(prev => [...prev, newRecord as any]);
     localStorage.removeItem('bpyes_draft_kontrola');
     setShowSaveModal(false);
-    toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola ${newRecord.cislo} (R${newRecord.revize}) uložena.` });
+    toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola ${newRecord.cislo} uložena.` });
     router.push(`/zaznamy/${newRecord.id}`);
   };
 
@@ -330,7 +313,6 @@ export default function NewInspectionPage() {
     const dostupneZavady = pointId ? (googleZavady[formData.typKontroly]?.[pointId] || []) : [];
     const updateFn = (f: any, v: any) => updateDefect(pointId, idx, f, v);
     const removeFn = () => setPointDefects(p => ({ ...p, [pointId]: p[pointId].filter((_, i) => i !== idx) }));
-    const ukazatSablony = !!pointId && pointId < 90000;
 
     return (
       <div key={def.uid} className="p-4 bg-white rounded-lg border border-amber-200/60 shadow-sm space-y-5 relative">
@@ -340,63 +322,38 @@ export default function NewInspectionPage() {
           </Button>
         )}
 
-        {ukazatSablony && (
-          <div className="bg-amber-50/50 -mx-4 -mt-4 p-4 rounded-t-lg border-b border-amber-100 mb-4">
-            <Label className="text-xs font-bold text-amber-900 mb-2 block">Rychlý výběr ze šablony zjištění</Label>
-            <Select 
-              disabled={dostupneZavady.length === 0}
-              onValueChange={(v) => {
-                const vybrana = dostupneZavady[parseInt(v)];
-                if (vybrana) {
-                  updateFn('popis', vybrana.popis);
-                  updateFn('navrhOpatreni', vybrana.opatreni);
-                }
-              }}
-            >
-              <SelectTrigger className="bg-white">
-                <SelectValue placeholder={dostupneZavady.length > 0 ? "-- Vyberte typický nedostatek --" : `Žádné šablony pro bod ID ${pointId}. (Doplňte do Tabulky)`} />
-              </SelectTrigger>
-              <SelectContent>
-                {dostupneZavady.map((tz, i) => <SelectItem key={i} value={i.toString()}>{tz.nazev}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label className="text-xs">Místo zjištění (Lokalizace)</Label>
-            <Input value={def.lokalizace} onChange={(e) => updateFn('lokalizace', e.target.value)} placeholder="Např. Hala B, 1. patro..." className="bg-white h-10" />
+            <Input value={def.lokalizace} onChange={(e) => updateFn('lokalizace', e.target.value)} placeholder="Např. Hala B..." className="bg-white h-10" />
           </div>
           <div className="space-y-2">
             <Label className="text-xs">Závažnost (Priorita)</Label>
             <Select value={def.zavaznost || "none"} onValueChange={(v) => updateFn('zavaznost', v)}>
-              <SelectTrigger className="bg-white h-10"><SelectValue placeholder="Nevyplněno (Volitelné)" /></SelectTrigger>
+              <SelectTrigger className="bg-white h-10"><SelectValue placeholder="Volitelné" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">-- Bez určení závažnosti --</SelectItem>
                 <SelectItem value="low">Nízká</SelectItem>
                 <SelectItem value="medium">Střední</SelectItem>
                 <SelectItem value="high">Vysoká</SelectItem>
-                <SelectItem value="critical">Kritická (Ihned řešit!)</SelectItem>
+                <SelectItem value="critical">Kritická</SelectItem>
               </SelectContent>
             </Select>
           </div>
-
           <div className="space-y-2">
             <Label className="text-xs">Popis závady *</Label>
-            <Textarea value={def.popis} onChange={(e) => updateFn('popis', e.target.value)} placeholder="Detailní popis nedostatku..." className="bg-white min-h-[100px]" />
+            <Textarea value={def.popis} onChange={(e) => updateFn('popis', e.target.value)} className="bg-white min-h-[80px]" />
           </div>
           <div className="space-y-2">
             <Label className="text-xs">Návrh opatření *</Label>
-            <Textarea value={def.navrhOpatreni} onChange={(e) => updateFn('navrhOpatreni', e.target.value)} placeholder="Co je nutné udělat..." className="bg-white min-h-[100px]" />
+            <Textarea value={def.navrhOpatreni} onChange={(e) => updateFn('navrhOpatreni', e.target.value)} className="bg-white min-h-[80px]" />
           </div>
-
           <div className="space-y-2">
             <Label className="text-xs">Termín odstranění</Label>
             <Input type="date" value={def.terminOdstraneni} onChange={(e) => updateFn('terminOdstraneni', e.target.value)} className="bg-white h-10" />
           </div>
           <div className="space-y-2">
-            <Label className="text-xs">Odpovědná pozice k řešení</Label>
+            <Label className="text-xs">Odpovědná pozice</Label>
             <Select value={def.odpovednaOsoba} onValueChange={(v) => updateFn('odpovednaOsoba', v)}>
               <SelectTrigger className="bg-white h-10"><SelectValue placeholder="Vyberte pozici" /></SelectTrigger>
               <SelectContent>
@@ -405,14 +362,14 @@ export default function NewInspectionPage() {
               </SelectContent>
             </Select>
             {def.odpovednaOsoba === 'manual' && (
-              <Input placeholder="Vepište konkrétní pozici..." value={def.odpovednaOsobaManualni} onChange={(e) => updateFn('odpovednaOsobaManualni', e.target.value)} className="mt-2 h-10 bg-white border-dashed" />
+              <Input placeholder="Vepište pozici..." value={def.odpovednaOsobaManualni} onChange={(e) => updateFn('odpovednaOsobaManualni', e.target.value)} className="mt-2 h-10" />
             )}
           </div>
         </div>
 
         <div className="pt-2">
           <div className="relative inline-block">
-            <Button variant="outline" size="sm" className="text-muted-foreground cursor-pointer">
+            <Button variant="outline" size="sm" className="text-muted-foreground">
               <Camera className="h-4 w-4 mr-2" /> {def.foto ? "Změnit fotku" : "Přidat fotodokumentaci"}
             </Button>
             <Input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
@@ -426,43 +383,9 @@ export default function NewInspectionPage() {
             />
           </div>
           {def.foto && (
-            <div className="relative mt-3 inline-block border rounded-md p-1 bg-muted/30">
-              <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow" onClick={() => updateFn('foto', '')}><X className="h-3 w-3" /></Button>
-              <img src={def.foto} alt="Závada" className="h-40 w-auto object-cover rounded shadow-sm" />
-            </div>
-          )}
-        </div>
-
-        <div className="pt-4 mt-2 border-t border-amber-200/60 bg-amber-50/30 -mx-4 -mb-4 p-4 rounded-b-lg">
-          <div className="flex items-center gap-2 cursor-pointer select-none" 
-               onClick={() => {
-                 updateFn('odstraneno', !def.odstraneno);
-                 if (!def.odstraneno && !def.datumOdstraneni) updateFn('datumOdstraneni', new Date().toISOString().split('T')[0]);
-               }}>
-            {def.odstraneno ? <CheckSquare className="h-5 w-5 text-green-600" /> : <Square className="h-5 w-5 text-muted-foreground" />}
-            <span className={cn("font-bold text-sm", def.odstraneno ? "text-green-700" : "text-muted-foreground")}>Nedostatek byl odstraněn</span>
-          </div>
-          
-          {def.odstraneno && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 animate-in slide-in-from-top-2">
-              <div className="space-y-2">
-                <Label className="text-xs">Datum odstranění</Label>
-                <Input type="date" value={def.datumOdstraneni} onChange={(e) => updateFn('datumOdstraneni', e.target.value)} className="bg-white h-10" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Záznam o odstranění provedl (Pozice)</Label>
-                <Select value={def.zaznamProvedl} onValueChange={(v) => updateFn('zaznamProvedl', v)}>
-                  <SelectTrigger className="bg-white h-10"><SelectValue placeholder="Vyberte pozici" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Provedl BPyes">Provedl (My / BPyes)</SelectItem>
-                    {uniquePositions.map(pozice => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}
-                    <SelectItem value="manual">-- Zadat manuálně --</SelectItem>
-                  </SelectContent>
-                </Select>
-                {def.zaznamProvedl === 'manual' && (
-                  <Input placeholder="Vepište pozici..." value={def.zaznamProvedlManualni} onChange={(e) => updateFn('zaznamProvedlManualni', e.target.value)} className="mt-2 h-10 bg-white border-dashed" />
-                )}
-              </div>
+            <div className="relative mt-3 inline-block">
+              <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full" onClick={() => updateFn('foto', '')}><X className="h-3 w-3" /></Button>
+              <img src={def.foto} alt="Závada" className="h-40 w-auto object-cover rounded border" />
             </div>
           )}
         </div>
@@ -476,17 +399,11 @@ export default function NewInspectionPage() {
     
     return (
       <div key={point.id} className="pt-8 first:pt-0 space-y-4 relative group">
-        {isCustom && (
-          <Button variant="ghost" size="icon" className="absolute top-2 right-0 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setCustomPoints(prev => prev.filter(p => p.id !== point.id))}>
-            <X className="h-4 w-4" />
-          </Button>
-        )}
-        
         <div className="flex flex-col md:flex-row justify-between items-start gap-4">
           <div className="flex gap-3 flex-1 w-full">
             <span className="font-mono text-muted-foreground font-bold">{isCustom ? '*' : point.id}.</span>
             {isCustom ? (
-              <Input value={point.text} onChange={(e) => setCustomPoints(prev => prev.map(p => p.id === point.id ? { ...p, text: e.target.value } : p))} placeholder="Zadejte název vlastního bodu zjištění..." className="font-medium text-[15px] h-8" />
+              <Input value={point.text} onChange={(e) => setCustomPoints(prev => prev.map(p => p.id === point.id ? { ...p, text: e.target.value } : p))} placeholder="Zadejte název..." className="font-medium text-[15px] h-8" />
             ) : (
               <p className="font-medium text-[15px]">{point.text}</p>
             )}
@@ -494,32 +411,24 @@ export default function NewInspectionPage() {
           
           <div className="grid grid-cols-5 gap-1 w-full md:w-auto">
             {[
-              { label: 'V', rating: 'V', color: 'bg-green-100 text-green-700 hover:bg-green-200 border-green-200 data-[state=active]:bg-green-600 data-[state=active]:text-white' },
-              { label: 'N', rating: 'N', color: 'bg-red-100 text-red-700 hover:bg-red-200 border-red-200 data-[state=active]:bg-red-600 data-[state=active]:text-white' },
-              { label: 'NA', rating: 'NA', color: 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200 data-[state=active]:bg-gray-600 data-[state=active]:text-white' },
-              { label: 'NK', rating: 'NK', color: 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200 data-[state=active]:bg-gray-600 data-[state=active]:text-white' }
+              { label: 'V', rating: 'V', color: 'bg-green-100 text-green-700 data-[state=active]:bg-green-600 data-[state=active]:text-white' },
+              { label: 'N', rating: 'N', color: 'bg-red-100 text-red-700 data-[state=active]:bg-red-600 data-[state=active]:text-white' },
+              { label: 'NA', rating: 'NA', color: 'bg-gray-100 text-gray-700 data-[state=active]:bg-gray-600 data-[state=active]:text-white' },
+              { label: 'NK', rating: 'NK', color: 'bg-gray-100 text-gray-700 data-[state=active]:bg-gray-600 data-[state=active]:text-white' }
             ].map((btn) => (
               <Button
                 key={btn.label} variant="outline" data-state={state?.hodnoceni === btn.rating ? 'active' : 'inactive'}
-                className={cn("h-12 min-w-[50px] font-bold shadow-none transition-all", btn.color)}
+                className={cn("h-12 min-w-[50px] font-bold shadow-none", btn.color)}
                 onClick={() => handleRatingChange(point, btn.rating as any)}
               >
                 {btn.label}
               </Button>
             ))}
-            
             <Button
-              key="D"
               variant="outline"
               data-state={state?.showDoporuceni ? 'active' : 'inactive'}
-              className={cn("h-12 min-w-[50px] font-bold shadow-none transition-all", "bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200 data-[state=active]:bg-blue-600 data-[state=active]:text-white")}
-              onClick={() => setChecklist(prev => ({
-                ...prev,
-                [point.id]: {
-                  ...(prev[point.id] || { bod: point.id, hodnoceni: '' }),
-                  showDoporuceni: !prev[point.id]?.showDoporuceni
-                }
-              }))}
+              className="h-12 min-w-[50px] font-bold bg-blue-100 text-blue-700 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+              onClick={() => setChecklist(prev => ({ ...prev, [point.id]: { ...(prev[point.id] || { bod: point.id, hodnoceni: '' }), showDoporuceni: !prev[point.id]?.showDoporuceni } }))}
             >
               D
             </Button>
@@ -527,52 +436,21 @@ export default function NewInspectionPage() {
         </div>
 
         {state?.showDoporuceni && (
-          <div className="space-y-2 mt-4 ml-8 animate-in fade-in slide-in-from-top-2">
+          <div className="space-y-2 mt-4 ml-8">
             <Label className="text-xs text-blue-700 font-semibold">Doporučení auditora k tomuto bodu</Label>
-            <Textarea 
-              value={state.doporuceni || ""} 
-              onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], doporuceni: e.target.value }}))}
-              placeholder="Zde můžete uvést doporučení pro klienta, i když je bod hodnocen jako vyhovující..." 
-              className="bg-blue-50/50 border-blue-200" 
-            />
+            <Textarea value={state.doporuceni || ""} onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], doporuceni: e.target.value }}))} className="bg-blue-50/50" />
           </div>
         )}
 
-        {state?.hodnoceni && state.hodnoceni !== 'NA' && (
-          <div className="space-y-4 ml-8 animate-in fade-in slide-in-from-top-2 duration-300">
-            {state.hodnoceni === 'N' && (
-              <div className="p-4 bg-amber-50/50 rounded-xl border border-amber-200 space-y-6 shadow-inner">
-                <div className="flex items-center gap-2 text-amber-800 font-bold text-sm uppercase">
-                  <AlertTriangle className="h-4 w-4" /> Evidence zjištěných nedostatků k tomuto bodu
-                </div>
-                
-                <div className="space-y-6">
-                  {defects.map((def, idx) => renderDefectForm(def, idx, point.id))}
-                </div>
-
-                <Button 
-                  variant="outline" 
-                  className="w-full border-dashed border-amber-300 text-amber-800 hover:bg-amber-100"
-                  onClick={() => setPointDefects(prev => ({ ...prev, [point.id]: [...(prev[point.id] || []), createEmptyDefect()] }))}
-                >
-                  <Plus className="h-4 w-4 mr-2" /> Přidat další, nesouvisející závadu pod tento stejný bod
-                </Button>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2">
-              {!state.poznamka && (
-                <Button variant="ghost" size="sm" onClick={() => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: " " }}))} className="text-muted-foreground">
-                  <Plus className="h-3 w-3 mr-1" /> Přidat interní poznámku (nebude v reportu)
-                </Button>
-              )}
-              {state.poznamka && (
-                <div className="flex-1 space-y-2 mt-2">
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1"><StickyNote className="h-3 w-3" /> Interní poznámka k hodnocení bodu</Label>
-                  <Textarea value={state.poznamka} onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: e.target.value }}))} className="bg-muted/30" />
-                </div>
-              )}
+        {state?.hodnoceni === 'N' && (
+          <div className="space-y-4 ml-8 p-4 bg-amber-50/50 rounded-xl border border-amber-200">
+            <div className="flex items-center gap-2 text-amber-800 font-bold text-sm uppercase">
+              <AlertTriangle className="h-4 w-4" /> Evidence nedostatků k tomuto bodu
             </div>
+            <div className="space-y-6">{defects.map((def, idx) => renderDefectForm(def, idx, point.id))}</div>
+            <Button variant="outline" className="w-full border-dashed text-amber-800" onClick={() => setPointDefects(prev => ({ ...prev, [point.id]: [...(prev[point.id] || []), createEmptyDefect()] }))}>
+              <Plus className="h-4 w-4 mr-2" /> Přidat další závadu
+            </Button>
           </div>
         )}
       </div>
@@ -597,24 +475,14 @@ export default function NewInspectionPage() {
       {showSaveModal && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in">
           <Card className="w-full max-w-md shadow-2xl">
-            <CardHeader>
-              <CardTitle>Dokončení a uložení kontroly</CardTitle>
-              <CardDescription>Před uložením záznamu potvrďte číslo revize dokumentu.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            <CardHeader><CardTitle>Dokončení auditu</CardTitle></CardHeader>
+            <CardContent>
               <div className="space-y-2">
                 <Label>Číslo revize (R)</Label>
                 <div className="flex items-center gap-2">
                   <span className="text-lg font-bold text-muted-foreground">R</span>
-                  <Input 
-                    type="number" 
-                    min="0" 
-                    value={revisionNumber} 
-                    onChange={(e) => setRevisionNumber(e.target.value)}
-                    className="text-lg font-bold"
-                  />
+                  <Input type="number" min="0" value={revisionNumber} onChange={(e) => setRevisionNumber(e.target.value)} className="text-lg font-bold" />
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">Výchozí hodnota je 0. Pokud se jedná o aktualizaci stávající zprávy, zvyšte číslo.</p>
               </div>
             </CardContent>
             <div className="p-4 border-t flex justify-end gap-2 bg-muted/20">
@@ -626,15 +494,7 @@ export default function NewInspectionPage() {
       )}
 
       <div className="flex flex-col gap-4">
-        <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold tracking-tight">Nová kontrola</h1>
-          {step > 1 && (
-            <div className="flex items-center gap-3 w-48">
-              <span className="text-xs font-bold text-muted-foreground uppercase">{progressPercent}%</span>
-              <Progress value={progressPercent} className="h-2" />
-            </div>
-          )}
-        </div>
+        <h1 className="text-3xl font-bold tracking-tight">Nová kontrola</h1>
         <div className="flex items-center gap-2">
           {[1, 2, 3].map((i) => (
             <div key={i} className="flex items-center gap-2">
@@ -650,15 +510,12 @@ export default function NewInspectionPage() {
 
       {step === 1 && (
         <Card className="border-none shadow-sm">
-          <CardHeader>
-            <CardTitle>Základní parametry kontroly</CardTitle>
-            <CardDescription>Vyberte klienta, pracoviště a typ kontroly pro zahájení procesu.</CardDescription>
-          </CardHeader>
+          <CardHeader><CardTitle>Základní parametry kontroly</CardTitle></CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label>Klient</Label>
-                <Select value={formData.klientId} onValueChange={(v) => setFormData({...formData, klientId: v, pracovisteId: ''})}>
+                <Select value={formData.klientId} onValueChange={(v) => setFormData({...formData, klientId: v, pracovisteIds: []})}>
                   <SelectTrigger className="h-11"><SelectValue placeholder="Vyberte klienta" /></SelectTrigger>
                   <SelectContent>
                     {klienti.map(k => <SelectItem key={k.id} value={k.id}>{k.nazev}</SelectItem>)}
@@ -667,13 +524,27 @@ export default function NewInspectionPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Pracoviště</Label>
-                <Select disabled={!formData.klientId} value={formData.pracovisteId} onValueChange={(v) => setFormData({...formData, pracovisteId: v})}>
-                  <SelectTrigger className="h-11"><SelectValue placeholder="Vyberte pracoviště" /></SelectTrigger>
-                  <SelectContent>
-                    {selectedKlient?.pracoviste.map(p => <SelectItem key={p.id} value={p.id}>{p.nazev}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label>Pracoviště / Provozovny (Lze vybrat více)</Label>
+                {!formData.klientId ? (
+                  <div className="h-11 bg-muted rounded-md flex items-center px-3 text-sm text-muted-foreground italic">Nejprve zvolte klienta</div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2 p-3 border rounded-md bg-white max-h-[150px] overflow-y-auto">
+                    {selectedKlient?.pracoviste.map(p => (
+                      <label key={p.id} className="flex items-center gap-3 cursor-pointer">
+                        <Checkbox 
+                          checked={formData.pracovisteIds.includes(p.id)} 
+                          onCheckedChange={(c) => {
+                            setFormData(prev => ({
+                              ...prev,
+                              pracovisteIds: c ? [...prev.pracovisteIds, p.id] : prev.pracovisteIds.filter(id => id !== p.id)
+                            }))
+                          }} 
+                        />
+                        <span className="text-sm font-medium leading-none">{p.nazev}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2 md:col-span-2">
@@ -706,7 +577,7 @@ export default function NewInspectionPage() {
                   <Input placeholder="Jméno a příjmení" value={u.jmeno} onChange={(e) => { const next = [...formData.ucastnici]; next[i].jmeno = e.target.value; setFormData({...formData, ucastnici: next}); }} className="flex-1" />
                   <Input placeholder="Pracovní pozice" value={u.pozice} onChange={(e) => { const next = [...formData.ucastnici]; next[i].pozice = e.target.value; setFormData({...formData, ucastnici: next}); }} className="flex-1" />
                   {formData.ucastnici.length > 1 && (
-                    <Button variant="ghost" size="icon" onClick={() => setFormData({...formData, ucastnici: formData.ucastnici.filter((_, idx) => idx !== i)})} className="shrink-0 text-muted-foreground hover:text-red-500">
+                    <Button variant="ghost" size="icon" onClick={() => setFormData({...formData, ucastnici: formData.ucastnici.filter((_, idx) => idx !== i)})} className="shrink-0 text-red-500">
                       <X className="h-4 w-4" />
                     </Button>
                   )}
@@ -720,61 +591,62 @@ export default function NewInspectionPage() {
       {step === 2 && (
         <div className="space-y-6">
           <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm pb-4 border-b">
-            <div className="flex justify-between items-center">
-              <h2 className="font-bold text-lg">Průběh auditování</h2>
-              <span className="px-3 py-1 rounded-full bg-secondary text-secondary-foreground text-xs font-bold">Typ: {formData.typKontroly}</span>
-            </div>
+            <h2 className="font-bold text-lg">Průběh auditování</h2>
           </div>
 
           {formData.typKontroly === 'BOZPaPO' && (
-            <Accordion type="single" collapsible className="space-y-4" defaultValue="A">
-              {CHECKLIST_SECTIONS.map((section) => (
-                <AccordionItem key={section.id} value={section.id} className="border rounded-lg bg-white overflow-hidden shadow-sm">
-                  <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50">
-                    <div className="flex flex-col items-start gap-1">
-                      <span className="text-xs font-bold uppercase text-muted-foreground">Oddíl {section.id}</span>
-                      <span className="text-base font-bold">{section.title}</span>
+            <Accordion type="multiple" className="space-y-4" defaultValue={["A"]}>
+              {CHECKLIST_SECTIONS.map((section) => {
+                const sectionName = `ODDÍL ${section.id}: ${section.title}`;
+                const isSectionDisabled = disabledSections.includes(sectionName);
+                
+                return (
+                  <div key={section.id} className={cn("border rounded-lg bg-white overflow-hidden shadow-sm transition-opacity relative", isSectionDisabled && "opacity-50 grayscale")}>
+                    
+                    {/* PŘEPÍNAČ PRO VYPNUTÍ CELÉHO ODDÍLU */}
+                    <div className="absolute top-4 right-10 z-10 flex items-center gap-2 bg-white/90 px-3 py-1.5 rounded-full shadow-sm border border-slate-200">
+                      <Checkbox 
+                        id={`disable-${section.id}`} 
+                        checked={!isSectionDisabled} 
+                        onCheckedChange={(checked) => {
+                          setDisabledSections(prev => 
+                            checked ? prev.filter(s => s !== sectionName) : [...prev, sectionName]
+                          )
+                        }} 
+                      />
+                      <label htmlFor={`disable-${section.id}`} className="text-xs font-bold cursor-pointer text-slate-700 select-none">
+                        Zahrnout oddíl do prověrky
+                      </label>
                     </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="px-6 pb-6 space-y-8 pt-4 divide-y">
-                    {section.points.map(p => renderPoint(p, false))}
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
+
+                    <AccordionItem value={section.id} className={cn("border-none", isSectionDisabled && "pointer-events-none")}>
+                      <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50">
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="text-xs font-bold uppercase text-muted-foreground">Oddíl {section.id}</span>
+                          <span className="text-base font-bold">{section.title}</span>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-6 pb-6 space-y-8 pt-4 divide-y">
+                        {section.points.map(p => renderPoint(p, false))}
+                      </AccordionContent>
+                    </AccordionItem>
+                  </div>
+                )
+              })}
             </Accordion>
           )}
 
-          {formData.typKontroly === 'PPP' && (
-            <div className="border rounded-lg bg-white overflow-hidden shadow-sm">
-              <div className="px-6 py-4 bg-muted/10 border-b"><span className="text-base font-bold">Kontrolní list - Preventivní požární prohlídka</span></div>
-              <div className="px-6 pb-6 space-y-8 pt-4 divide-y">
-                {CHECKLIST_PPP.map(p => renderPoint(p, false))}
-              </div>
-            </div>
-          )}
-
-          {formData.typKontroly === 'PBOZP' && (
-            <div className="border rounded-lg bg-white overflow-hidden shadow-sm">
-              <div className="px-6 py-4 bg-muted/10 border-b"><span className="text-base font-bold">Kontrolní list - Prověrka BOZP pracoviště</span></div>
-              <div className="px-6 pb-6 space-y-8 pt-4 divide-y">
-                {CHECKLIST_PBOZP.map(p => renderPoint(p, false))}
-              </div>
-            </div>
-          )}
-
-          <div className="border rounded-lg bg-white overflow-hidden shadow-sm border-blue-200">
-            <div className="px-6 py-4 bg-blue-50 border-b border-blue-100 flex justify-between items-center">
+          <div className="border rounded-lg bg-white overflow-hidden shadow-sm border-blue-200 mt-6">
+            <div className="px-6 py-4 bg-blue-50 border-b flex justify-between items-center">
               <span className="text-base font-bold text-blue-900">Vlastní zjištění (Volné body)</span>
               <Button size="sm" onClick={() => setCustomPoints(prev => [...prev, { id: 99000 + prev.length, text: "" }])}>
                 <Plus className="h-4 w-4 mr-2" /> Přidat vlastní bod
               </Button>
             </div>
-            {customPoints.length > 0 ? (
+            {customPoints.length > 0 && (
               <div className="px-6 pb-6 space-y-8 pt-4 divide-y">
                 {customPoints.map(p => renderPoint(p, true))}
               </div>
-            ) : (
-              <div className="p-8 text-center text-muted-foreground text-sm italic">Zatím nebyly přidány žádné volné body zjištění.</div>
             )}
           </div>
         </div>
@@ -791,65 +663,9 @@ export default function NewInspectionPage() {
           </div>
 
           <Card className="border-none shadow-sm">
-            <CardHeader><CardTitle>Závěrečné hodnocení a doporučení</CardTitle><CardDescription>Celkové shrnutí kontroly nebo hlavní doporučení pro klienta.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Závěrečné hodnocení a doporučení</CardTitle></CardHeader>
             <CardContent>
-              <Textarea placeholder="Napište celkové zhodnocení prověrky/prohlídky..." className="min-h-[120px] bg-white" value={formData.poznamka} onChange={(e) => setFormData(prev => ({ ...prev, poznamka: e.target.value }))} />
-            </CardContent>
-          </Card>
-
-          <Card className="border-none shadow-sm">
-            <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/20 border-b pb-4">
-              <div>
-                <CardTitle>Náhled zjištěných závad</CardTitle>
-                <CardDescription>Zde si můžete prohlédnout evidované nedostatky před uložením.</CardDescription>
-              </div>
-              
-              <div className="flex items-center gap-2 bg-white p-2 rounded-md border shadow-sm">
-                <Filter className="h-4 w-4 text-muted-foreground ml-2" />
-                <Select value={filterPosition} onValueChange={setFilterPosition}>
-                  <SelectTrigger className="h-9 w-[220px] border-none shadow-none focus:ring-0">
-                    <SelectValue placeholder="Filtrovat podle pozice" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Zobrazit vše (Všechny pozice)</SelectItem>
-                    {uniquePositions.map(pozice => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}
-                    <SelectItem value="manual">Vlastní manuální zadání</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardHeader>
-            
-            <CardContent className="space-y-4 pt-6">
-              {filteredPointDefects.map(group => (
-                group.defects.map(defect => (
-                  <div key={defect.uid} className="p-4 border rounded-lg flex items-start gap-4 hover:bg-muted/20 transition-colors">
-                    <div className="bg-red-600 text-white font-mono text-xs h-6 w-6 rounded-full flex items-center justify-center shrink-0 mt-1">
-                      {Number(group.id) > 90000 ? '*' : group.id}
-                    </div>
-                    <div className="flex-1 space-y-2">
-                      <p className="font-bold">{defect.popis}</p>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <CalendarIcon className="h-3 w-3" />
-                          {defect.terminOdstraneni ? new Date(defect.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neuvedeno'}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <UserIcon className="h-3 w-3" />
-                          <span className="font-medium text-black">
-                            {defect.odpovednaOsoba === 'manual' ? defect.odpovednaOsobaManualni : (defect.odpovednaOsoba || 'Neuvedena')}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ))}
-              
-              {filteredPointDefects.length === 0 && (
-                <div className="py-12 text-center text-muted-foreground italic">
-                  {filterPosition === 'all' ? "Nebyly zjištěny žádné systémové závady." : `Pro vybranou pozici nebyly zjištěny žádné závady.`}
-                </div>
-              )}
+              <Textarea placeholder="Shrnutí prověrky..." className="min-h-[120px] bg-white" value={formData.poznamka} onChange={(e) => setFormData(prev => ({ ...prev, poznamka: e.target.value }))} />
             </CardContent>
           </Card>
         </div>
