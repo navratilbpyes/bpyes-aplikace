@@ -61,7 +61,7 @@ const createEmptyDefect = (): DefectFormState => ({
   odpovednaOsoba: "",
   odpovednaOsobaManualni: "",
   lokalizace: "",
-  zavaznost: "",
+  zavaznost: "none", // Ošetřeno pro stabilitu UI
   odstraneno: false,
   datumOdstraneni: "",
   zaznamProvedl: "",
@@ -164,6 +164,25 @@ export default function NewInspectionPage() {
     fetchZavady();
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (formData.klientId) {
+        localStorage.setItem('bpyes_draft_kontrola', JSON.stringify({
+          formData, checklist, pointDefects, customPoints
+        }));
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [formData, checklist, pointDefects, customPoints]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (formData.klientId) { e.preventDefault(); e.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [formData.klientId]);
+
   const currentChecklistFlat = useMemo(() => {
     let base = [];
     if (formData.typKontroly === 'PPP') base = CHECKLIST_PPP || [];
@@ -244,7 +263,7 @@ export default function NewInspectionPage() {
       odpovednaOsoba: def.odpovednaOsoba === 'manual' ? def.odpovednaOsobaManualni : def.odpovednaOsoba,
       stavOdstraneni: def.odstraneno ? 'odstranena' : 'otevrena',
       lokalizace: def.lokalizace,
-      zavaznost: def.zavaznost,
+      zavaznost: def.zavaznost === 'none' ? "" : def.zavaznost, // Zde ošetřeno vymazání pro API a PDF
       datumOdstraneni: def.odstraneno ? def.datumOdstraneni : undefined,
       zaznamProvedl: def.odstraneno ? (def.zaznamProvedl === 'manual' ? def.zaznamProvedlManualni : def.zaznamProvedl) : undefined,
       foto: def.foto
@@ -319,10 +338,10 @@ export default function NewInspectionPage() {
           </div>
           <div className="space-y-2">
             <Label className="text-xs">Závažnost (Priorita)</Label>
-            <Select value={def.zavaznost} onValueChange={(v) => updateFn('zavaznost', v)}>
+            <Select value={def.zavaznost || "none"} onValueChange={(v) => updateFn('zavaznost', v)}>
               <SelectTrigger className="bg-white h-10"><SelectValue placeholder="Nevyplněno (Volitelné)" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">-- Bez určení závažnosti --</SelectItem>
+                <SelectItem value="none">-- Bez určení závažnosti --</SelectItem>
                 <SelectItem value="low">Nízká</SelectItem>
                 <SelectItem value="medium">Střední</SelectItem>
                 <SelectItem value="high">Vysoká</SelectItem>
@@ -403,7 +422,7 @@ export default function NewInspectionPage() {
                 <Select value={def.zaznamProvedl} onValueChange={(v) => updateFn('zaznamProvedl', v)}>
                   <SelectTrigger className="bg-white h-10"><SelectValue placeholder="Vyberte pozici" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Auditor BPyes">Provedl (My / BPyes)</SelectItem>
+                    <SelectItem value="Provedl BPyes">Provedl (My / BPyes)</SelectItem>
                     {uniquePositions.map(pozice => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}
                     <SelectItem value="manual">-- Zadat manuálně --</SelectItem>
                   </SelectContent>
@@ -641,6 +660,27 @@ export default function NewInspectionPage() {
                 <Label>Datum kontroly</Label>
                 <Input type="date" className="h-11" value={formData.datum} onChange={(e) => setFormData({...formData, datum: e.target.value})} />
               </div>
+            </div>
+
+            {/* SEkce pro přidávání účastníků vrácena */}
+            <div className="space-y-4 pt-6 border-t mt-6">
+              <div className="flex justify-between items-center">
+                <Label>Účastníci kontroly (Uvedení v protokolu)</Label>
+                <Button variant="ghost" size="sm" onClick={() => setFormData({...formData, ucastnici: [...formData.ucastnici, {jmeno: '', pozice: ''}]})}>
+                  <Plus className="mr-2 h-4 w-4" /> Přidat osobu
+                </Button>
+              </div>
+              {formData.ucastnici.map((u, i) => (
+                <div key={i} className="flex gap-2 items-center">
+                  <Input placeholder="Jméno a příjmení" value={u.jmeno} onChange={(e) => { const next = [...formData.ucastnici]; next[i].jmeno = e.target.value; setFormData({...formData, ucastnici: next}); }} className="flex-1" />
+                  <Input placeholder="Pracovní pozice" value={u.pozice} onChange={(e) => { const next = [...formData.ucastnici]; next[i].pozice = e.target.value; setFormData({...formData, ucastnici: next}); }} className="flex-1" />
+                  {formData.ucastnici.length > 1 && (
+                    <Button variant="ghost" size="icon" onClick={() => setFormData({...formData, ucastnici: formData.ucastnici.filter((_, idx) => idx !== i)})} className="shrink-0 text-muted-foreground hover:text-red-500">
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
