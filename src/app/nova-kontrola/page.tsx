@@ -109,18 +109,13 @@ export default function NewInspectionPage() {
   const [googleZavady, setGoogleZavady] = useState<Record<string, Record<number, TypickaZavada[]>>>({});
   const [customPoints, setCustomPoints] = useState<ChecklistPoint[]>([]);
   const [manualDefects, setManualDefects] = useState<DefectFormState[]>([]);
-
-  // Filtry pro Krok 3
   const [filterPosition, setFilterPosition] = useState<string>("all");
-
-  // Stav pro modální okno uložení a revizi
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [revisionNumber, setRevisionNumber] = useState("0");
 
   const selectedKlient = klienti.find(k => k.id === formData.klientId);
   const selectedPrac = selectedKlient?.pracoviste.find(p => p.id === formData.pracovisteId);
 
-  // Unikátní pozice z odpovědných osob klienta
   const uniquePositions = useMemo(() => {
     if (!selectedKlient) return [];
     const positions = selectedKlient.odpovedneOsoby.map(o => o.pozice).filter(Boolean);
@@ -223,14 +218,6 @@ export default function NewInspectionPage() {
     });
   };
 
-  const updateManualDefect = (index: number, field: keyof DefectFormState, value: any) => {
-    setManualDefects(prev => {
-      const next = [...prev];
-      next[index] = { ...next[index], [field]: value };
-      return next;
-    });
-  };
-
   const handleNext = () => {
     if (step === 1 && (!formData.klientId || !formData.pracovisteId || !formData.typKontroly)) {
       toast({ title: "Chyba", description: "Prosím vyplňte základní údaje.", variant: "destructive" });
@@ -269,12 +256,10 @@ export default function NewInspectionPage() {
       }
     });
 
-    manualDefects.forEach(def => aggregatedZavady.push(buildZavadaAPI(def)));
-
     const newRecord = {
       id: Math.random().toString(36).substring(7),
       cislo: generateRecordNumber(year, countInYear, formData.typKontroly),
-      revize: parseInt(revisionNumber) || 0, // Nově ukládáme číslo revize
+      revize: parseInt(revisionNumber) || 0,
       ...formData,
       kontrolniBody: Object.values(checklist),
       zavady: aggregatedZavady,
@@ -290,15 +275,15 @@ export default function NewInspectionPage() {
     router.push(`/zaznamy/${newRecord.id}`);
   };
 
-  const renderDefectForm = (def: DefectFormState, idx: number, pointId: number | null, isManual: boolean = false) => {
+  const renderDefectForm = (def: DefectFormState, idx: number, pointId: number) => {
     const dostupneZavady = pointId ? (googleZavady[formData.typKontroly]?.[pointId] || []) : [];
-    const updateFn = isManual ? (f: any, v: any) => updateManualDefect(idx, f, v) : (f: any, v: any) => updateDefect(pointId as number, idx, f, v);
-    const removeFn = isManual ? () => setManualDefects(p => p.filter((_, i) => i !== idx)) : () => setPointDefects(p => ({ ...p, [pointId as number]: p[pointId as number].filter((_, i) => i !== idx) }));
+    const updateFn = (f: any, v: any) => updateDefect(pointId, idx, f, v);
+    const removeFn = () => setPointDefects(p => ({ ...p, [pointId]: p[pointId].filter((_, i) => i !== idx) }));
     const ukazatSablony = !!pointId && pointId < 90000;
 
     return (
       <div key={def.uid} className="p-4 bg-white rounded-lg border border-amber-200/60 shadow-sm space-y-5 relative">
-        {(isManual || (pointId && pointDefects[pointId]?.length > 1)) && (
+        {pointDefects[pointId]?.length > 1 && (
           <Button variant="ghost" size="icon" className="absolute top-2 right-2 text-muted-foreground hover:bg-red-50 hover:text-red-600" onClick={removeFn}>
             <X className="h-4 w-4" />
           </Button>
@@ -337,6 +322,7 @@ export default function NewInspectionPage() {
             <Select value={def.zavaznost} onValueChange={(v) => updateFn('zavaznost', v)}>
               <SelectTrigger className="bg-white h-10"><SelectValue placeholder="Nevyplněno (Volitelné)" /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="">-- Bez určení závažnosti --</SelectItem>
                 <SelectItem value="low">Nízká</SelectItem>
                 <SelectItem value="medium">Střední</SelectItem>
                 <SelectItem value="high">Vysoká</SelectItem>
@@ -373,7 +359,6 @@ export default function NewInspectionPage() {
           </div>
         </div>
 
-        {/* Fotografie */}
         <div className="pt-2">
           <div className="relative inline-block">
             <Button variant="outline" size="sm" className="text-muted-foreground cursor-pointer">
@@ -397,7 +382,6 @@ export default function NewInspectionPage() {
           )}
         </div>
 
-        {/* Historie a řešení */}
         <div className="pt-4 mt-2 border-t border-amber-200/60 bg-amber-50/30 -mx-4 -mb-4 p-4 rounded-b-lg">
           <div className="flex items-center gap-2 cursor-pointer select-none" 
                onClick={() => {
@@ -419,7 +403,7 @@ export default function NewInspectionPage() {
                 <Select value={def.zaznamProvedl} onValueChange={(v) => updateFn('zaznamProvedl', v)}>
                   <SelectTrigger className="bg-white h-10"><SelectValue placeholder="Vyberte pozici" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Auditor BPyes">Auditor (My / BPyes)</SelectItem>
+                    <SelectItem value="Auditor BPyes">Provedl (My / BPyes)</SelectItem>
                     {uniquePositions.map(pozice => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}
                     <SelectItem value="manual">-- Zadat manuálně --</SelectItem>
                   </SelectContent>
@@ -544,7 +528,6 @@ export default function NewInspectionPage() {
     );
   };
 
-  // Logika filtrování pro zobrazení v Kroku 3
   const filteredPointDefects = useMemo(() => {
     return Object.entries(pointDefects).filter(([id]) => checklist[Number(id)]?.hodnoceni === 'N').map(([id, defects]) => {
       const filtered = defects.filter(def => {
@@ -560,7 +543,6 @@ export default function NewInspectionPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24">
-      {/* Vyskakovací okno pro nastavení revize při ukládání */}
       {showSaveModal && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in">
           <Card className="w-full max-w-md shadow-2xl">
@@ -581,7 +563,7 @@ export default function NewInspectionPage() {
                     className="text-lg font-bold"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">Výchozí hodnota je 0. Pokud se jedná o aktualizaci stávající zprávy, zvyšte číslo (např. 1, 2).</p>
+                <p className="text-xs text-muted-foreground mt-1">Výchozí hodnota je 0. Pokud se jedná o aktualizaci stávající zprávy, zvyšte číslo.</p>
               </div>
             </CardContent>
             <div className="p-4 border-t flex justify-end gap-2 bg-muted/20">
@@ -751,7 +733,6 @@ export default function NewInspectionPage() {
                 <CardDescription>Zde si můžete prohlédnout evidované nedostatky před uložením.</CardDescription>
               </div>
               
-              {/* Panel filtrů pro Krok 3 */}
               <div className="flex items-center gap-2 bg-white p-2 rounded-md border shadow-sm">
                 <Filter className="h-4 w-4 text-muted-foreground ml-2" />
                 <Select value={filterPosition} onValueChange={setFilterPosition}>
