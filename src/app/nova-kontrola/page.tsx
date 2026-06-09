@@ -14,7 +14,9 @@ import {
   AlertTriangle,
   Calendar as CalendarIcon,
   User as UserIcon,
-  StickyNote
+  StickyNote,
+  Camera,
+  Image as ImageIcon
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,17 +30,14 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Progress } from "@/components/ui/progress";
 import { KontrolniBod, Zavada } from "@/app/lib/types";
 
-// Rozhraní pro závady stažené z Google Tabulky
 interface TypickaZavada {
   nazev: string;
   popis: string;
   opatreni: string;
 }
 
-// Odkaz na vaši živou databázi
 const GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTqBDqcv7REG4fkbLQHUqOQP13KzwB-wAAEaotZldSvZMvTpzfc8OlJvo8isBWkmQBpjYTm-I_X6Lls/pub?output=csv";
 
-// Pomocná funkce pro bezpečné rozřezání CSV (řeší i čárky uvnitř textu)
 function parseCSV(str: string) {
   const arr: string[][] = [];
   let quote = false;
@@ -73,17 +72,17 @@ export default function NewInspectionPage() {
     poznamka: ''
   });
 
-  const [checklist, setChecklist] = useState<Record<number, KontrolniBod>>({});
-  const [pointDefects, setPointDefects] = useState<Record<number, Partial<Zavada>>>({});
-  const [manualDefects, setManualDefects] = useState<Partial<Zavada>[]>([]);
-  
-  // Stát pro uložení stažené databáze závad z Googlu
+  const [checklist, setChecklist] = useState<Record<number, KontrolniBod & { foto?: string }>>({});
+  const [pointDefects, setPointDefects] = useState<Record<number, Partial<Zavada> & { doporuceni?: string }>>({});
+  const [manualDefects, setManualDefects] = useState<(Partial<Zavada> & { doporuceni?: string })[]>([]);
   const [googleZavady, setGoogleZavady] = useState<Record<string, Record<number, TypickaZavada[]>>>({});
+  
+  // Stát pro vlastní volné body přidávané na konci checklistu
+  const [customPoints, setCustomPoints] = useState<ChecklistPoint[]>([]);
 
   const selectedKlient = klienti.find(k => k.id === formData.klientId);
   const selectedPrac = selectedKlient?.pracoviste.find(p => p.id === formData.pracovisteId);
 
-  // Funkce pro stažení dat z Google Tabulky
   useEffect(() => {
     const fetchZavady = async () => {
       try {
@@ -95,8 +94,7 @@ export default function NewInspectionPage() {
           const headers = rows[0].map(h => h.toLowerCase().trim());
           const iTyp = headers.findIndex(h => h.includes('typ'));
           const iId = headers.findIndex(h => h.includes('id'));
-          // Hledá sloupec se zkráceným názvem, jinak vezme "Nedostatek"
-          let iKratky = headers.findIndex(h => h.includes('zkrác') || h.includes('krát') || h.includes('název'));
+          let iKratky = headers.findIndex(h => h === 'tag' || h.includes('zkrác') || h.includes('krát') || h.includes('název'));
           if (iKratky === -1) iKratky = headers.findIndex(h => h.includes('nedostatek'));
           const iPopis = headers.findIndex(h => h === 'popis' || (h.includes('popis') && !h.includes('zkr')));
           const iOpatreni = headers.findIndex(h => h.includes('opatřen') || h.includes('opatren'));
@@ -125,16 +123,14 @@ export default function NewInspectionPage() {
             }
           }
           setGoogleZavady(parsedDefects);
-          console.log("Databáze závad úspěšně načtena z Google Sheets.");
         }
       } catch (error) {
-        console.error("Chyba při stahování závad z Google Sheets:", error);
+        console.error("Chyba při stahování závad:", error);
       }
     };
     fetchZavady();
   }, []);
 
-  // Auto-save logic
   useEffect(() => {
     const interval = setInterval(() => {
       if (formData.klientId) {
@@ -142,12 +138,13 @@ export default function NewInspectionPage() {
           formData,
           checklist,
           pointDefects,
-          manualDefects
+          manualDefects,
+          customPoints
         }));
       }
     }, 30000);
     return () => clearInterval(interval);
-  }, [formData, checklist, pointDefects, manualDefects]);
+  }, [formData, checklist, pointDefects, manualDefects, customPoints]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -161,11 +158,12 @@ export default function NewInspectionPage() {
   }, [formData.klientId]);
 
   const currentChecklistFlat = useMemo(() => {
-    if (formData.typKontroly === 'PPP') return CHECKLIST_PPP || [];
-    if (formData.typKontroly === 'PBOZP') return CHECKLIST_PBOZP || [];
-    if (formData.typKontroly === 'BOZPaPO') return CHECKLIST_SECTIONS.flatMap(s => s.points);
-    return [];
-  }, [formData.typKontroly]);
+    let base = [];
+    if (formData.typKontroly === 'PPP') base = CHECKLIST_PPP || [];
+    else if (formData.typKontroly === 'PBOZP') base = CHECKLIST_PBOZP || [];
+    else if (formData.typKontroly === 'BOZPaPO') base = CHECKLIST_SECTIONS.flatMap(s => s.points);
+    return [...base, ...customPoints];
+  }, [formData.typKontroly, customPoints]);
 
   const totalPoints = currentChecklistFlat.length > 0 ? currentChecklistFlat.length : 1;
   const answeredPoints = Object.keys(checklist).length;
@@ -194,6 +192,7 @@ export default function NewInspectionPage() {
         [point.id]: {
           popis: "",
           navrhOpatreni: "",
+          doporuceni: "",
           terminOdstraneni: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           odpovednaOsoba: selectedKlient?.kontaktOsoba || ""
         }
@@ -206,9 +205,26 @@ export default function NewInspectionPage() {
         bod: point.id,
         hodnoceni: rating,
         textHodnoceni: text,
-        poznamka: prev[point.id]?.poznamka
+        poznamka: prev[point.id]?.poznamka,
+        foto: prev[point.id]?.foto
       }
     }));
+  };
+
+  const handlePhotoUpload = (pointId: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setChecklist(prev => ({
+        ...prev,
+        [pointId]: {
+          ...prev[pointId],
+          foto: reader.result as string
+        }
+      }));
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleNext = () => {
@@ -237,7 +253,9 @@ export default function NewInspectionPage() {
           navrhOpatreni: defect.navrhOpatreni || "",
           terminOdstraneni: defect.terminOdstraneni || "",
           odpovednaOsoba: defect.odpovednaOsoba || "",
-          stavOdstraneni: 'otevrena'
+          stavOdstraneni: 'otevrena',
+          // Ukládáme i doporučení do popisu nebo speciálního pole, pokud by systém měl (zatím lepíme k opatření)
+          ...(defect.doporuceni ? { navrhOpatreni: `${defect.navrhOpatreni}\n\nDOPORUČENÍ: ${defect.doporuceni}` } : {})
         });
       }
     });
@@ -250,7 +268,8 @@ export default function NewInspectionPage() {
         navrhOpatreni: defect.navrhOpatreni || "",
         terminOdstraneni: defect.terminOdstraneni || "",
         odpovednaOsoba: defect.odpovednaOsoba || "",
-        stavOdstraneni: 'otevrena'
+        stavOdstraneni: 'otevrena',
+        ...(defect.doporuceni ? { navrhOpatreni: `${defect.navrhOpatreni}\n\nDOPORUČENÍ: ${defect.doporuceni}` } : {})
       });
     });
 
@@ -271,19 +290,37 @@ export default function NewInspectionPage() {
     router.push(`/zaznamy/${newRecord.id}`);
   };
 
-  const renderPoint = (point: ChecklistPoint) => {
+  const renderPoint = (point: ChecklistPoint, isCustom: boolean = false) => {
     const state = checklist[point.id];
     const defect = pointDefects[point.id];
-    
-    // Sloučení závad z Google Tabulky pro tento konkrétní bod a typ kontroly
     const dostupneZavady = googleZavady[formData.typKontroly]?.[point.id] || point.typickeZavady || [];
     
     return (
-      <div key={point.id} className="pt-8 first:pt-0 space-y-4">
+      <div key={point.id} className="pt-8 first:pt-0 space-y-4 relative group">
+        {isCustom && (
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="absolute top-2 right-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+            onClick={() => setCustomPoints(prev => prev.filter(p => p.id !== point.id))}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+        
         <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-          <div className="flex gap-3 flex-1">
-            <span className="font-mono text-muted-foreground font-bold">{point.id}.</span>
-            <p className="font-medium text-[15px]">{point.text}</p>
+          <div className="flex gap-3 flex-1 w-full">
+            <span className="font-mono text-muted-foreground font-bold">{isCustom ? '*' : point.id}.</span>
+            {isCustom ? (
+              <Input 
+                value={point.text} 
+                onChange={(e) => setCustomPoints(prev => prev.map(p => p.id === point.id ? { ...p, text: e.target.value } : p))}
+                placeholder="Zadejte název vlastního bodu zjištění..."
+                className="font-medium text-[15px] h-8"
+              />
+            ) : (
+              <p className="font-medium text-[15px]">{point.text}</p>
+            )}
           </div>
           
           <div className="grid grid-cols-4 gap-1 w-full md:w-auto">
@@ -315,13 +352,12 @@ export default function NewInspectionPage() {
                   Definice závady
                 </div>
                 
-                {/* Dynamická roletka dat z Google Disku */}
-                {dostupneZavady.length > 0 && (
+                {dostupneZavady.length > 0 && !isCustom && (
                   <div className="p-3 bg-white/60 border border-amber-200/60 rounded-md space-y-2">
-                    <Label className="text-xs font-bold text-amber-900">Rychlý výběr závady (z Google Tabulky)</Label>
+                    <Label className="text-xs font-bold text-amber-900">Rychlý výběr závady ze šablony</Label>
                     <Select 
                       onValueChange={(v) => {
-                        const vybrana = dostupneZavady.find(z => z.nazev === v);
+                        const vybrana = dostupneZavady[parseInt(v)];
                         if (vybrana) {
                           setPointDefects(prev => ({
                             ...prev,
@@ -335,11 +371,11 @@ export default function NewInspectionPage() {
                       }}
                     >
                       <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="-- Vyberte typický nedostatek --" />
+                        <SelectValue placeholder="-- Vyberte štítek nedostatku --" />
                       </SelectTrigger>
                       <SelectContent>
                         {dostupneZavady.map((tz, idx) => (
-                          <SelectItem key={`${idx}-${tz.nazev}`} value={tz.nazev}>{tz.nazev}</SelectItem>
+                          <SelectItem key={idx} value={idx.toString()}>{tz.nazev}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -348,7 +384,7 @@ export default function NewInspectionPage() {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-xs">Popis závady (lze ručně upravit)</Label>
+                    <Label className="text-xs">Popis závady</Label>
                     <Textarea 
                       value={defect?.popis} 
                       onChange={(e) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], popis: e.target.value }}))}
@@ -357,12 +393,21 @@ export default function NewInspectionPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs">Návrh opatření (lze ručně upravit)</Label>
+                    <Label className="text-xs">Návrh opatření</Label>
                     <Textarea 
                       value={defect?.navrhOpatreni} 
                       onChange={(e) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], navrhOpatreni: e.target.value }}))}
                       placeholder="Navrhněte řešení..."
                       className="bg-white min-h-[100px]"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label className="text-xs text-blue-700 font-semibold">Doporučení ke zjištění (volitelné)</Label>
+                    <Textarea 
+                      value={defect?.doporuceni || ""} 
+                      onChange={(e) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], doporuceni: e.target.value }}))}
+                      placeholder="Např.: Doporučujeme zvážit instalaci ochranných nárazníků pro zamezení budoucího poškození..."
+                      className="bg-blue-50/50 border-blue-200"
                     />
                   </div>
                   <div className="space-y-2">
@@ -395,7 +440,20 @@ export default function NewInspectionPage() {
               </div>
             )}
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Button variant="outline" size="sm" className="text-muted-foreground cursor-pointer">
+                  <Camera className="h-3 w-3 mr-1" />
+                  {state.foto ? "Změnit fotku" : "Přidat fotku"}
+                </Button>
+                <Input 
+                  type="file" 
+                  accept="image/*" 
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
+                  onChange={(e) => handlePhotoUpload(point.id, e)}
+                />
+              </div>
+
               {!state.poznamka && (
                 <Button 
                   variant="ghost" 
@@ -407,21 +465,40 @@ export default function NewInspectionPage() {
                   Přidat interní poznámku
                 </Button>
               )}
-              {state.poznamka && (
-                <div className="flex-1 space-y-2">
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                    <StickyNote className="h-3 w-3" />
-                    Interní poznámka k bodu
-                  </Label>
-                  <Textarea 
-                    value={state.poznamka} 
-                    onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: e.target.value }}))}
-                    placeholder="Libovolný doprovodný text k bodu..."
-                    className="bg-muted/30"
-                  />
-                </div>
-              )}
             </div>
+
+            {state.foto && (
+              <div className="relative mt-2 inline-block border rounded-md p-1 bg-muted/30">
+                <Button 
+                  variant="destructive" 
+                  size="icon" 
+                  className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                  onClick={() => setChecklist(prev => {
+                    const next = {...prev};
+                    delete next[point.id].foto;
+                    return next;
+                  })}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+                <img src={state.foto} alt="Fotodokumentace" className="h-32 w-auto object-cover rounded shadow-sm" />
+              </div>
+            )}
+
+            {state.poznamka && (
+              <div className="flex-1 space-y-2 mt-2">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  <StickyNote className="h-3 w-3" />
+                  Interní poznámka k bodu
+                </Label>
+                <Textarea 
+                  value={state.poznamka} 
+                  onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: e.target.value }}))}
+                  placeholder="Libovolný doprovodný text k bodu..."
+                  className="bg-muted/30"
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -446,7 +523,7 @@ export default function NewInspectionPage() {
               <div 
                 className={cn(
                   "h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold",
-                  step === i ? "bg-primary text-white" : step > i ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"
+                  step === i ? "bg-primary text-white" : step > i ? "bg-muted text-muted-foreground" : "bg-green-100 text-green-700"
                 )}
               >
                 {step > i ? <CheckCircle2 className="h-5 w-5" /> : i}
@@ -570,7 +647,7 @@ export default function NewInspectionPage() {
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-6 pb-6 space-y-8 pt-4 divide-y">
-                    {section.points.map(renderPoint)}
+                    {section.points.map(p => renderPoint(p, false))}
                   </AccordionContent>
                 </AccordionItem>
               ))}
@@ -583,7 +660,7 @@ export default function NewInspectionPage() {
                 <span className="text-base font-bold">Kontrolní list - Preventivní požární prohlídka</span>
               </div>
               <div className="px-6 pb-6 space-y-8 pt-4 divide-y">
-                {CHECKLIST_PPP.map(renderPoint)}
+                {CHECKLIST_PPP.map(p => renderPoint(p, false))}
               </div>
             </div>
           )}
@@ -594,10 +671,34 @@ export default function NewInspectionPage() {
                 <span className="text-base font-bold">Kontrolní list - Prověrka BOZP pracoviště</span>
               </div>
               <div className="px-6 pb-6 space-y-8 pt-4 divide-y">
-                {CHECKLIST_PBOZP.map(renderPoint)}
+                {CHECKLIST_PBOZP.map(p => renderPoint(p, false))}
               </div>
             </div>
           )}
+
+          {/* NOVÁ SEKCE: Volné body zjištění */}
+          <div className="border rounded-lg bg-white overflow-hidden shadow-sm border-blue-200">
+            <div className="px-6 py-4 bg-blue-50 border-b border-blue-100 flex justify-between items-center">
+              <span className="text-base font-bold text-blue-900">Vlastní zjištění (Volné body)</span>
+              <Button 
+                size="sm" 
+                onClick={() => setCustomPoints(prev => [...prev, { id: 99000 + prev.length, text: "" }])}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Přidat vlastní bod
+              </Button>
+            </div>
+            {customPoints.length > 0 ? (
+              <div className="px-6 pb-6 space-y-8 pt-4 divide-y">
+                {customPoints.map(p => renderPoint(p, true))}
+              </div>
+            ) : (
+              <div className="p-8 text-center text-muted-foreground text-sm italic">
+                Zatím nebyly přidány žádné volné body zjištění.
+              </div>
+            )}
+          </div>
+
         </div>
       )}
 
@@ -650,7 +751,7 @@ export default function NewInspectionPage() {
               {Object.entries(pointDefects).filter(([id]) => checklist[Number(id)]?.hodnoceni === 'N').map(([id, defect]) => (
                 <div key={id} className="p-4 border rounded-lg flex items-start gap-4 hover:bg-muted/20 transition-colors">
                   <div className="bg-red-600 text-white font-mono text-xs h-6 w-6 rounded-full flex items-center justify-center shrink-0 mt-1">
-                    {id}
+                    {id > 99000 ? '*' : id}
                   </div>
                   <div className="flex-1 space-y-2">
                     <p className="font-bold">{defect.popis}</p>
@@ -726,6 +827,19 @@ export default function NewInspectionPage() {
                           next[idx].navrhOpatreni = e.target.value;
                           setManualDefects(next);
                         }}
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label className="text-xs text-blue-700 font-semibold">Doporučení ke zjištění (volitelné)</Label>
+                      <Textarea 
+                        value={def.doporuceni || ""} 
+                        onChange={(e) => {
+                          const next = [...manualDefects];
+                          next[idx].doporuceni = e.target.value;
+                          setManualDefects(next);
+                        }}
+                        placeholder="Např.: Doporučujeme zvážit..."
+                        className="bg-blue-50/50 border-blue-200"
                       />
                     </div>
                     <div className="space-y-2">
