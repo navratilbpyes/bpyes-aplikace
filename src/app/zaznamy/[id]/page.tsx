@@ -3,7 +3,7 @@
 import { useData } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { 
   ChevronLeft, 
@@ -63,6 +63,18 @@ export default function RecordDetailPage() {
     return record.kontrolniBody.filter((kb: any) => kb.showDoporuceni && kb.doporuceni && kb.doporuceni.trim() !== "");
   }, [record]);
 
+  // Výpočet statistik pro PDF semafor
+  const stats = useMemo(() => {
+    if (!record?.kontrolniBody) return { V: 0, N: 0, NA: 0, NK: 0, total: 0 };
+    return {
+      V: record.kontrolniBody.filter((b: any) => b.hodnoceni === 'V').length,
+      N: record.kontrolniBody.filter((b: any) => b.hodnoceni === 'N').length,
+      NA: record.kontrolniBody.filter((b: any) => b.hodnoceni === 'NA').length,
+      NK: record.kontrolniBody.filter((b: any) => b.hodnoceni === 'NK').length,
+      total: record.kontrolniBody.length
+    };
+  }, [record]);
+
   const pdfFileName = useMemo(() => {
     if (!record || !klient) return "export.pdf";
     const cleanKlient = klient.nazev.replace(/[^a-zA-Z0-9\s]/g, "").trim();
@@ -98,7 +110,7 @@ export default function RecordDetailPage() {
 
   const triggerEmailModal = () => {
     setEmailTo(filterPosition !== "all" ? `udrzba@${klient?.nazev.toLowerCase().replace(/[^a-z]/g, "") || "firma"}.cz` : "");
-    setEmailText(`Dobrý den,\n\nv příloze Vám zasílám vygenerovaný přehled zjištěných neshod a opatření z prověrky BOZP a PO konané dne ${new Date(record.datum).toLocaleDateString('cs-CZ')}.\n\n` + 
+    setEmailText(`Dobrý den,\n\nv příloze Vám zasílám vygenerovaný přehled zjištěných neshod a opatření z prověrky BOZP a PO konané dne ${record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : ''}.\n\n` + 
       (filterPosition !== "all" ? `Tento výpis obsahuje výhradně úkoly určené pro pracovní pozici: ${filterPosition}.\n\n` : "") +
       `Prosím o zajištění nápravy v uvedených termínech.\n\nS pozdravem,\nTým BPyes`);
     setShowEmailModal(true);
@@ -182,7 +194,7 @@ export default function RecordDetailPage() {
             </span>
           </div>
           <h1 className="text-3xl font-bold tracking-tight">{record.cislo} <span className="text-muted-foreground font-normal text-xl">R{record.revize || 0}</span></h1>
-          <p className="text-sm text-muted-foreground">Provedeno dne {new Date(record.datum).toLocaleDateString('cs-CZ')}</p>
+          <p className="text-sm text-muted-foreground">Provedeno dne {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : 'Neuvedeno'}</p>
         </div>
 
         <div className="flex flex-wrap gap-2 w-full md:w-auto">
@@ -251,7 +263,7 @@ export default function RecordDetailPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-muted/30 p-3 rounded-lg border">
                     <div><span className="text-muted-foreground block mb-0.5">Návrh opatření:</span><p className="font-medium">{z.navrhOpatreni}</p></div>
                     {z.lokalizace && <div><span className="text-muted-foreground block mb-0.5">Místo zjištění:</span><p className="font-medium text-blue-900">{z.lokalizace}</p></div>}
-                    <div><span className="text-muted-foreground block mb-0.5">Termín odstranění:</span><p className="font-medium">{new Date(z.terminOdstraneni).toLocaleDateString('cs-CZ')}</p></div>
+                    <div><span className="text-muted-foreground block mb-0.5">Termín odstranění:</span><p className="font-medium">{z.terminOdstraneni ? new Date(z.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</p></div>
                     <div><span className="text-muted-foreground block mb-0.5">Odpovědná pracovní pozice:</span><p className="font-bold text-black">{z.odpovednaOsoba || 'Neuvedena'}</p></div>
                   </div>
 
@@ -283,12 +295,13 @@ export default function RecordDetailPage() {
             <CardContent className="space-y-4 text-sm">
               <div className="flex gap-3"><Building className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Klient</span><p className="font-bold">{klient?.nazev}</p><p className="text-xs text-muted-foreground">IČO: {klient?.ico}</p></div></div>
               <div className="flex gap-3"><MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Pracoviště / Lokace</span><p className="font-bold">{pracoviste?.nazev}</p><p className="text-xs text-muted-foreground">{pracoviste?.adresa}</p></div></div>
-              <div className="flex gap-3"><Clock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Vytvořeno v systému</span><p className="font-medium">{new Date(record.createdAt).toLocaleString('cs-CZ')}</p></div></div>
+              <div className="flex gap-3"><Clock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Vytvořeno v systému</span><p className="font-medium">{record.createdAt ? new Date(record.createdAt).toLocaleString('cs-CZ') : 'Neznámé'}</p></div></div>
             </CardContent>
           </Card>
         </div>
       </div>
 
+      {/* Skrytá šablona pro tvorbu PDF */}
       <div className="absolute top-[-9999px] left-[-9999px] w-[800px] bg-white text-black font-sans pointer-events-none" id="pdf-export-container">
         <div className="p-8" style={{ minHeight: '1050px' }}>
           <div className="flex justify-between items-start border-b-2 border-black pb-6">
@@ -343,7 +356,7 @@ export default function RecordDetailPage() {
               <div className="text-center">
                 <p className="font-bold text-[12px] uppercase">Provedl (Za BPyes):</p>
                 <p className="text-[10px] text-slate-500">Oprávněný specialista BOZP a PO</p>
-                <p className="text-[9px] text-slate-400">Dne: {new Date(record.datum).toLocaleDateString('cs-CZ')}</p>
+                <p className="text-[9px] text-slate-400">Dne: {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : 'Neuvedeno'}</p>
               </div>
             </div>
             <div className="space-y-12">
@@ -363,10 +376,10 @@ export default function RecordDetailPage() {
           <h2 className="text-base font-bold uppercase border-b-2 border-black pb-2 mb-4 tracking-wide">1. Manažerské shrnutí a statistiky</h2>
           
           <div className="grid grid-cols-4 gap-2 text-center text-[11px] mb-6">
-            <div className="p-3 border bg-slate-50 font-bold"><span className="text-lg block font-black">--</span>CELKEM BODŮ</div>
-            <div className="p-3 border border-green-300 bg-green-50 text-green-900 font-bold"><span className="text-lg block font-black">--</span>VYHOVUJE</div>
-            <div className="p-3 border border-red-300 bg-red-50 text-red-900 font-bold"><span className="text-lg block font-black">{filteredZavady.length}</span>NESHODY (N)</div>
-            <div className="p-3 border bg-slate-50 text-slate-700 font-bold"><span className="text-lg block font-black">--</span>NEKONTROLOVÁNO</div>
+            <div className="p-3 border bg-slate-50 font-bold"><span className="text-lg block font-black">{stats.total}</span>CELKEM BODŮ</div>
+            <div className="p-3 border border-green-300 bg-green-50 text-green-900 font-bold"><span className="text-lg block font-black">{stats.V}</span>VYHOVUJE</div>
+            <div className="p-3 border border-red-300 bg-red-50 text-red-900 font-bold"><span className="text-lg block font-black">{stats.N}</span>NESHODY (N)</div>
+            <div className="p-3 border bg-slate-50 text-slate-700 font-bold"><span className="text-lg block font-black">{stats.NK + stats.NA}</span>NEHODNOCENO</div>
           </div>
 
           <div className="space-y-2 mb-6">
@@ -437,7 +450,7 @@ export default function RecordDetailPage() {
                   </div>
 
                   <div className="flex justify-between pt-1">
-                    <div><span className="text-[9px] text-slate-400 block">Termín:</span><p className="font-mono font-bold">{new Date(z.terminOdstraneni).toLocaleDateString('cs-CZ')}</p></div>
+                    <div><span className="text-[9px] text-slate-400 block">Termín:</span><p className="font-mono font-bold">{z.terminOdstraneni ? new Date(z.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</p></div>
                     <div><span className="text-[9px] text-slate-400 block">Odpovědná pozice:</span><p className="font-bold uppercase text-slate-900">{z.odpovednaOsoba || 'Neuvedena'}</p></div>
                     <div className="text-right"><span className="text-[9px] text-slate-400 block">Stav:</span><p className="font-bold text-slate-800">{z.stavOdstraneni === 'odstranena' ? '✅ ODSTRANĚNO' : '❌ NEVYŘEŠENO'}</p></div>
                   </div>
