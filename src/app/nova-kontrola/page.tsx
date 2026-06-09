@@ -28,6 +28,36 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Progress } from "@/components/ui/progress";
 import { KontrolniBod, Zavada } from "@/app/lib/types";
 
+// Rozhraní pro závady stažené z Google Tabulky
+interface TypickaZavada {
+  nazev: string;
+  popis: string;
+  opatreni: string;
+}
+
+// Odkaz na vaši živou databázi
+const GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTqBDqcv7REG4fkbLQHUqOQP13KzwB-wAAEaotZldSvZMvTpzfc8OlJvo8isBWkmQBpjYTm-I_X6Lls/pub?output=csv";
+
+// Pomocná funkce pro bezpečné rozřezání CSV (řeší i čárky uvnitř textu)
+function parseCSV(str: string) {
+  const arr: string[][] = [];
+  let quote = false;
+  let row = 0, col = 0;
+  for (let c = 0; c < str.length; c++) {
+    let cc = str[c], nc = str[c+1];
+    arr[row] = arr[row] || [];
+    arr[row][col] = arr[row][col] || '';
+    if (cc == '"' && quote && nc == '"') { arr[row][col] += cc; ++c; continue; }
+    if (cc == '"') { quote = !quote; continue; }
+    if (cc == ',' && !quote) { ++col; continue; }
+    if (cc == '\r' && nc == '\n' && !quote) { ++row; col = 0; ++c; continue; }
+    if (cc == '\n' && !quote) { ++row; col = 0; continue; }
+    if (cc == '\r' && !quote) { ++row; col = 0; continue; }
+    arr[row][col] += cc;
+  }
+  return arr;
+}
+
 export default function NewInspectionPage() {
   const { klienti, zaznamy, setZaznamy } = useData();
   const { toast } = useToast();
@@ -46,9 +76,63 @@ export default function NewInspectionPage() {
   const [checklist, setChecklist] = useState<Record<number, KontrolniBod>>({});
   const [pointDefects, setPointDefects] = useState<Record<number, Partial<Zavada>>>({});
   const [manualDefects, setManualDefects] = useState<Partial<Zavada>[]>([]);
+  
+  // Stát pro uložení stažené databáze závad z Googlu
+  const [googleZavady, setGoogleZavady] = useState<Record<string, Record<number, TypickaZavada[]>>>({});
 
   const selectedKlient = klienti.find(k => k.id === formData.klientId);
   const selectedPrac = selectedKlient?.pracoviste.find(p => p.id === formData.pracovisteId);
+
+  // Funkce pro stažení dat z Google Tabulky
+  useEffect(() => {
+    const fetchZavady = async () => {
+      try {
+        const response = await fetch(GOOGLE_SHEETS_URL);
+        const csvText = await response.text();
+        const rows = parseCSV(csvText);
+        
+        if (rows.length > 1) {
+          const headers = rows[0].map(h => h.toLowerCase().trim());
+          const iTyp = headers.findIndex(h => h.includes('typ'));
+          const iId = headers.findIndex(h => h.includes('id'));
+          // Hledá sloupec se zkráceným názvem, jinak vezme "Nedostatek"
+          let iKratky = headers.findIndex(h => h.includes('zkrác') || h.includes('krát') || h.includes('název'));
+          if (iKratky === -1) iKratky = headers.findIndex(h => h.includes('nedostatek'));
+          const iPopis = headers.findIndex(h => h === 'popis' || (h.includes('popis') && !h.includes('zkr')));
+          const iOpatreni = headers.findIndex(h => h.includes('opatřen') || h.includes('opatren'));
+
+          const parsedDefects: Record<string, Record<number, TypickaZavada[]>> = {};
+
+          for (let i = 1; i < rows.length; i++) {
+            const r = rows[i];
+            if (!r || r.length < 3) continue;
+            
+            const typ = iTyp >= 0 ? r[iTyp]?.trim() : r[0]?.trim();
+            const id = parseInt(iId >= 0 ? r[iId] : r[2]);
+            const nazev = (iKratky >= 0 ? r[iKratky] : r[3])?.trim();
+            const popis = (iPopis >= 0 ? r[iPopis] : r[4])?.trim();
+            const opatreni = (iOpatreni >= 0 ? r[iOpatreni] : r[5])?.trim();
+
+            if (typ && !isNaN(id) && nazev) {
+              if (!parsedDefects[typ]) parsedDefects[typ] = {};
+              if (!parsedDefects[typ][id]) parsedDefects[typ][id] = [];
+              
+              parsedDefects[typ][id].push({
+                nazev: nazev,
+                popis: popis || "",
+                opatreni: opatreni || ""
+              });
+            }
+          }
+          setGoogleZavady(parsedDefects);
+          console.log("Databáze závad úspěšně načtena z Google Sheets.");
+        }
+      } catch (error) {
+        console.error("Chyba při stahování závad z Google Sheets:", error);
+      }
+    };
+    fetchZavady();
+  }, []);
 
   // Auto-save logic
   useEffect(() => {
@@ -60,13 +144,11 @@ export default function NewInspectionPage() {
           pointDefects,
           manualDefects
         }));
-        console.log('Draft auto-saved');
       }
     }, 30000);
     return () => clearInterval(interval);
   }, [formData, checklist, pointDefects, manualDefects]);
 
-  // Leave warning
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (formData.klientId) {
@@ -78,7 +160,6 @@ export default function NewInspectionPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [formData.klientId]);
 
-  // Dynamicky vypocet poctu otazek podle vybraneho typu kontroly
   const currentChecklistFlat = useMemo(() => {
     if (formData.typKontroly === 'PPP') return CHECKLIST_PPP || [];
     if (formData.typKontroly === 'PBOZP') return CHECKLIST_PBOZP || [];
@@ -101,42 +182,19 @@ export default function NewInspectionPage() {
     };
   }, [checklist, currentChecklistFlat.length, answeredPoints]);
 
-  // Pomocná funkce pro inteligentní AI návrhy textů na základě klíčových slov
-  const ziskatAINavrh = (bodText: string, pole: 'popis' | 'opatreni') => {
-    const txt = bodText.toLowerCase();
-    if (pole === 'popis') {
-      if (txt.includes('lékárnič')) return "Na pracovišti byla zjištěna lékárnička s neúplným obsahem komponentů pro první pomoc, případně po expirační době.";
-      if (txt.includes('hasic') || txt.includes('php')) return "Přenosné hasicí přístroje na pracovišti vykazují chybějící periodickou revizi (starší než 1 rok) nebo je k nim zablokován volný přístup.";
-      if (txt.includes('únik') || txt.includes('východ')) return "Únikové cesty a nouzové východy jsou částečně zastavěny skladovaným materiálem, což omezuje bezpečnou evakuaci osob.";
-      if (txt.includes('elektro') || txt.includes('rozvaděč')) return "U elektrických rozvaděčů chybí platná revizní zpráva, případně je v ochranném pásmu 80 cm skladován hořlavý materiál.";
-      if (txt.includes('dokumentace') || txt.includes('řád')) return "Provozní dokumentace (deníky zařízení, předpisy) není na pracovišti k dispozici v aktuálním znění nebo zcela chybí zápisy.";
-      if (txt.includes('oopp')) return "Zaměstnanci prokazatelně nepoužívají přidělené osobní ochranné pracovní prostředky pro danou činnost.";
-      return `Na pracovišti byl zjištěn nedostatek v oblasti: "${bodText}". Stav neodpovídá platným standardům.`;
-    } else {
-      if (txt.includes('lékárnič')) return "Doplnit chybějící zdravotnický materiál dle předepsaného obsahu lékárničky a zajistit pravidelnou kontrolu expirace.";
-      if (txt.includes('hasic') || txt.includes('php')) return "Zajistit neprodlené provedení revize oprávněnou osobou a trvale uvolnit manipulační prostor kolem přístroje.";
-      if (txt.includes('únik') || txt.includes('východ')) return "Okamžitě vyklidit únikové prostory, odstranit překážky a poučit zaměstnance o striktním zákazu skladování v těchto zónách.";
-      if (txt.includes('elektro') || txt.includes('rozvaděč')) return "Odstranit veškerý hořlavý materiál z blízkosti rozvaděčů a zajistit provedení revize oprávněným technikem.";
-      if (txt.includes('dokumentace') || txt.includes('řád')) return "Zpracovat, aktualizovat a uvést do provozu chybějící dokumentaci a začít provádět pravidelné zápisy.";
-      if (txt.includes('oopp')) return "Zajistit důslednou kontrolu používání OOPP vedoucími pracovníky a provést mimořádné poučení zaměstnanců.";
-      return "Zjednat nápravu, odstranit zjištěné neshody a uvést stav pracoviště do souladu s platnými právními předpisy ČR.";
-    }
-  };
-
   const handleRatingChange = (point: ChecklistPoint, rating: 'V' | 'N' | 'NA' | 'NK') => {
     let text = "";
     if (rating === 'V') text = "Bez zjištěných závad.";
     if (rating === 'NK') text = "V rámci prověrky, prohlídky nebo auditu nebyla tato část kontrolována.";
     if (rating === 'N') {
-      text = point.nText || "Zjištěn nedostatek. Je nutné zjednat nápravu v souladu s platnými právními předpisy.";
+      text = point.nText || "Zjištěn nedostatek. Je nutné zjednat nápravu.";
       
-      // Pre-fill defect
       setPointDefects(prev => ({
         ...prev,
         [point.id]: {
-          popis: text,
-          navrhOpatreni: "Provést nápravu v souladu s legislativou.",
-          terminOdstraneni: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days
+          popis: "",
+          navrhOpatreni: "",
+          terminOdstraneni: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           odpovednaOsoba: selectedKlient?.kontaktOsoba || ""
         }
       }));
@@ -166,11 +224,9 @@ export default function NewInspectionPage() {
     const year = new Date(formData.datum).getFullYear();
     const countInYear = zaznamy.filter(z => new Date(z.datum).getFullYear() === year).length + 1;
     
-    // Aggregate defects
     const aggregatedZavady: Zavada[] = [];
     let defectCounter = 1;
 
-    // From points
     Object.entries(pointDefects).forEach(([pointId, defect]) => {
       if (checklist[Number(pointId)]?.hodnoceni === 'N') {
         aggregatedZavady.push({
@@ -186,7 +242,6 @@ export default function NewInspectionPage() {
       }
     });
 
-    // From manual
     manualDefects.forEach((defect) => {
       aggregatedZavady.push({
         id: Math.random().toString(36).substring(7),
@@ -212,14 +267,16 @@ export default function NewInspectionPage() {
 
     setZaznamy(prev => [...prev, newRecord as any]);
     localStorage.removeItem('bpyes_draft_kontrola');
-    toast({ title: isDraft ? "Uloženo jako otevřené" : "Záznam vytvořen", description: `Kontrola ${newRecord.cislo} byla úspěšně založena.` });
+    toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola ${newRecord.cislo} byla úspěšně založena.` });
     router.push(`/zaznamy/${newRecord.id}`);
   };
 
-  // Univerzalni komponenta pro vykresleni jednoho bodu checklistu
   const renderPoint = (point: ChecklistPoint) => {
     const state = checklist[point.id];
     const defect = pointDefects[point.id];
+    
+    // Sloučení závad z Google Tabulky pro tento konkrétní bod a typ kontroly
+    const dostupneZavady = googleZavady[formData.typKontroly]?.[point.id] || point.typickeZavady || [];
     
     return (
       <div key={point.id} className="pt-8 first:pt-0 space-y-4">
@@ -251,15 +308,6 @@ export default function NewInspectionPage() {
 
         {state?.hodnoceni && state.hodnoceni !== 'NA' && (
           <div className="space-y-4 ml-8 animate-in fade-in slide-in-from-top-2 duration-300">
-            <div className="space-y-2">
-              <Label className="text-xs uppercase text-muted-foreground">Text hodnocení</Label>
-              <Textarea 
-                value={state.textHodnoceni} 
-                onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], textHodnoceni: e.target.value }}))}
-                className="min-h-[80px]"
-              />
-            </div>
-
             {state.hodnoceni === 'N' && (
               <div className="p-4 bg-amber-50 rounded-lg border border-amber-200 space-y-4 shadow-inner">
                 <div className="flex items-center gap-2 text-amber-800 font-bold text-sm uppercase">
@@ -267,43 +315,54 @@ export default function NewInspectionPage() {
                   Definice závady
                 </div>
                 
+                {/* Dynamická roletka dat z Google Disku */}
+                {dostupneZavady.length > 0 && (
+                  <div className="p-3 bg-white/60 border border-amber-200/60 rounded-md space-y-2">
+                    <Label className="text-xs font-bold text-amber-900">Rychlý výběr závady (z Google Tabulky)</Label>
+                    <Select 
+                      onValueChange={(v) => {
+                        const vybrana = dostupneZavady.find(z => z.nazev === v);
+                        if (vybrana) {
+                          setPointDefects(prev => ({
+                            ...prev,
+                            [point.id]: {
+                              ...prev[point.id],
+                              popis: vybrana.popis,
+                              navrhOpatreni: vybrana.opatreni
+                            }
+                          }));
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="-- Vyberte typický nedostatek --" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {dostupneZavady.map((tz, idx) => (
+                          <SelectItem key={`${idx}-${tz.nazev}`} value={tz.nazev}>{tz.nazev}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <Label className="text-xs">Popis závady</Label>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 text-[11px] text-primary"
-                        onClick={() => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], popis: ziskatAINavrh(point.text, 'popis') }}))}
-                      >
-                        ✨ Generovat AI návrh
-                      </Button>
-                    </div>
+                    <Label className="text-xs">Popis závady (lze ručně upravit)</Label>
                     <Textarea 
                       value={defect?.popis} 
                       onChange={(e) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], popis: e.target.value }}))}
                       placeholder="Popište zjištěný nedostatek..."
-                      className="bg-white"
+                      className="bg-white min-h-[100px]"
                     />
                   </div>
                   <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <Label className="text-xs">Návrh opatření</Label>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 text-[11px] text-primary"
-                        onClick={() => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], navrhOpatreni: ziskatAINavrh(point.text, 'opatreni') }}))}
-                      >
-                        ✨ Generovat AI nápravu
-                      </Button>
-                    </div>
+                    <Label className="text-xs">Návrh opatření (lze ručně upravit)</Label>
                     <Textarea 
                       value={defect?.navrhOpatreni} 
                       onChange={(e) => setPointDefects(prev => ({ ...prev, [point.id]: { ...prev[point.id], navrhOpatreni: e.target.value }}))}
                       placeholder="Navrhněte řešení..."
-                      className="bg-white"
+                      className="bg-white min-h-[100px]"
                     />
                   </div>
                   <div className="space-y-2">
@@ -345,14 +404,14 @@ export default function NewInspectionPage() {
                   className="text-muted-foreground"
                 >
                   <Plus className="h-3 w-3 mr-1" />
-                  Poznámka
+                  Přidat interní poznámku
                 </Button>
               )}
               {state.poznamka && (
                 <div className="flex-1 space-y-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1">
                     <StickyNote className="h-3 w-3" />
-                    Interní poznámka
+                    Interní poznámka k bodu
                   </Label>
                   <Textarea 
                     value={state.poznamka} 
