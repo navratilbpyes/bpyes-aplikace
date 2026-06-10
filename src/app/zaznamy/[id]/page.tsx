@@ -160,7 +160,8 @@ export default function RecordDetailPage() {
           width: 794
         },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['css', 'legacy'], avoid: '.avoid-break' }
+        // OPRAVA DĚLENÍ STRÁNEK: avoid-all zajistí, že nikdy nezkusí rozříznout označený prvek
+        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
       };
 
       await html2pdf()
@@ -420,7 +421,7 @@ export default function RecordDetailPage() {
             </table>
           </div>
 
-          <div style={{ pageBreakBefore: 'always', height: '1px', clear: 'both' }}></div>
+          <div className="html2pdf__page-break"></div>
 
           <div style={{ padding: '10px 0' }}>
             <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '20px', color: '#000' }}>
@@ -452,7 +453,8 @@ export default function RecordDetailPage() {
               </div>
             </div>
 
-            <div className="avoid-break" style={{ marginTop: '25px', pageBreakInside: 'avoid' }}>
+            {/* INLINE-BLOCK HACK: Definitivní prevence proti řezání bloků v půlce */}
+            <div className="avoid-break" style={{ marginTop: '25px', pageBreakInside: 'avoid', breakInside: 'avoid', display: 'inline-block', width: '100%' }}>
               <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Zúčastněné osoby:</span>
               <table style={{ width: '100%', tableLayout: 'fixed', fontSize: '11px', borderCollapse: 'collapse', border: '1px solid #cbd5e1' }}>
                 <thead>
@@ -477,18 +479,18 @@ export default function RecordDetailPage() {
             </div>
           </div>
 
-          <div style={{ pageBreakBefore: 'always', height: '1px', clear: 'both' }}></div>
+          <div className="html2pdf__page-break"></div>
 
           <div style={{ padding: '10px 0' }}>
             <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '20px', color: '#000' }}>
               2. {onlyDefects ? "Registr zjištěných nedostatků a nápravných opatření" : "Kompletní auditní protokol zjištění"}
             </h2>
-            {/* OPRAVA BLOKU ZÁVAD: Žádný flexbox, pouze čisté HTML bloky */}
             <div style={{ display: 'block' }}>
               {filteredKontrolniBody.map((kb: any) => {
                 const isDefect = kb.hodnoceni === 'N';
                 return (
-                  <div key={kb.id || kb.bod} className="avoid-break" style={{ marginBottom: '12px', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '10px', backgroundColor: '#fff', pageBreakInside: 'avoid', display: 'block' }}>
+                  // INLINE-BLOCK HACK: Zabránění gilotiny u dlouhých karet s fotkami
+                  <div key={kb.id || kb.bod} className="avoid-break" style={{ marginBottom: '12px', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '10px', backgroundColor: '#fff', pageBreakInside: 'avoid', breakInside: 'avoid', display: 'inline-block', width: '100%', boxSizing: 'border-box' }}>
                     <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderBottom: '1px solid #f1f5f9', paddingBottom: '4px', marginBottom: '6px' }}>
                       <tbody>
                         <tr>
