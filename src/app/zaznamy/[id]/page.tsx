@@ -139,48 +139,47 @@ export default function RecordDetailPage() {
     const html2canvas = (await import('html2canvas')).default;
     const { jsPDF } = await import('jspdf');
     const element = document.getElementById('pdf-export-container');
-
     if (!element) throw new Error('PDF container not found');
 
-    // Dočasně přepni na static aby html2canvas nepočítal offset
-    element.style.position = 'static';
-    element.style.top = 'auto';
-    element.style.left = 'auto';
+    // Přesuň element na top:0 left:0 při renderování
+    element.style.top = '0px';
+    element.style.left = '0px';
+    element.style.zIndex = '99999';
 
-    // Počkej jeden frame aby se DOM překreslil
+    // Počkej jeden frame
+    await new Promise(resolve => requestAnimationFrame(resolve));
     await new Promise(resolve => requestAnimationFrame(resolve));
 
     const canvas = await html2canvas(element, {
       scale: 3,
       useCORS: true,
       logging: false,
-      scrollX: 0,
-      scrollY: 0,
       windowWidth: 800,
       width: 800,
-      height: element.scrollHeight,
     });
 
     // Schovaný zpět
-    element.style.position = 'fixed';
     element.style.top = '-9999px';
     element.style.left = '-9999px';
+    element.style.zIndex = '-9999';
 
     const imgData = canvas.toDataURL('image/jpeg', 1.0);
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
-    const imgHeightMm = (canvas.height / canvas.width) * pdfWidth * 3;
-    let position = 0;
+    const imgHeightMm = (canvas.height / canvas.width) * pdfWidth / 3 * (canvas.width / canvas.width);
+    
+    // Správný výpočet výšky
+    const ratio = pdfWidth / (canvas.width / 3);
+    const totalHeightMm = (canvas.height / 3) * ratio;
+    
+    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, totalHeightMm);
+    let renderedHeight = pdfHeight;
 
-    pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeightMm);
-    let remainingHeight = imgHeightMm - pdfHeight;
-
-    while (remainingHeight > 0) {
-      position -= pdfHeight;
+    while (renderedHeight < totalHeightMm) {
       pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeightMm);
-      remainingHeight -= pdfHeight;
+      pdf.addImage(imgData, 'JPEG', 0, -renderedHeight, pdfWidth, totalHeightMm);
+      renderedHeight += pdfHeight;
     }
 
     pdf.save(pdfFileName);
