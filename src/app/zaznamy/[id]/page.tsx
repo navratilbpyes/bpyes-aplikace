@@ -13,7 +13,8 @@ import {
   MapPin, 
   FileText,
   Loader2,
-  Edit
+  Edit,
+  Users
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -49,7 +50,6 @@ export default function RecordDetailPage() {
   }, [klient, record]);
 
   const [filterPosition, setFilterPosition] = useState<string>("all");
-  // OPRAVA: Defaultně false -> zobrazí se kompletní protokol
   const [onlyDefects, setOnlyDefects] = useState<boolean>(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
@@ -140,7 +140,7 @@ export default function RecordDetailPage() {
       const element = document.getElementById('pdf-export-container');
 
       const opt = {
-        margin:       20, // OPRAVA: 20 mm = přesně 2 cm okraj ze všech stran
+        margin:       20, 
         filename:     pdfFileName,
         image:        { type: 'jpeg', quality: 1 },
         html2canvas:  { 
@@ -150,7 +150,7 @@ export default function RecordDetailPage() {
           windowWidth: 800
         },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['css', 'legacy'] } // OPRAVA: Vrácení CSS dělení, aby to neseřízlo fotky v půlce
+        pagebreak:    { mode: ['css', 'legacy'] } 
       };
 
       await html2pdf().set(opt).from(element).save();
@@ -189,7 +189,6 @@ export default function RecordDetailPage() {
           <Button variant="default" className="h-11 shadow-sm font-bold bg-blue-600 hover:bg-blue-700 text-white" onClick={handleDownloadPDF} disabled={isGeneratingPDF}>
             {isGeneratingPDF ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Printer className="h-4 w-4 mr-2" />} {isGeneratingPDF ? "Generuji PDF..." : "Stáhnout PDF report"}
           </Button>
-          {/* OPRAVA: Vrácení tlačítka Upravit záznam */}
           <Button variant="secondary" className="h-11 shadow-sm" onClick={() => toast({ title: "Připravuje se", description: "Funkce editace záznamu bude zprovozněna v další fázi." })}>
             <Edit className="h-4 w-4 mr-2" /> Upravit záznam
           </Button>
@@ -293,11 +292,28 @@ export default function RecordDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* NÁVRAT SEKCE NA WEB: Seznam zúčastněných osob */}
+          <Card className="border-none shadow-sm bg-white">
+            <CardHeader><CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-bold flex items-center gap-2"><Users className="h-4 w-4 text-slate-500" /> Zúčastněné osoby</CardTitle></CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              {record?.ucastnici && record.ucastnici.length > 0 ? (
+                record.ucastnici.map((u: any, i: number) => (
+                  <div key={i} className="border-b pb-2 last:border-0 last:pb-0">
+                    <p className="font-bold text-slate-900">{u.jmeno || 'Neuvedeno'}</p>
+                    <p className="text-xs text-muted-foreground">{u.pozice || 'Bez specifické pozice'}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground italic">Nebyly zapsány žádné osoby.</p>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* TISKOVÁ ŠABLONA PDF (Opacity odstraněno, klasický off-screen fix) */}
+      {/* TISKOVÁ ŠABLONA PDF (Claude fix šířky + Oprava dělení stránek a účastníků) */}
       {/* ========================================================================= */}
       <div style={{ position: 'fixed', left: '-9999px', top: '0px', width: '800px', zIndex: -1000 }}>
         <div id="pdf-export-container" style={{ width: '800px', backgroundColor: '#ffffff', color: '#000000', padding: '0px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
@@ -368,6 +384,7 @@ export default function RecordDetailPage() {
 
           <div style={{ pageBreakBefore: 'always' }}></div>
 
+          {/* SEKCE 1: SHRNUTÍ A STATISTIKY V PDF */}
           <div style={{ padding: '10px 0' }}>
             <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '20px', color: '#000' }}>
               1. Shrnutí a statistiky
@@ -397,10 +414,36 @@ export default function RecordDetailPage() {
                 {record.poznamka || "Při prověrce nebylo vloženo žádné doprovodné textové hodnocení."}
               </div>
             </div>
+
+            {/* NÁVRAT SEKCE DO PDF: Tabulka zúčastněných osob */}
+            <div style={{ marginTop: '25px', pageBreakInside: 'avoid' }}>
+              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Zúčastněné osoby:</span>
+              <table style={{ width: '100%', tableLayout: 'fixed', fontSize: '11px', borderCollapse: 'collapse', border: '1px solid #cbd5e1' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1px solid #cbd5e1' }}>
+                    <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 'bold', borderRight: '1px solid #cbd5e1', width: '50%' }}>Jméno a příjmení</th>
+                    <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 'bold', width: '50%' }}>Pracovní pozice / Vztah k subjektu</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {record?.ucastnici && record.ucastnici.length > 0 ? (
+                    record.ucastnici.map((u: any, i: number) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                        <td style={{ padding: '6px 10px', fontWeight: 'medium', borderRight: '1px solid #cbd5e1', wordWrap: 'break-word' }}>{u.jmeno || 'Neuvedeno'}</td>
+                        <td style={{ padding: '6px 10px', color: '#475569', wordWrap: 'break-word' }}>{u.pozice || 'Bez zařazení'}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr><td colSpan={2} style={{ padding: '10px', fontStyle: 'italic', color: '#64748b', textAlign: 'center' }}>Nebyly zapsány žádné osoby.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div style={{ pageBreakBefore: 'always' }}></div>
 
+          {/* SEKCE 2: REGISTR BODŮ V PDF */}
           <div style={{ padding: '10px 0' }}>
             <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '20px', color: '#000' }}>
               2. {onlyDefects ? "Registr zjištěných nedostatků a nápravných opatření" : "Kompletní auditní protokol zjištění"}
