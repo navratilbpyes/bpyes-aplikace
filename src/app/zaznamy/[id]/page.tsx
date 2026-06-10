@@ -50,6 +50,7 @@ export default function RecordDetailPage() {
   }, [klient, record]);
 
   const [filterPosition, setFilterPosition] = useState<string>("all");
+  // OPRAVA: Defaultně vypnuto (zobrazí se kompletní protokol)
   const [onlyDefects, setOnlyDefects] = useState<boolean>(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
@@ -140,30 +141,26 @@ export default function RecordDetailPage() {
       const element = document.getElementById('pdf-export-container');
       const wrapper = document.getElementById('pdf-wrapper');
 
-      // Trik z kódu od Claude: Přesuneme do viewportu, aby se zamezilo oříznutí
+      // Dočasný přesun šablony přímo na souřadnice 0,0 zabrání špatnému měření a ořezům.
       if (wrapper) {
-        wrapper.style.position = 'fixed';
-        wrapper.style.left = '0px';
         wrapper.style.top = '0px';
-        wrapper.style.zIndex = '-9999';
+        wrapper.style.left = '0px';
       }
 
-      await new Promise(resolve => requestAnimationFrame(resolve));
-      await new Promise(resolve => requestAnimationFrame(resolve));
+      await new Promise(resolve => setTimeout(resolve, 150));
 
       const opt = {
-        margin:       20, // 2 CM OKRAJE ZE VŠECH STRAN
+        margin:       15, // OPRAVA: Krásný 1.5 cm okraj, který zaručí dostatek místa
         filename:     pdfFileName,
         image:        { type: 'jpeg', quality: 1 },
         html2canvas:  { 
           scale: 2, 
           useCORS: true, 
-          logging: false,
-          windowWidth: 794,
-          width: 794
+          logging: false
         },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['css', 'legacy'] }
+        // OPRAVA: Inteligentní stránkování (avoid: '.avoid-break' zakazuje roztržení karet napůl)
+        pagebreak:    { mode: ['css', 'legacy'], avoid: '.avoid-break' } 
       };
 
       await html2pdf().set(opt).from(element).save();
@@ -172,10 +169,10 @@ export default function RecordDetailPage() {
       console.error("Chyba PDF:", error);
       toast({ title: "Chyba generování", description: "Nastala chyba při vytváření PDF.", variant: "destructive" });
     } finally {
-      // Úklid - schování wrapperu
+      // Návrat do úkrytu
       const wrapper = document.getElementById('pdf-wrapper');
       if (wrapper) {
-        wrapper.style.position = 'absolute';
+        wrapper.style.top = '-9999px';
         wrapper.style.left = '-9999px';
       }
       setIsGeneratingPDF(false);
@@ -208,6 +205,7 @@ export default function RecordDetailPage() {
           <Button variant="default" className="h-11 shadow-sm font-bold bg-blue-600 hover:bg-blue-700 text-white" onClick={handleDownloadPDF} disabled={isGeneratingPDF}>
             {isGeneratingPDF ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Printer className="h-4 w-4 mr-2" />} {isGeneratingPDF ? "Generuji PDF..." : "Stáhnout PDF report"}
           </Button>
+          {/* OPRAVA: Tlačítko upravení záznamu je zpět */}
           <Button variant="secondary" className="h-11 shadow-sm" onClick={() => toast({ title: "Připravuje se", description: "Funkce editace záznamu bude zprovozněna v další fázi." })}>
             <Edit className="h-4 w-4 mr-2" /> Upravit záznam
           </Button>
@@ -330,8 +328,11 @@ export default function RecordDetailPage() {
         </div>
       </div>
 
-      <div id="pdf-wrapper" style={{ position: 'absolute', left: '-9999px', top: '0px', width: '794px', zIndex: -1000 }}>
-        <div id="pdf-export-container" style={{ width: '794px', backgroundColor: '#ffffff', color: '#000000', padding: '0px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
+      {/* ========================================================================= */}
+      {/* TISKOVÁ ŠABLONA PDF (Pevná šířka 720px zajišťuje perfektní poměr na A4) */}
+      {/* ========================================================================= */}
+      <div id="pdf-wrapper" style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '720px', zIndex: -1000 }}>
+        <div id="pdf-export-container" style={{ width: '720px', backgroundColor: '#ffffff', color: '#000000', padding: '0px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
           
           <div style={{ boxSizing: 'border-box', paddingBottom: '20px' }}>
             <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderBottom: '2px solid #000', paddingBottom: '12px', marginBottom: '25px' }}>
@@ -397,7 +398,8 @@ export default function RecordDetailPage() {
             </table>
           </div>
 
-          <div style={{ pageBreakBefore: 'always' }}></div>
+          {/* Čistý a spolehlivý pagebreak */}
+          <div className="html2pdf__page-break"></div>
 
           <div style={{ padding: '10px 0' }}>
             <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '20px', color: '#000' }}>
@@ -429,7 +431,7 @@ export default function RecordDetailPage() {
               </div>
             </div>
 
-            <div style={{ marginTop: '25px', pageBreakInside: 'avoid' }}>
+            <div className="avoid-break" style={{ marginTop: '25px', pageBreakInside: 'avoid' }}>
               <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Zúčastněné osoby:</span>
               <table style={{ width: '100%', tableLayout: 'fixed', fontSize: '11px', borderCollapse: 'collapse', border: '1px solid #cbd5e1' }}>
                 <thead>
@@ -454,7 +456,7 @@ export default function RecordDetailPage() {
             </div>
           </div>
 
-          <div style={{ pageBreakBefore: 'always' }}></div>
+          <div className="html2pdf__page-break"></div>
 
           <div style={{ padding: '10px 0' }}>
             <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '20px', color: '#000' }}>
@@ -464,7 +466,7 @@ export default function RecordDetailPage() {
               {filteredKontrolniBody.map((kb: any) => {
                 const isDefect = kb.hodnoceni === 'N';
                 return (
-                  <div key={kb.id || kb.bod} style={{ border: '1px solid #cbd5e1', borderRadius: '4px', padding: '10px', backgroundColor: '#fff', pageBreakInside: 'avoid' }}>
+                  <div key={kb.id || kb.bod} className="avoid-break" style={{ border: '1px solid #cbd5e1', borderRadius: '4px', padding: '10px', backgroundColor: '#fff', pageBreakInside: 'avoid' }}>
                     <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderBottom: '1px solid #f1f5f9', paddingBottom: '4px', marginBottom: '6px' }}>
                       <tbody>
                         <tr>
