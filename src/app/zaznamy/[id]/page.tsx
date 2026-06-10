@@ -140,44 +140,44 @@ export default function RecordDetailPage() {
       const element = document.getElementById('pdf-export-container');
       const wrapper = document.getElementById('pdf-wrapper');
 
-      // Trik proti oříznutí: Přesuneme šablonu do aktuálního zorného pole (ale schováme ji dospod z-indexem)
+      // Trik z kódu od Claude: Přesuneme do viewportu, aby se zamezilo oříznutí
       if (wrapper) {
+        wrapper.style.position = 'fixed';
         wrapper.style.left = '0px';
-        wrapper.style.top = `${window.scrollY}px`;
+        wrapper.style.top = '0px';
         wrapper.style.zIndex = '-9999';
       }
 
-      // Dáme prohlížeči chvilku, aby překreslil DOM na nové pozici
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      await new Promise(resolve => requestAnimationFrame(resolve));
 
       const opt = {
-        margin:       20, // PŘESNĚ 2 CM OKRAJE ZE VŠECH STRAN
+        margin:       20, // 2 CM OKRAJE ZE VŠECH STRAN
         filename:     pdfFileName,
         image:        { type: 'jpeg', quality: 1 },
         html2canvas:  { 
           scale: 2, 
           useCORS: true, 
-          logging: false, 
-          scrollY: 0,
-          scrollX: 0
+          logging: false,
+          windowWidth: 794,
+          width: 794
         },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['css', 'legacy'] } // SPRÁVNÉ DĚLENÍ STRÁNEK BEZ ROZŘÍZNUTÍ
+        pagebreak:    { mode: ['css', 'legacy'] }
       };
 
       await html2pdf().set(opt).from(element).save();
-
-      // Návrat šablony mimo obrazovku
-      if (wrapper) {
-        wrapper.style.left = '-9999px';
-        wrapper.style.top = '0px';
-      }
-
       toast({ title: "Úspěch", description: "PDF bylo úspěšně staženo." });
     } catch (error) {
       console.error("Chyba PDF:", error);
       toast({ title: "Chyba generování", description: "Nastala chyba při vytváření PDF.", variant: "destructive" });
     } finally {
+      // Úklid - schování wrapperu
+      const wrapper = document.getElementById('pdf-wrapper');
+      if (wrapper) {
+        wrapper.style.position = 'absolute';
+        wrapper.style.left = '-9999px';
+      }
       setIsGeneratingPDF(false);
     }
   };
@@ -330,11 +330,8 @@ export default function RecordDetailPage() {
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* TISKOVÁ ŠABLONA PDF S FIXEM OŘEZU A PŘESNÝMI OKRAJI */}
-      {/* ========================================================================= */}
       <div id="pdf-wrapper" style={{ position: 'absolute', left: '-9999px', top: '0px', width: '794px', zIndex: -1000 }}>
-        <div id="pdf-export-container" style={{ width: '794px', backgroundColor: '#ffffff', color: '#000000', padding: '0px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif', overflowWrap: 'break-word', wordWrap: 'break-word' }}>
+        <div id="pdf-export-container" style={{ width: '794px', backgroundColor: '#ffffff', color: '#000000', padding: '0px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
           
           <div style={{ boxSizing: 'border-box', paddingBottom: '20px' }}>
             <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderBottom: '2px solid #000', paddingBottom: '12px', marginBottom: '25px' }}>
@@ -360,13 +357,13 @@ export default function RecordDetailPage() {
               </div>
             </div>
 
-            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '12px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
+            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '12px', backgroundColor: '#f8fafc', borderRadius: '4px', wordWrap: 'break-word' }}>
               <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Zpracovatel / Poskytovatel:</span>
               <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>BPyes s.r.o.</strong>
               <span style={{ fontSize: '11px', color: '#334155' }}>Specializovaný poskytovatel služeb v oblasti rizik BOZP a PO | <strong>IČO: 04399421</strong> | E-mail: navratil@bpyes.cz</span>
             </div>
 
-            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '30px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
+            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '30px', backgroundColor: '#f8fafc', borderRadius: '4px', wordWrap: 'break-word' }}>
               <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Kontrolovaný subjekt / Klient:</span>
               <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>{klient?.nazev || 'Neznámý subjekt'}</strong>
               <span style={{ fontSize: '11px', color: '#334155', display: 'block', marginBottom: '6px' }}>IČO: {klient?.ico || 'Neuvedeno'}</span>
