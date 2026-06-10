@@ -134,33 +134,49 @@ export default function RecordDetailPage() {
   const handleDownloadPDF = async () => {
   setIsGeneratingPDF(true);
   toast({ title: "Připravuji PDF", description: "Dokument se generuje, čekejte prosím..." });
-  
+
   try {
-    const html2pdf = (await import('html2pdf.js')).default;
+    const html2canvas = (await import('html2canvas')).default;
+    const { jsPDF } = await import('jspdf');
     const element = document.getElementById('pdf-export-container');
-    
-    // Dočasně přesuň element na viditelnou pozici
-    element.style.position = 'fixed';
-    element.style.top = '0';
-    element.style.left = '0';
-    element.style.zIndex = '9999';
-    
-    const opt = {
-      margin: 0,
-      filename: pdfFileName,
-      image: { type: 'jpeg', quality: 1 },
-      html2canvas: { 
-        scale: 3, 
-        useCORS: true, 
-        logging: false, 
-        windowWidth: 800,
-        width: 800,
-        scrollX: 0,
-        scrollY: 0,
-        y: 0,  // přidej toto
-      },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
+
+    const canvas = await html2canvas(element, {
+      scale: 3,
+      useCORS: true,
+      logging: false,
+      x: 0,
+      y: 0,
+      scrollX: 0,
+      scrollY: 0,
+      windowWidth: 800,
+      width: 800,
+      height: element.scrollHeight,
+    });
+
+    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const canvasWidth = canvas.width;
+    const canvasHeight = canvas.height;
+    const ratio = pdfWidth / (canvasWidth / 3);
+    let position = 0;
+
+    while (position < canvasHeight / 3) {
+      pdf.addImage(imgData, 'JPEG', 0, -(position * ratio), pdfWidth, (canvasHeight / 3) * ratio);
+      position += pdfHeight / ratio;
+      if (position < canvasHeight / 3) pdf.addPage();
+    }
+
+    pdf.save(pdfFileName);
+    toast({ title: "Úspěch", description: "PDF bylo úspěšně staženo." });
+  } catch (error) {
+    console.error("Chyba PDF:", error);
+    toast({ title: "Chyba generování", description: "Nastala chyba při vytváření PDF.", variant: "destructive" });
+  } finally {
+    setIsGeneratingPDF(false);
+  }
+};
 
     await html2pdf().set(opt).from(element).save();
     toast({ title: "Úspěch", description: "PDF bylo úspěšně staženo." });
