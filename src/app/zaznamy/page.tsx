@@ -36,16 +36,13 @@ export default function RecordDetailPage() {
   const pracovisteList = useMemo(() => {
     if (!klient || !record) return [];
     const prac = klient.pracoviste || [];
-    
     if (record.pracovisteIds && Array.isArray(record.pracovisteIds)) {
       return prac.filter(p => record.pracovisteIds.includes(p.id));
     }
-    
     if (record.pracovisteId) {
       const oldPrac = prac.find(p => p.id === record.pracovisteId);
       return oldPrac ? [oldPrac] : [];
     }
-
     return [];
   }, [klient, record]);
 
@@ -132,68 +129,57 @@ export default function RecordDetailPage() {
   };
 
   const handleDownloadPDF = async () => {
-  setIsGeneratingPDF(true);
-  toast({ title: "Připravuji PDF", description: "Dokument se generuje, čekejte prosím..." });
+    setIsGeneratingPDF(true);
+    toast({ title: "Připravuji PDF", description: "Dokument se generuje, čekejte prosím..." });
 
-  try {
-    const html2canvas = (await import('html2canvas')).default;
-    const { jsPDF } = await import('jspdf');
-    const element = document.getElementById('pdf-export-container');
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const { jsPDF } = await import('jspdf');
+      const element = document.getElementById('pdf-export-container');
 
-    const canvas = await html2canvas(element, {
-      scale: 3,
-      useCORS: true,
-      logging: false,
-      x: 0,
-      y: 0,
-      scrollX: 0,
-      scrollY: 0,
-      windowWidth: 800,
-      width: 800,
-      height: element.scrollHeight,
-    });
+      if (!element) throw new Error('PDF container not found');
 
-    const imgData = canvas.toDataURL('image/jpeg', 1.0);
-    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    const canvasWidth = canvas.width;
-    const canvasHeight = canvas.height;
-    const ratio = pdfWidth / (canvasWidth / 3);
-    let position = 0;
+      const canvas = await html2canvas(element, {
+        scale: 3,
+        useCORS: true,
+        logging: false,
+        x: 0,
+        y: 0,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: 800,
+        width: 800,
+        height: element.scrollHeight,
+      });
 
-    while (position < canvasHeight / 3) {
-      pdf.addImage(imgData, 'JPEG', 0, -(position * ratio), pdfWidth, (canvasHeight / 3) * ratio);
-      position += pdfHeight / ratio;
-      if (position < canvasHeight / 3) pdf.addPage();
+      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const scale = 3;
+      const imgWidthMm = pdfWidth;
+      const imgHeightMm = (canvas.height / scale) * (pdfWidth / (canvas.width / scale));
+      let position = 0;
+
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidthMm, imgHeightMm);
+      let remainingHeight = imgHeightMm - pdfHeight;
+
+      while (remainingHeight > 0) {
+        position -= pdfHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidthMm, imgHeightMm);
+        remainingHeight -= pdfHeight;
+      }
+
+      pdf.save(pdfFileName);
+      toast({ title: "Úspěch", description: "PDF bylo úspěšně staženo." });
+    } catch (error) {
+      console.error("Chyba PDF:", error);
+      toast({ title: "Chyba generování", description: "Nastala chyba při vytváření PDF.", variant: "destructive" });
+    } finally {
+      setIsGeneratingPDF(false);
     }
-
-    pdf.save(pdfFileName);
-    toast({ title: "Úspěch", description: "PDF bylo úspěšně staženo." });
-  } catch (error) {
-    console.error("Chyba PDF:", error);
-    toast({ title: "Chyba generování", description: "Nastala chyba při vytváření PDF.", variant: "destructive" });
-  } finally {
-    setIsGeneratingPDF(false);
-  }
-};
-
-    await html2pdf().set(opt).from(element).save();
-    toast({ title: "Úspěch", description: "PDF bylo úspěšně staženo." });
-  } catch (error) {
-    console.error("Chyba PDF:", error);
-    toast({ title: "Chyba generování", description: "Nastala chyba při vytváření PDF.", variant: "destructive" });
-  } finally {
-    // Schovaný zpět
-    const element = document.getElementById('pdf-export-container');
-    if (element) {
-      element.style.top = '-9999px';
-      element.style.left = '-9999px';
-      element.style.zIndex = '-9999';
-    }
-    setIsGeneratingPDF(false);
-  }
-};
+  };
 
   if (!record) {
     return (
@@ -292,7 +278,6 @@ export default function RecordDetailPage() {
                         {isDefect ? 'Neshoda' : kb.hodnoceni === 'V' ? 'Vyhovuje' : 'Nehodnoceno'}
                       </span>
                     </div>
-
                     {isDefect && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-muted/30 p-3 rounded-lg border">
                         <div><span className="text-muted-foreground block mb-0.5">Návrh opatření:</span><p className="font-medium text-slate-900">{kb.navrhOpatreni || 'Není definováno'}</p></div>
@@ -329,7 +314,6 @@ export default function RecordDetailPage() {
 
       {/* ========================================================================= */}
       {/* TISKOVÁ ŠABLONA PDF — renderuje se přes createPortal přímo do document.body */}
-      {/* Díky tomu nedědí žádné offsety ani styly od rodičovských elementů stránky. */}
       {/* ========================================================================= */}
       {typeof window !== 'undefined' && createPortal(
         <div id="pdf-export-container" style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '800px', backgroundColor: '#ffffff', color: '#000000', padding: '40px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
