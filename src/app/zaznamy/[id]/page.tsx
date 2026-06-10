@@ -12,7 +12,8 @@ import {
   Building, 
   MapPin, 
   FileText,
-  Loader2
+  Loader2,
+  Edit
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -31,10 +32,9 @@ export default function RecordDetailPage() {
   const record = useMemo(() => zaznamy.find(z => z.id === params.id), [zaznamy, params.id]);
   const klient = useMemo(() => klienti.find(k => k.id === record?.klientId), [klienti, record]);
   
-  // ROBUSTNÍ VERZE: Zvládne staré záznamy (pracovisteId) i nové záznamy s více pracovišti (pracovisteIds)
   const pracovisteList = useMemo(() => {
     if (!klient || !record) return [];
-    const prac = klient.pracoviste || []; // Fallback proti pádu
+    const prac = klient.pracoviste || [];
     
     if (record.pracovisteIds && Array.isArray(record.pracovisteIds)) {
       return prac.filter(p => record.pracovisteIds.includes(p.id));
@@ -49,7 +49,8 @@ export default function RecordDetailPage() {
   }, [klient, record]);
 
   const [filterPosition, setFilterPosition] = useState<string>("all");
-  const [onlyDefects, setOnlyDefects] = useState<boolean>(true);
+  // OPRAVA: Defaultně false -> zobrazí se kompletní protokol
+  const [onlyDefects, setOnlyDefects] = useState<boolean>(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -110,7 +111,6 @@ export default function RecordDetailPage() {
     };
   }, [record]);
 
-  // SUPER BEZPEČNÝ NÁZEV PDF - už nikdy nespadne
   const pdfFileName = useMemo(() => {
     if (!record || !klient) return "export.pdf";
     const cleanKlient = (klient.nazev || "Neznamy").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9\s]/g, "").trim();
@@ -132,65 +132,36 @@ export default function RecordDetailPage() {
   };
 
   const handleDownloadPDF = async () => {
-  setIsGeneratingPDF(true);
-  toast({ title: "Připravuji PDF", description: "Dokument se generuje, čekejte prosím..." });
+    setIsGeneratingPDF(true);
+    toast({ title: "Připravuji PDF", description: "Dokument se generuje, čekejte prosím..." });
 
-  try {
-    const html2canvas = (await import('html2canvas')).default;
-    const { jsPDF } = await import('jspdf');
-    const element = document.getElementById('pdf-export-container');
-    if (!element) throw new Error('PDF container not found');
+    try {
+      const html2pdf = (await import('html2pdf.js')).default;
+      const element = document.getElementById('pdf-export-container');
 
-    // Přesuň element na top:0 left:0 při renderování
-    element.style.top = '0px';
-    element.style.left = '0px';
-    element.style.zIndex = '99999';
+      const opt = {
+        margin:       20, // OPRAVA: 20 mm = přesně 2 cm okraj ze všech stran
+        filename:     pdfFileName,
+        image:        { type: 'jpeg', quality: 1 },
+        html2canvas:  { 
+          scale: 2, 
+          useCORS: true, 
+          logging: false, 
+          windowWidth: 800
+        },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak:    { mode: ['css', 'legacy'] } // OPRAVA: Vrácení CSS dělení, aby to neseřízlo fotky v půlce
+      };
 
-    // Počkej jeden frame
-    await new Promise(resolve => requestAnimationFrame(resolve));
-    await new Promise(resolve => requestAnimationFrame(resolve));
-
-    const canvas = await html2canvas(element, {
-      scale: 3,
-      useCORS: true,
-      logging: false,
-      windowWidth: 800,
-      width: 800,
-    });
-
-    // Schovaný zpět
-    element.style.top = '-9999px';
-    element.style.left = '-9999px';
-    element.style.zIndex = '-9999';
-
-    const imgData = canvas.toDataURL('image/jpeg', 1.0);
-    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    const imgHeightMm = (canvas.height / canvas.width) * pdfWidth / 3 * (canvas.width / canvas.width);
-    
-    // Správný výpočet výšky
-    const ratio = pdfWidth / (canvas.width / 3);
-    const totalHeightMm = (canvas.height / 3) * ratio;
-    
-    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, totalHeightMm);
-    let renderedHeight = pdfHeight;
-
-    while (renderedHeight < totalHeightMm) {
-      pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, -renderedHeight, pdfWidth, totalHeightMm);
-      renderedHeight += pdfHeight;
+      await html2pdf().set(opt).from(element).save();
+      toast({ title: "Úspěch", description: "PDF bylo úspěšně staženo." });
+    } catch (error) {
+      console.error("Chyba PDF:", error);
+      toast({ title: "Chyba generování", description: "Nastala chyba při vytváření PDF.", variant: "destructive" });
+    } finally {
+      setIsGeneratingPDF(false);
     }
-
-    pdf.save(pdfFileName);
-    toast({ title: "Úspěch", description: "PDF bylo úspěšně staženo." });
-  } catch (error) {
-    console.error("Chyba PDF:", error);
-    toast({ title: "Chyba generování", description: "Nastala chyba při vytváření PDF.", variant: "destructive" });
-  } finally {
-    setIsGeneratingPDF(false);
-  }
-};
+  };
 
   if (!record) {
     return (
@@ -213,9 +184,14 @@ export default function RecordDetailPage() {
           <h1 className="text-3xl font-bold tracking-tight">{record.cislo} <span className="text-muted-foreground font-normal text-xl">R{record.revize || 0}</span></h1>
           <p className="text-sm text-muted-foreground">Provedeno dne {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : 'Neuvedeno'}</p>
         </div>
+        
         <div className="flex flex-wrap gap-2 w-full md:w-auto">
           <Button variant="default" className="h-11 shadow-sm font-bold bg-blue-600 hover:bg-blue-700 text-white" onClick={handleDownloadPDF} disabled={isGeneratingPDF}>
             {isGeneratingPDF ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Printer className="h-4 w-4 mr-2" />} {isGeneratingPDF ? "Generuji PDF..." : "Stáhnout PDF report"}
+          </Button>
+          {/* OPRAVA: Vrácení tlačítka Upravit záznam */}
+          <Button variant="secondary" className="h-11 shadow-sm" onClick={() => toast({ title: "Připravuje se", description: "Funkce editace záznamu bude zprovozněna v další fázi." })}>
+            <Edit className="h-4 w-4 mr-2" /> Upravit záznam
           </Button>
         </div>
       </div>
@@ -320,9 +296,11 @@ export default function RecordDetailPage() {
         </div>
       </div>
 
-      {/* TISKOVÁ ŠABLONA PDF */}
-      <div style={{ position: 'absolute', left: '-9999px', top: '0px', width: '794px', overflow: 'hidden', zIndex: -1000, backgroundColor: '#fff' }}>
-        <div id="pdf-export-container" style={{ width: '794px', maxWidth: '794px', fontFamily: 'Arial, sans-serif', padding: '24px', boxSizing: 'border-box', backgroundColor: '#fff' }}>
+      {/* ========================================================================= */}
+      {/* TISKOVÁ ŠABLONA PDF (Opacity odstraněno, klasický off-screen fix) */}
+      {/* ========================================================================= */}
+      <div style={{ position: 'fixed', left: '-9999px', top: '0px', width: '800px', zIndex: -1000 }}>
+        <div id="pdf-export-container" style={{ width: '800px', backgroundColor: '#ffffff', color: '#000000', padding: '0px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
           
           <div style={{ boxSizing: 'border-box', paddingBottom: '20px' }}>
             <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderBottom: '2px solid #000', paddingBottom: '12px', marginBottom: '25px' }}>
@@ -348,13 +326,13 @@ export default function RecordDetailPage() {
               </div>
             </div>
 
-            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '12px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
+            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '12px', backgroundColor: '#f8fafc', borderRadius: '4px', wordWrap: 'break-word' }}>
               <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Zpracovatel / Poskytovatel:</span>
               <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>BPyes s.r.o.</strong>
               <span style={{ fontSize: '11px', color: '#334155' }}>Specializovaný poskytovatel služeb v oblasti rizik BOZP a PO | <strong>IČO: 04399421</strong> | E-mail: navratil@bpyes.cz</span>
             </div>
 
-            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '30px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
+            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '30px', backgroundColor: '#f8fafc', borderRadius: '4px', wordWrap: 'break-word' }}>
               <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Kontrolovaný subjekt / Klient:</span>
               <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>{klient?.nazev || 'Neznámý subjekt'}</strong>
               <span style={{ fontSize: '11px', color: '#334155', display: 'block', marginBottom: '6px' }}>IČO: {klient?.ico || 'Neuvedeno'}</span>
