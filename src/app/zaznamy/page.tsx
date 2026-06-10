@@ -132,36 +132,51 @@ export default function RecordDetailPage() {
   };
 
   const handleDownloadPDF = async () => {
-    setIsGeneratingPDF(true);
-    toast({ title: "Připravuji PDF", description: "Dokument se generuje, čekejte prosím..." });
+  setIsGeneratingPDF(true);
+  toast({ title: "Připravuji PDF", description: "Dokument se generuje, čekejte prosím..." });
+  
+  try {
+    const html2pdf = (await import('html2pdf.js')).default;
+    const element = document.getElementById('pdf-export-container');
     
-    try {
-      const html2pdf = (await import('html2pdf.js')).default;
-      const element = document.getElementById('pdf-export-container');
-      
-      const opt = {
-        margin:       0,
-        filename:     pdfFileName,
-        image:        { type: 'jpeg', quality: 1 },
-        html2canvas:  { 
-          scale: 3, 
-          useCORS: true, 
-          logging: false, 
-          windowWidth: 800,
-          width: 800,
-        },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
+    // Dočasně přesuň element na viditelnou pozici
+    element.style.position = 'fixed';
+    element.style.top = '0';
+    element.style.left = '0';
+    element.style.zIndex = '9999';
+    
+    const opt = {
+      margin: 0,
+      filename: pdfFileName,
+      image: { type: 'jpeg', quality: 1 },
+      html2canvas: { 
+        scale: 3, 
+        useCORS: true, 
+        logging: false, 
+        windowWidth: 800,
+        width: 800,
+        scrollX: 0,
+        scrollY: 0,
+      },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
 
-      await html2pdf().set(opt).from(element).save();
-      toast({ title: "Úspěch", description: "PDF bylo úspěšně staženo." });
-    } catch (error) {
-      console.error("Chyba PDF:", error);
-      toast({ title: "Chyba generování", description: "Nastala chyba při vytváření PDF.", variant: "destructive" });
-    } finally {
-      setIsGeneratingPDF(false);
+    await html2pdf().set(opt).from(element).save();
+    toast({ title: "Úspěch", description: "PDF bylo úspěšně staženo." });
+  } catch (error) {
+    console.error("Chyba PDF:", error);
+    toast({ title: "Chyba generování", description: "Nastala chyba při vytváření PDF.", variant: "destructive" });
+  } finally {
+    // Schovaný zpět
+    const element = document.getElementById('pdf-export-container');
+    if (element) {
+      element.style.top = '-9999px';
+      element.style.left = '-9999px';
+      element.style.zIndex = '-9999';
     }
-  };
+    setIsGeneratingPDF(false);
+  }
+};
 
   if (!record) {
     return (
