@@ -157,6 +157,7 @@ export default function RecordDetailPage() {
         width: 800,
         scrollX: 0,
         scrollY: 0,
+        y: 0,  // přidej toto
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
