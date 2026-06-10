@@ -32,8 +32,16 @@ export default function RecordDetailPage() {
   const pracovisteList = useMemo(() => {
     if (!klient || !record) return [];
     const prac = klient.pracoviste || [];
-    if (record.pracovisteIds && Array.isArray(record.pracovisteIds)) return prac.filter(p => record.pracovisteIds.includes(p.id));
-    if (record.pracovisteId) { const oldPrac = prac.find(p => p.id === record.pracovisteId); return oldPrac ? [oldPrac] : []; }
+    
+    if (record.pracovisteIds && Array.isArray(record.pracovisteIds)) {
+      return prac.filter(p => record.pracovisteIds.includes(p.id));
+    }
+    
+    if (record.pracovisteId) {
+      const oldPrac = prac.find(p => p.id === record.pracovisteId);
+      return oldPrac ? [oldPrac] : [];
+    }
+
     return [];
   }, [klient, record]);
 
@@ -43,21 +51,33 @@ export default function RecordDetailPage() {
 
   const allSectionsInRecord = useMemo(() => {
     const sections = new Set<string>();
-    if (record?.kontrolniBody) record.kontrolniBody.forEach((kb: any) => { if (kb.sekce) sections.add(kb.sekce); });
+    if (record?.kontrolniBody) {
+      record.kontrolniBody.forEach((kb: any) => {
+        if (kb.sekce) sections.add(kb.sekce);
+      });
+    }
     return Array.from(sections) as string[];
   }, [record]);
 
   const [visibleSections, setVisibleSections] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
-    if (record?.kontrolniBody) record.kontrolniBody.forEach((kb: any) => { if (kb.sekce) initial[kb.sekce] = true; });
+    if (record?.kontrolniBody) {
+      record.kontrolniBody.forEach((kb: any) => {
+        if (kb.sekce) initial[kb.sekce] = true;
+      });
+    }
     return initial;
   }, [record]);
 
-  const toggleSection = (sectionName: string) => setVisibleSections(prev => ({ ...prev, [sectionName]: !prev[sectionName] }));
+  const toggleSection = (sectionName: string) => {
+    setVisibleSections(prev => ({ ...prev, [sectionName]: !prev[sectionName] }));
+  };
 
   const uniquePositionsInRecord = useMemo(() => {
     if (!record?.kontrolniBody) return [];
-    const positions = record.kontrolniBody.filter((kb: any) => kb.hodnoceni === 'N' && kb.odpovednaOsoba).map((kb: any) => kb.odpovednaOsoba);
+    const positions = record.kontrolniBody
+      .filter((kb: any) => kb.hodnoceni === 'N' && kb.odpovednaOsoba)
+      .map((kb: any) => kb.odpovednaOsoba);
     return Array.from(new Set(positions)) as string[];
   }, [record]);
 
@@ -103,7 +123,6 @@ export default function RecordDetailPage() {
     }
   };
 
-  // POMOCNÁ FUNKCE: Připraveno pro jednu i více fotek
   const extractPhotos = (kb: any) => {
     let photos: string[] = [];
     if (Array.isArray(kb.fotografie)) photos = photos.concat(kb.fotografie);
@@ -113,181 +132,80 @@ export default function RecordDetailPage() {
     return Array.from(new Set(photos));
   };
 
-  // NATIVNÍ GENEROVÁNÍ PDF (DYNAMICKY IMPORTUJE KNIHOVNU BEZ PÁDU SERVERU)
   const handleDownloadPDF = async () => {
     setIsGeneratingPDF(true);
-    toast({ title: "Připravuji PDF", description: "Vytvářím profesionální nativní dokument..." });
+    toast({ title: "Připravuji PDF", description: "Dokument se generuje a číslují se stránky..." });
+
+    const originalScrollY = window.scrollY;
+    window.scrollTo(0, 0);
 
     try {
-      // Dynamický import obejde problémy s SSR u Next.js
-      const { pdf, Document, Page, Text, View, StyleSheet, Font, Image: PdfImage } = await import('@react-pdf/renderer');
+      const html2pdf = (await import('html2pdf.js')).default;
+      const element = document.getElementById('pdf-export-container');
+      const wrapper = document.getElementById('pdf-wrapper');
 
-      // Fonty pro českou diakritiku
-      Font.register({
-        family: 'Roboto',
-        fonts: [
-          { src: 'https://fonts.gstatic.com/s/roboto/v27/KFOmCnqEu92Fr1Me5WZLCzYlKw.ttf', fontWeight: 400 },
-          { src: 'https://fonts.gstatic.com/s/roboto/v27/KFOlCnqEu92Fr1MmWUlvAx05IsDqlA.ttf', fontWeight: 700 }
-        ]
-      });
+      if (wrapper) {
+        wrapper.style.left = '0px';
+        wrapper.style.zIndex = '-9999'; // OPRAVA: Zrušeno opacity: '0', které způsobovalo crash foťáku
+      }
 
-      // Vzhled PDF definovaný přímo pro engine
-      const styles = StyleSheet.create({
-        page: { padding: '20mm', fontFamily: 'Roboto', fontSize: 10, color: '#334155', paddingBottom: '30mm' },
-        header: { flexDirection: 'row', justifyContent: 'space-between', borderBottom: '1 solid #cbd5e1', paddingBottom: 5, marginBottom: 20 },
-        headerText: { fontSize: 9, color: '#64748b', fontWeight: 700 },
-        footer: { position: 'absolute', bottom: '15mm', left: '20mm', right: '20mm', flexDirection: 'row', justifyContent: 'space-between', fontSize: 8, color: '#64748b', borderTop: '1 solid #cbd5e1', paddingTop: 5 },
-        h1: { fontSize: 18, fontWeight: 700, color: '#000', textTransform: 'uppercase', marginBottom: 10, borderLeft: '4 solid #000', paddingLeft: 10 },
-        h2: { fontSize: 12, fontWeight: 700, color: '#000', textTransform: 'uppercase', borderBottom: '1 solid #000', paddingBottom: 4, marginBottom: 15, marginTop: 25 },
-        box: { border: '1 solid #cbd5e1', padding: 12, borderRadius: 4, marginBottom: 15, backgroundColor: '#f8fafc' },
-        boxTitle: { fontSize: 8, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 },
-        textBold: { fontWeight: 700, color: '#000', fontSize: 11 },
-        statBoxContainer: { flexDirection: 'row', marginBottom: 20, gap: 10 },
-        statBox: { flex: 1, border: '1 solid #cbd5e1', padding: 10, alignItems: 'center', borderRadius: 4 },
-        statNumber: { fontSize: 18, fontWeight: 700, color: '#000', marginBottom: 2 },
-        statLabel: { fontSize: 7, fontWeight: 700, textTransform: 'uppercase', color: '#64748b' },
-        tableHeader: { backgroundColor: '#f1f5f9', borderBottom: '1 solid #cbd5e1', flexDirection: 'row', padding: 6 },
-        tableRow: { borderBottom: '1 solid #e2e8f0', flexDirection: 'row', padding: 6 },
-        col1: { flex: 1, borderRight: '1 solid #cbd5e1', paddingRight: 6 },
-        col2: { flex: 1, paddingLeft: 6 },
-        defectCard: { border: '1 solid #cbd5e1', borderRadius: 4, padding: 10, marginBottom: 15, backgroundColor: '#fff' },
-        defectHeader: { flexDirection: 'row', justifyContent: 'space-between', borderBottom: '1 solid #f1f5f9', paddingBottom: 6, marginBottom: 8 },
-        badgeN: { color: '#991b1b', fontWeight: 700, fontSize: 9 },
-        badgeV: { color: '#166534', fontWeight: 700, fontSize: 9 },
-        defectInfoBox: { flexDirection: 'row', backgroundColor: '#f8fafc', border: '1 solid #e2e8f0', padding: 8, borderRadius: 4, gap: 10 },
-        imageContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 },
-        image: { width: 150, height: 110, objectFit: 'contain', border: '1 solid #cbd5e1', borderRadius: 4 }
-      });
+      await new Promise(resolve => setTimeout(resolve, 300));
 
-      // Samotná komponenta PDF dokumentu
-      const MyDoc = () => (
-        <Document>
-          <Page size="A4" style={styles.page}>
-            {/* OPAKUJÍCÍ SE HLAVIČKA */}
-            <View style={styles.header} fixed>
-              <Text style={styles.headerText}>BPyes s.r.o.</Text>
-            </View>
+      const opt = {
+        margin:       [20, 20, 20, 20], 
+        filename:     pdfFileName,
+        image:        { type: 'jpeg', quality: 1 },
+        html2canvas:  { 
+          scale: 2, 
+          useCORS: true, 
+          logging: false
+        },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak:    { mode: ['css', 'legacy'], avoid: '.avoid-break' }
+      };
 
-            <Text style={styles.h1}>{getFullInspectionTitle(record.typKontroly)}</Text>
-            <Text style={{ fontSize: 9, backgroundColor: '#f1f5f9', padding: 4, alignSelf: 'flex-start', marginBottom: 20, borderRadius: 2, border: '1 solid #cbd5e1' }}>
-              ČÍSLO ZPRÁVY: {record.cislo} | REVIZE: R{record.revize || 0}
-            </Text>
+      await html2pdf()
+        .set(opt)
+        .from(element)
+        .toPdf()
+        .get('pdf')
+        .then((pdf: any) => {
+          // OPRAVA: Bezpečné zjištění počtu stránek nezávisle na verzi knihovny
+          const totalPages = typeof pdf.internal.getNumberOfPages === 'function' 
+            ? pdf.internal.getNumberOfPages() 
+            : (pdf.internal.pages.length ? pdf.internal.pages.length - 1 : 1);
+          
+          for (let i = 1; i <= totalPages; i++) {
+            pdf.setPage(i);
+            pdf.setFontSize(9);
+            pdf.setTextColor(130);
 
-            <View style={styles.box}>
-              <Text style={styles.boxTitle}>Zpracovatel / Poskytovatel:</Text>
-              <Text style={styles.textBold}>BPyes s.r.o.</Text>
-              <Text>Specializovaný poskytovatel služeb v oblasti rizik BOZP a PO | IČO: 04399421 | E-mail: navratil@bpyes.cz</Text>
-            </View>
+            // Záhlaví
+            pdf.text('BPyes s.r.o.', 20, 12);
 
-            <View style={styles.box}>
-              <Text style={styles.boxTitle}>Kontrolovaný subjekt / Klient:</Text>
-              <Text style={styles.textBold}>{klient?.nazev || 'Neznámý subjekt'}</Text>
-              <Text style={{ marginBottom: 6 }}>IČO: {klient?.ico || 'Neuvedeno'}</Text>
-              <Text style={{ fontWeight: 700 }}>Místo prověrky: {pracovisteList.map((p:any) => p.nazev).join(', ') || 'Celý areál'}</Text>
-              <Text>{pracovisteList.map((p:any) => p.adresa).join(', ') || ''}</Text>
-            </View>
-
-            <View style={{ ...styles.box, border: '2 solid #000', backgroundColor: '#fff' }}>
-              <Text style={{ ...styles.boxTitle, color: '#000' }}>Prohlášení a konstatování o seznámení:</Text>
-              <Text style={{ lineHeight: 1.4 }}>
-                Kontrolovaný subjekt / zástupce klienta svým podpisem stvrzuje, že byl v plném rozsahu seznámen se všemi zjištěnými nedostatky specifikovanými uvnitř této zprávy. Souhlasí s navrženými opatřeními a zavazuje se k jejich odstranění.
-              </Text>
-            </View>
-
-            <Text style={styles.h2} break>1. Shrnutí a statistiky</Text>
-            <View style={styles.statBoxContainer}>
-              <View style={{...styles.statBox, backgroundColor: '#f8fafc'}}><Text style={styles.statNumber}>{stats.total}</Text><Text style={styles.statLabel}>CELKEM BODŮ</Text></View>
-              <View style={{ ...styles.statBox, backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }}><Text style={{ ...styles.statNumber, color: '#166534' }}>{stats.V}</Text><Text style={{ ...styles.statLabel, color: '#166534' }}>VYHOVUJE</Text></View>
-              <View style={{ ...styles.statBox, backgroundColor: '#fef2f2', borderColor: '#fecaca' }}><Text style={{ ...styles.statNumber, color: '#991b1b' }}>{stats.N}</Text><Text style={{ ...styles.statLabel, color: '#991b1b' }}>NESHODY (N)</Text></View>
-              <View style={{...styles.statBox, backgroundColor: '#f8fafc'}}><Text style={styles.statNumber}>{stats.NK + stats.NA}</Text><Text style={styles.statLabel}>NEHODNOCENO</Text></View>
-            </View>
-
-            {record.poznamka && (
-              <View style={{ marginBottom: 20 }} wrap={false}>
-                <Text style={styles.boxTitle}>Závěrečné vyhodnocení:</Text>
-                <Text style={{ padding: 10, backgroundColor: '#f8fafc', border: '1 solid #e2e8f0', fontStyle: 'italic', borderRadius: 4 }}>{record.poznamka}</Text>
-              </View>
-            )}
-
-            <View wrap={false}>
-              <Text style={styles.boxTitle}>Zúčastněné osoby:</Text>
-              <View style={{ border: '1 solid #cbd5e1', borderRadius: 4 }}>
-                <View style={styles.tableHeader}>
-                  <Text style={{ ...styles.col1, fontSize: 8, fontWeight: 700, color: '#64748b' }}>JMÉNO A PŘÍJMENÍ</Text>
-                  <Text style={{ ...styles.col2, fontSize: 8, fontWeight: 700, color: '#64748b' }}>PRACOVNÍ POZICE / VZTAH K SUBJEKTU</Text>
-                </View>
-                {record?.ucastnici?.length > 0 ? record.ucastnici.map((u:any, i:number) => (
-                  <View key={i} style={styles.tableRow}>
-                    <Text style={{ ...styles.col1, fontWeight: 700 }}>{u.jmeno}</Text>
-                    <Text style={styles.col2}>{u.pozice}</Text>
-                  </View>
-                )) : <View style={styles.tableRow}><Text style={{ padding: 4, fontStyle: 'italic' }}>Neuvedeny žádné osoby.</Text></View>}
-              </View>
-            </View>
-
-            <Text style={styles.h2} break>2. {onlyDefects ? "Registr zjištěných nedostatků" : "Kompletní auditní protokol"}</Text>
+            // Zápatí
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
             
-            {filteredKontrolniBody.map((kb: any) => {
-              const isDefect = kb.hodnoceni === 'N';
-              const kbPhotos = extractPhotos(kb);
-              return (
-                // ZÁZRAK: wrap={false} zakazuje roztržení karet napůl.
-                <View key={kb.id || kb.bod} style={styles.defectCard} wrap={false}>
-                  <View style={styles.defectHeader}>
-                    <Text style={{ fontWeight: 700, fontSize: 10 }}>[{kb.bod}] <Text style={{ color: '#64748b', fontSize: 9 }}>KAPITOLA: {kb.sekce || 'OSTATNÍ'}</Text></Text>
-                    <Text style={isDefect ? styles.badgeN : styles.badgeV}>{isDefect ? '❌ NESHODA' : (kb.hodnoceni === 'V' ? '✅ VYHOVUJE' : '– NEHODNOCENO')}</Text>
-                  </View>
-                  <Text style={styles.boxTitle}>KONTROLOVANÝ BOD / OTÁZKA:</Text>
-                  <Text style={{ fontWeight: 700, color: '#0f172a', marginBottom: 8, fontSize: 11 }}>{kb.otazka || kb.popis}</Text>
-                  
-                  {isDefect && (
-                    <View style={styles.defectInfoBox}>
-                      <View style={styles.col1}>
-                        <Text style={styles.boxTitle}>NÁVRH OPATŘENÍ:</Text>
-                        <Text>{kb.navrhOpatreni || 'Není definováno'}</Text>
-                      </View>
-                      <View style={styles.col2}>
-                        <Text style={styles.boxTitle}>LOKALIZACE A TERMÍN:</Text>
-                        <Text style={{ fontWeight: 700, color: '#1e3a8a', marginBottom: 2 }}>{kb.lokalizace || 'Objekt společnosti'}</Text>
-                        <Text>Termín: {kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</Text>
-                        <Text>Pozice: {kb.odpovednaOsoba || 'Neuvedena'}</Text>
-                      </View>
-                    </View>
-                  )}
-                  {kbPhotos.length > 0 && (
-                    <View style={styles.imageContainer}>
-                      {kbPhotos.map((p:string, idx:number) => (
-                        <PdfImage key={idx} src={p} style={styles.image} />
-                      ))}
-                    </View>
-                  )}
-                </View>
-              );
-            })}
+            pdf.text(pdfFileName, 20, pageHeight - 10);
+            
+            const pageString = `Strana ${i} z ${totalPages}`;
+            const textWidth = pdf.getTextWidth(pageString);
+            pdf.text(pageString, pageWidth - 20 - textWidth, pageHeight - 10);
+          }
+        })
+        .save();
 
-            {/* OPAKUJÍCÍ SE PATIČKA */}
-            <View style={styles.footer} fixed>
-              <Text>{pdfFileName}</Text>
-              <Text render={({ pageNumber, totalPages }) => `Strana ${pageNumber} z ${totalPages}`} />
-            </View>
-
-          </Page>
-        </Document>
-      );
-
-      // Převod vytvořené komponenty na Blob a stažení
-      const blob = await pdf(<MyDoc />).toBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = pdfFileName;
-      a.click();
-      URL.revokeObjectURL(url);
-      
-    } catch (error) {
-      console.error("Chyba při generování PDF:", error);
-      toast({ title: "Chyba", description: "Nepodařilo se vygenerovat PDF dokument.", variant: "destructive" });
+      toast({ title: "Úspěch", description: "PDF bylo úspěšně staženo." });
+    } catch (error: any) {
+      console.error("Chyba PDF:", error);
+      toast({ title: "Chyba generování", description: error?.message || "Nastala chyba při vytváření PDF.", variant: "destructive" });
     } finally {
+      const wrapper = document.getElementById('pdf-wrapper');
+      if (wrapper) {
+        wrapper.style.left = '-9999px';
+      }
+      window.scrollTo(0, originalScrollY);
       setIsGeneratingPDF(false);
     }
   };
@@ -444,6 +362,198 @@ export default function RecordDetailPage() {
               )}
             </CardContent>
           </Card>
+        </div>
+      </div>
+
+      <div id="pdf-wrapper" style={{ position: 'absolute', left: '-9999px', top: '0px', width: '170mm', zIndex: -1000 }}>
+        <div id="pdf-export-container" style={{ width: '170mm', backgroundColor: '#ffffff', color: '#000000', padding: '0px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
+          
+          <div style={{ boxSizing: 'border-box', paddingBottom: '20px' }}>
+            <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderBottom: '2px solid #000', paddingBottom: '12px', marginBottom: '25px' }}>
+              <tbody>
+                <tr>
+                  <td style={{ textAlign: 'left', verticalAlign: 'middle', padding: '5px 0' }}>
+                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', letterSpacing: '2px', display: 'block', textTransform: 'uppercase' }}>BEZPEČNOST PRÁCE & POŽÁRNÍ OCHRANA</span>
+                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>Profesionální auditorské a kontrolní systémy</span>
+                  </td>
+                  <td style={{ textAlign: 'right', verticalAlign: 'middle', width: '160px', padding: '5px 0' }}>
+                    <img src="/logo.png" alt="Logo" style={{ maxHeight: '42px', maxWidth: '100%', objectFit: 'contain' }} />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style={{ margin: '30px 0' }}>
+              <h1 style={{ fontSize: '20px', fontWeight: '900', lineHeight: '1.3', borderLeft: '5px solid #000', paddingLeft: '15px', textTransform: 'uppercase', color: '#000', margin: 0 }}>
+                {getFullInspectionTitle(record.typKontroly)}
+              </h1>
+              <div style={{ marginTop: '12px', fontSize: '11px', fontFamily: 'monospace', backgroundColor: '#f1f5f9', padding: '5px 10px', display: 'inline-block', border: '1px solid #cbd5e1', borderRadius: '4px' }}>
+                ČÍSLO ZPRÁVY: {record.cislo} | REVIZE: R{record.revize || 0}
+              </div>
+            </div>
+
+            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '12px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
+              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Zpracovatel / Poskytovatel:</span>
+              <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>BPyes s.r.o.</strong>
+              <span style={{ fontSize: '11px', color: '#334155' }}>Specializovaný poskytovatel služeb v oblasti rizik BOZP a PO | <strong>IČO: 04399421</strong> | E-mail: navratil@bpyes.cz</span>
+            </div>
+
+            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '30px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
+              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Kontrolovaný subjekt / Klient:</span>
+              <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>{klient?.nazev || 'Neznámý subjekt'}</strong>
+              <span style={{ fontSize: '11px', color: '#334155', display: 'block', marginBottom: '6px' }}>IČO: {klient?.ico || 'Neuvedeno'}</span>
+              <strong style={{ fontSize: '11px', color: '#0f172a' }}>Místo prověrky: {pracovisteList.map(p => p.nazev).join(', ') || 'Celý areál'}</strong><br />
+              <span style={{ fontSize: '11px', color: '#475569' }}>{pracovisteList.map(p => p.adresa).join(', ') || ''}</span>
+            </div>
+
+            <div style={{ border: '2px solid #000', padding: '12px', borderRadius: '6px', backgroundColor: '#f8fafc', margin: '30px 0' }}>
+              <span style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 'bold', color: '#0f172a', display: 'block', marginBottom: '4px' }}>Prohlášení a konstatování o seznámení:</span>
+              <p style={{ fontSize: '11px', color: '#334155', margin: 0, textAlign: 'justify', lineHeight: '1.5' }}>
+                Kontrolovaný subjekt / zástupce klienta svým níže uvedeným podpisem stvrzuje, že byl v plném rozsahu, prokazatelně a jasně seznámen se všemi zjištěnými legislativními nedostatky, systémovými neshodami a doporučeními, která jsou detailně specifikována uvnitř této auditní zprávy. Souhlasí s navrženými nápravnými opatřeními a zavazuje se k jejich vyřešení a odstranění v definovaných zákonných či dohodnutých termínech.
+              </p>
+            </div>
+
+            <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', marginTop: '60px' }}>
+              <tbody>
+                <tr>
+                  <td style={{ width: '45%', textAlign: 'center', verticalAlign: 'top' }}>
+                    <div style={{ borderBottom: '1px solid #000', width: '90%', margin: '0 auto 12px auto', height: '25px' }}></div>
+                    <strong style={{ fontSize: '11px', textTransform: 'uppercase', display: 'block', color: '#000' }}>Provedl (Za BPyes):</strong>
+                    <span style={{ fontSize: '10px', color: '#64748b', display: 'block', marginTop: '2px' }}>Specialista BOZP a PO</span>
+                  </td>
+                  <td style={{ width: '10%' }}></td>
+                  <td style={{ width: '45%', textAlign: 'center', verticalAlign: 'top' }}>
+                    <div style={{ borderBottom: '1px solid #000', width: '90%', margin: '0 auto 12px auto', height: '25px' }}></div>
+                    <strong style={{ fontSize: '11px', textTransform: 'uppercase', display: 'block', color: '#000' }}>Zástupce klienta / subjektu:</strong>
+                    <span style={{ fontSize: '10px', color: '#64748b', display: 'block', marginTop: '2px' }}>Osoba seznámená s reportem</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="html2pdf__page-break"></div>
+
+          <div style={{ padding: '10px 0' }}>
+            <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '20px', color: '#000' }}>
+              1. Shrnutí a statistiky
+            </h2>
+            <table style={{ width: '100%', tableLayout: 'fixed', textAlign: 'center', borderCollapse: 'collapse', marginBottom: '25px' }}>
+              <tbody>
+                <tr>
+                  <td style={{ width: '25%', padding: '10px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc' }}>
+                    <strong style={{ fontSize: '18px', display: 'block', color: '#000' }}>{stats.total}</strong><span style={{ fontSize: '9px', fontWeight: 'bold', color: '#475569' }}>CELKEM BODŮ</span>
+                  </td>
+                  <td style={{ width: '25%', padding: '10px', border: '1px solid #cbd5e1', backgroundColor: '#f0fdf4', color: '#166534' }}>
+                    <strong style={{ fontSize: '18px', display: 'block' }}>{stats.V}</strong><span style={{ fontSize: '9px', fontWeight: 'bold' }}>VYHOVUJE</span>
+                  </td>
+                  <td style={{ width: '25%', padding: '10px', border: '1px solid #cbd5e1', backgroundColor: '#fef2f2', color: '#991b1b' }}>
+                    <strong style={{ fontSize: '18px', display: 'block' }}>{stats.N}</strong><span style={{ fontSize: '9px', fontWeight: 'bold', color: '#991b1b' }}>NESHODY (N)</span>
+                  </td>
+                  <td style={{ width: '25%', padding: '10px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', color: '#64748b' }}>
+                    <strong style={{ fontSize: '18px', display: 'block' }}>{stats.NK + stats.NA}</strong><span style={{ fontSize: '9px', fontWeight: 'bold' }}>NEHODNOCENO</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style={{ marginBottom: '25px' }}>
+              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Závěrečné vyhodnocení:</span>
+              <div style={{ padding: '12px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', borderRadius: '4px', fontSize: '11px', fontStyle: 'italic', lineHeight: '1.5', textAlign: 'justify' }}>
+                {record.poznamka || "Při prověrce nebylo vloženo žádné doprovodné textové hodnocení."}
+              </div>
+            </div>
+
+            <div className="avoid-break" style={{ pageBreakInside: 'avoid', breakInside: 'avoid', marginTop: '25px' }}>
+              <div style={{ display: 'block' }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Zúčastněné osoby:</span>
+                <table style={{ width: '100%', tableLayout: 'fixed', fontSize: '11px', borderCollapse: 'collapse', border: '1px solid #cbd5e1' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1px solid #cbd5e1' }}>
+                      <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 'bold', borderRight: '1px solid #cbd5e1', width: '50%' }}>Jméno a příjmení</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 'bold', width: '50%' }}>Pracovní pozice / Vztah k subjektu</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {record?.ucastnici && record.ucastnici.length > 0 ? (
+                      record.ucastnici.map((u: any, i: number) => (
+                        <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                          <td style={{ padding: '6px 10px', fontWeight: 'medium', borderRight: '1px solid #cbd5e1', wordWrap: 'break-word' }}>{u.jmeno || 'Neuvedeno'}</td>
+                          <td style={{ padding: '6px 10px', color: '#475569', wordWrap: 'break-word' }}>{u.pozice || 'Bez zařazení'}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr><td colSpan={2} style={{ padding: '10px', fontStyle: 'italic', color: '#64748b', textAlign: 'center' }}>Nebyly zapsány žádné osoby.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div className="html2pdf__page-break"></div>
+
+          <div style={{ padding: '10px 0' }}>
+            <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '20px', color: '#000' }}>
+              2. {onlyDefects ? "Registr zjištěných nedostatků a nápravných opatření" : "Kompletní auditní protokol zjištění"}
+            </h2>
+            <div style={{ display: 'block' }}>
+              {filteredKontrolniBody.map((kb: any) => {
+                const isDefect = kb.hodnoceni === 'N';
+                const photos = extractPhotos(kb);
+                return (
+                  <div key={kb.id || kb.bod} className="avoid-break" style={{ pageBreakInside: 'avoid', breakInside: 'avoid', marginBottom: '15px' }}>
+                    <div style={{ border: '1px solid #cbd5e1', borderRadius: '4px', padding: '10px', backgroundColor: '#fff', display: 'block' }}>
+                      <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderBottom: '1px solid #f1f5f9', paddingBottom: '4px', marginBottom: '6px' }}>
+                        <tbody>
+                          <tr>
+                            <td style={{ textAlign: 'left', fontSize: '11px', fontWeight: 'bold', color: '#000' }}>
+                              <span style={{ color: isDefect ? '#991b1b' : '#166534', marginRight: '6px' }}>[{kb.bod}]</span> KAPITOLA: <span style={{ textTransform: 'uppercase', color: '#475569', fontSize: '10px' }}>{kb.sekce || 'Ostatní'}</span>
+                            </td>
+                            <td style={{ textAlign: 'right', fontSize: '9px', fontWeight: 'bold', color: isDefect ? '#991b1b' : '#166534' }}>
+                              {isDefect ? '❌ NESHODA' : kb.hodnoceni === 'V' ? '✅ VYHOVUJE' : '– NEHODNOCENO'}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <div style={{ fontSize: '11px', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', display: 'block' }}>Kontrolovaný bod / Otázka:</span>
+                        <strong style={{ color: '#0f172a' }}>{kb.otazka || kb.popis || 'Bez popisu'}</strong>
+                      </div>
+                      {isDefect && (
+                        <table style={{ width: '100%', tableLayout: 'fixed', fontSize: '10px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: '6px', borderCollapse: 'collapse' }}>
+                          <tbody>
+                            <tr>
+                              <td style={{ padding: '6px', width: '55%', verticalAlign: 'top', borderRight: '1px solid #e2e8f0' }}>
+                                <span style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Návrh opatření:</span>
+                                <span style={{ color: '#334155', display: 'block', marginTop: '2px' }}>{kb.navrhOpatreni || 'Není definováno'}</span>
+                              </td>
+                              <td style={{ padding: '6px', width: '45%', verticalAlign: 'top' }}>
+                                <span style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Lokalizace a termín:</span>
+                                <strong style={{ color: '#1e3a8a', display: 'block', marginTop: '2px' }}>{kb.lokalizace || 'Objekt společnosti'}</strong>
+                                <span style={{ display: 'block', marginTop: '4px' }}>Termín: {kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</span>
+                                <span style={{ display: 'block', marginTop: '2px' }}>Pozice: {kb.odpovednaOsoba || 'Neuvedena'}</span>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      )}
+                      
+                      {photos.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px' }}>
+                          {photos.map((p, idx) => (
+                            <img key={idx} src={p} alt={`Důkaz ${idx + 1}`} style={{ maxHeight: '130px', maxWidth: '48%', objectFit: 'contain', borderRadius: '3px', border: '1px solid #cbd5e1' }} />
+                          ))}
+                        </div>
+                      )}
+
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
