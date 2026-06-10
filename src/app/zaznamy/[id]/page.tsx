@@ -133,24 +133,24 @@ export default function RecordDetailPage() {
 
   const handleDownloadPDF = async () => {
     setIsGeneratingPDF(true);
-    toast({ title: "Připravuji PDF", description: "Dokument se generuje, čekejte prosím..." });
+    toast({ title: "Připravuji PDF", description: "Dokument se generuje a číslují se stránky..." });
 
     try {
       const html2pdf = (await import('html2pdf.js')).default;
       const element = document.getElementById('pdf-export-container');
       const wrapper = document.getElementById('pdf-wrapper');
 
-      // Trik k zabránění oříznutí - Přesun šablony přímo na souřadnice prohlížeče
       if (wrapper) {
         wrapper.style.left = '0px';
         wrapper.style.top = '0px';
         wrapper.style.zIndex = '-9999';
       }
 
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       const opt = {
-        margin:       0, // NULOVÝ MARGIN = ŽÁDNÁ GILOTINA (okraje řeší padding níže v HTML)
+        // Nahoře a dole 20 mm (prostora pro záhlaví a zápatí), levý a pravý bok 15 mm.
+        margin:       [20, 15, 20, 15], 
         filename:     pdfFileName,
         image:        { type: 'jpeg', quality: 1 },
         html2canvas:  { 
@@ -164,13 +164,43 @@ export default function RecordDetailPage() {
         pagebreak:    { mode: ['css', 'legacy'], avoid: '.avoid-break' }
       };
 
-      await html2pdf().set(opt).from(element).save();
+      // Spuštění generování, protažení interním API knihovny pro vložení Záhlaví a Zápatí
+      await html2pdf()
+        .set(opt)
+        .from(element)
+        .toPdf()
+        .get('pdf')
+        .then((pdf: any) => {
+          const totalPages = pdf.internal.getNumberOfPages();
+          
+          for (let i = 1; i <= totalPages; i++) {
+            pdf.setPage(i);
+            pdf.setFontSize(8);
+            pdf.setTextColor(150); // Nenápadná šedá barva
+
+            // PŘIDÁNÍ ZÁHLAVÍ
+            pdf.text('BPyes s.r.o. - Profesionální auditorské a kontrolní systémy', 15, 12);
+
+            // PŘIDÁNÍ ZÁPATÍ (Název souboru + Číslování stránek)
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            
+            // Jméno souboru dole vlevo
+            pdf.text(pdfFileName, 15, pageHeight - 12);
+            
+            // Strana X z Y dole vpravo
+            const pageString = `Strana ${i} z ${totalPages}`;
+            const textWidth = pdf.getTextWidth(pageString);
+            pdf.text(pageString, pageWidth - 15 - textWidth, pageHeight - 12);
+          }
+        })
+        .save();
+
       toast({ title: "Úspěch", description: "PDF bylo úspěšně staženo." });
     } catch (error) {
       console.error("Chyba PDF:", error);
       toast({ title: "Chyba generování", description: "Nastala chyba při vytváření PDF.", variant: "destructive" });
     } finally {
-      // Úklid - schování wrapperu zpět mimo obrazovku
       const wrapper = document.getElementById('pdf-wrapper');
       if (wrapper) {
         wrapper.style.left = '-9999px';
@@ -327,11 +357,9 @@ export default function RecordDetailPage() {
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* TISKOVÁ ŠABLONA PDF S PADDINGEM 15MM = ZERO GUILLOTINE BUG */}
-      {/* ========================================================================= */}
       <div id="pdf-wrapper" style={{ position: 'absolute', left: '-9999px', top: '0px', width: '794px', zIndex: -1000 }}>
-        <div id="pdf-export-container" style={{ width: '794px', backgroundColor: '#ffffff', color: '#000000', padding: '15mm', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif', wordBreak: 'break-word' }}>
+        {/* Odstraněn padding, generování okrajů plně přebírá html2pdf */}
+        <div id="pdf-export-container" style={{ width: '794px', backgroundColor: '#ffffff', color: '#000000', padding: '0px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif', wordBreak: 'break-word' }}>
           
           <div style={{ boxSizing: 'border-box', paddingBottom: '20px' }}>
             <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderBottom: '2px solid #000', paddingBottom: '12px', marginBottom: '25px' }}>
@@ -442,8 +470,8 @@ export default function RecordDetailPage() {
                   {record?.ucastnici && record.ucastnici.length > 0 ? (
                     record.ucastnici.map((u: any, i: number) => (
                       <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                        <td style={{ padding: '6px 10px', fontWeight: 'medium', borderRight: '1px solid #cbd5e1' }}>{u.jmeno || 'Neuvedeno'}</td>
-                        <td style={{ padding: '6px 10px', color: '#475569' }}>{u.pozice || 'Bez zařazení'}</td>
+                        <td style={{ padding: '6px 10px', fontWeight: 'medium', borderRight: '1px solid #cbd5e1', wordWrap: 'break-word' }}>{u.jmeno || 'Neuvedeno'}</td>
+                        <td style={{ padding: '6px 10px', color: '#475569', wordWrap: 'break-word' }}>{u.pozice || 'Bez zařazení'}</td>
                       </tr>
                     ))
                   ) : (
