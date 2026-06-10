@@ -123,6 +123,18 @@ export default function RecordDetailPage() {
     }
   };
 
+  // Pomocná funkce pro extrakci fotek (podporuje textový řetězec i pole fotek)
+  const extractPhotos = (kb: any) => {
+    let photos: string[] = [];
+    if (Array.isArray(kb.fotografie)) photos = photos.concat(kb.fotografie);
+    if (Array.isArray(kb.fotky)) photos = photos.concat(kb.fotky);
+    if (Array.isArray(kb.foto)) photos = photos.concat(kb.foto);
+    else if (typeof kb.foto === 'string' && kb.foto.trim() !== '') photos.push(kb.foto);
+    
+    // Vrátíme unikátní fotky
+    return Array.from(new Set(photos));
+  };
+
   const handleDownloadPDF = async () => {
     setIsGeneratingPDF(true);
     toast({ title: "Připravuji PDF", description: "Dokument se generuje a číslují se stránky..." });
@@ -143,7 +155,7 @@ export default function RecordDetailPage() {
       await new Promise(resolve => setTimeout(resolve, 300));
 
       const opt = {
-        margin:       [20, 20, 20, 20], // Přesně 20 mm na všech stranách
+        margin:       [20, 20, 20, 20],
         filename:     pdfFileName,
         image:        { type: 'jpeg', quality: 1 },
         html2canvas:  { 
@@ -168,10 +180,8 @@ export default function RecordDetailPage() {
             pdf.setFontSize(9);
             pdf.setTextColor(130);
 
-            // Záhlaví
             pdf.text('BPyes s.r.o.', 20, 12);
 
-            // Zápatí (Název dokumentu a strany)
             const pageWidth = pdf.internal.pageSize.getWidth();
             const pageHeight = pdf.internal.pageSize.getHeight();
             
@@ -280,6 +290,7 @@ export default function RecordDetailPage() {
             <CardContent className="space-y-4">
               {filteredKontrolniBody.map((kb: any) => {
                 const isDefect = kb.hodnoceni === 'N';
+                const photos = extractPhotos(kb);
                 return (
                   <div key={kb.id || kb.bod} className={cn("p-4 border rounded-xl space-y-3 transition-colors", isDefect ? "bg-white border-slate-200 shadow-sm" : "bg-slate-50/40 border-slate-100 text-slate-600")}>
                     <div className="flex justify-between items-start gap-2">
@@ -305,7 +316,13 @@ export default function RecordDetailPage() {
                         <div><span className="text-muted-foreground block mb-0.5">Odpovědná pozice:</span><p className="font-bold text-black">{kb.odpovednaOsoba || 'Neuvedena'}</p></div>
                       </div>
                     )}
-                    {kb.foto && <img src={kb.foto} alt="Důkaz" className="h-32 w-auto object-cover rounded-lg border mt-2" />}
+                    {photos.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {photos.map((p, idx) => (
+                          <img key={idx} src={p} alt={`Důkaz ${idx + 1}`} className="h-32 w-auto object-cover rounded-lg border" />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -348,7 +365,6 @@ export default function RecordDetailPage() {
       </div>
 
       <div id="pdf-wrapper" style={{ position: 'absolute', left: '-9999px', top: '0px', width: '170mm', zIndex: -1000 }}>
-        {/* Tiskový kontejner nastaven pevně na šířku 170mm (A4 bez okrajů) */}
         <div id="pdf-export-container" style={{ width: '170mm', backgroundColor: '#ffffff', color: '#000000', padding: '0px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
           
           <div style={{ boxSizing: 'border-box', paddingBottom: '20px' }}>
@@ -447,28 +463,30 @@ export default function RecordDetailPage() {
               </div>
             </div>
 
-            <div className="avoid-break" style={{ marginTop: '25px', pageBreakInside: 'avoid', breakInside: 'avoid', display: 'block' }}>
-              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Zúčastněné osoby:</span>
-              <table style={{ width: '100%', tableLayout: 'fixed', fontSize: '11px', borderCollapse: 'collapse', border: '1px solid #cbd5e1' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1px solid #cbd5e1' }}>
-                    <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 'bold', borderRight: '1px solid #cbd5e1', width: '50%' }}>Jméno a příjmení</th>
-                    <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 'bold', width: '50%' }}>Pracovní pozice / Vztah k subjektu</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {record?.ucastnici && record.ucastnici.length > 0 ? (
-                    record.ucastnici.map((u: any, i: number) => (
-                      <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                        <td style={{ padding: '6px 10px', fontWeight: 'medium', borderRight: '1px solid #cbd5e1', wordWrap: 'break-word' }}>{u.jmeno || 'Neuvedeno'}</td>
-                        <td style={{ padding: '6px 10px', color: '#475569', wordWrap: 'break-word' }}>{u.pozice || 'Bez zařazení'}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr><td colSpan={2} style={{ padding: '10px', fontStyle: 'italic', color: '#64748b', textAlign: 'center' }}>Nebyly zapsány žádné osoby.</td></tr>
-                  )}
-                </tbody>
-              </table>
+            <div className="avoid-break" style={{ pageBreakInside: 'avoid', breakInside: 'avoid', marginTop: '25px' }}>
+              <div style={{ display: 'block' }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Zúčastněné osoby:</span>
+                <table style={{ width: '100%', tableLayout: 'fixed', fontSize: '11px', borderCollapse: 'collapse', border: '1px solid #cbd5e1' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1px solid #cbd5e1' }}>
+                      <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 'bold', borderRight: '1px solid #cbd5e1', width: '50%' }}>Jméno a příjmení</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 'bold', width: '50%' }}>Pracovní pozice / Vztah k subjektu</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {record?.ucastnici && record.ucastnici.length > 0 ? (
+                      record.ucastnici.map((u: any, i: number) => (
+                        <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                          <td style={{ padding: '6px 10px', fontWeight: 'medium', borderRight: '1px solid #cbd5e1', wordWrap: 'break-word' }}>{u.jmeno || 'Neuvedeno'}</td>
+                          <td style={{ padding: '6px 10px', color: '#475569', wordWrap: 'break-word' }}>{u.pozice || 'Bez zařazení'}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr><td colSpan={2} style={{ padding: '10px', fontStyle: 'italic', color: '#64748b', textAlign: 'center' }}>Nebyly zapsány žádné osoby.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
@@ -481,47 +499,56 @@ export default function RecordDetailPage() {
             <div style={{ display: 'block' }}>
               {filteredKontrolniBody.map((kb: any) => {
                 const isDefect = kb.hodnoceni === 'N';
+                const photos = extractPhotos(kb);
                 return (
-                  <div key={kb.id || kb.bod} className="avoid-break" style={{ marginBottom: '12px', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '10px', backgroundColor: '#fff', pageBreakInside: 'avoid', breakInside: 'avoid', display: 'block' }}>
-                    <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderBottom: '1px solid #f1f5f9', paddingBottom: '4px', marginBottom: '6px' }}>
-                      <tbody>
-                        <tr>
-                          <td style={{ textAlign: 'left', fontSize: '11px', fontWeight: 'bold', color: '#000' }}>
-                            <span style={{ color: isDefect ? '#991b1b' : '#166534', marginRight: '6px' }}>[{kb.bod}]</span> KAPITOLA: <span style={{ textTransform: 'uppercase', color: '#475569', fontSize: '10px' }}>{kb.sekce || 'Ostatní'}</span>
-                          </td>
-                          <td style={{ textAlign: 'right', fontSize: '9px', fontWeight: 'bold', color: isDefect ? '#991b1b' : '#166534' }}>
-                            {isDefect ? '❌ NESHODA' : kb.hodnoceni === 'V' ? '✅ VYHOVUJE' : '– NEHODNOCENO'}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                    <div style={{ fontSize: '11px', marginBottom: '6px' }}>
-                      <span style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', display: 'block' }}>Kontrolovaný bod / Otázka:</span>
-                      <strong style={{ color: '#0f172a' }}>{kb.otazka || kb.popis || 'Bez popisu'}</strong>
-                    </div>
-                    {isDefect && (
-                      <table style={{ width: '100%', tableLayout: 'fixed', fontSize: '10px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: '6px', borderCollapse: 'collapse' }}>
+                  // OPRAVA: Dvojitý obal pro zamezení uříznuté linky
+                  <div key={kb.id || kb.bod} className="avoid-break" style={{ pageBreakInside: 'avoid', breakInside: 'avoid', marginBottom: '15px' }}>
+                    <div style={{ border: '1px solid #cbd5e1', borderRadius: '4px', padding: '10px', backgroundColor: '#fff', display: 'block' }}>
+                      <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderBottom: '1px solid #f1f5f9', paddingBottom: '4px', marginBottom: '6px' }}>
                         <tbody>
                           <tr>
-                            <td style={{ padding: '6px', width: '55%', verticalAlign: 'top', borderRight: '1px solid #e2e8f0' }}>
-                              <span style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Návrh opatření:</span>
-                              <span style={{ color: '#334155', display: 'block', marginTop: '2px' }}>{kb.navrhOpatreni || 'Není definováno'}</span>
+                            <td style={{ textAlign: 'left', fontSize: '11px', fontWeight: 'bold', color: '#000' }}>
+                              <span style={{ color: isDefect ? '#991b1b' : '#166534', marginRight: '6px' }}>[{kb.bod}]</span> KAPITOLA: <span style={{ textTransform: 'uppercase', color: '#475569', fontSize: '10px' }}>{kb.sekce || 'Ostatní'}</span>
                             </td>
-                            <td style={{ padding: '6px', width: '45%', verticalAlign: 'top' }}>
-                              <span style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Lokalizace a termín:</span>
-                              <strong style={{ color: '#1e3a8a', display: 'block', marginTop: '2px' }}>{kb.lokalizace || 'Objekt společnosti'}</strong>
-                              <span style={{ display: 'block', marginTop: '4px' }}>Termín: {kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</span>
-                              <span style={{ display: 'block', marginTop: '2px' }}>Pozice: {kb.odpovednaOsoba || 'Neuvedena'}</span>
+                            <td style={{ textAlign: 'right', fontSize: '9px', fontWeight: 'bold', color: isDefect ? '#991b1b' : '#166534' }}>
+                              {isDefect ? '❌ NESHODA' : kb.hodnoceni === 'V' ? '✅ VYHOVUJE' : '– NEHODNOCENO'}
                             </td>
                           </tr>
                         </tbody>
                       </table>
-                    )}
-                    {kb.foto && (
-                      <div style={{ marginTop: '6px' }}>
-                        <img src={kb.foto} alt="Důkaz" style={{ maxHeight: '130px', width: 'auto', borderRadius: '3px', border: '1px solid #cbd5e1' }} />
+                      <div style={{ fontSize: '11px', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', display: 'block' }}>Kontrolovaný bod / Otázka:</span>
+                        <strong style={{ color: '#0f172a' }}>{kb.otazka || kb.popis || 'Bez popisu'}</strong>
                       </div>
-                    )}
+                      {isDefect && (
+                        <table style={{ width: '100%', tableLayout: 'fixed', fontSize: '10px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: '6px', borderCollapse: 'collapse' }}>
+                          <tbody>
+                            <tr>
+                              <td style={{ padding: '6px', width: '55%', verticalAlign: 'top', borderRight: '1px solid #e2e8f0' }}>
+                                <span style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Návrh opatření:</span>
+                                <span style={{ color: '#334155', display: 'block', marginTop: '2px' }}>{kb.navrhOpatreni || 'Není definováno'}</span>
+                              </td>
+                              <td style={{ padding: '6px', width: '45%', verticalAlign: 'top' }}>
+                                <span style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Lokalizace a termín:</span>
+                                <strong style={{ color: '#1e3a8a', display: 'block', marginTop: '2px' }}>{kb.lokalizace || 'Objekt společnosti'}</strong>
+                                <span style={{ display: 'block', marginTop: '4px' }}>Termín: {kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</span>
+                                <span style={{ display: 'block', marginTop: '2px' }}>Pozice: {kb.odpovednaOsoba || 'Neuvedena'}</span>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      )}
+                      
+                      {/* Generování více fotek s flex wrapem */}
+                      {photos.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px' }}>
+                          {photos.map((p, idx) => (
+                            <img key={idx} src={p} alt={`Důkaz ${idx + 1}`} style={{ maxHeight: '130px', maxWidth: '48%', objectFit: 'contain', borderRadius: '3px', border: '1px solid #cbd5e1' }} />
+                          ))}
+                        </div>
+                      )}
+
+                    </div>
                   </div>
                 );
               })}
