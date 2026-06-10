@@ -1,5 +1,6 @@
 'use client';
 
+import { createPortal } from 'react-dom';
 import { useData } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -147,7 +148,7 @@ export default function RecordDetailPage() {
           useCORS: true, 
           logging: false, 
           windowWidth: 800,
-          width: 800, // OPRAVA: explicitní šířka pro html2canvas
+          width: 800,
         },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
@@ -172,7 +173,7 @@ export default function RecordDetailPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative overflow-hidden">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24">
       
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6">
         <div className="space-y-1">
@@ -295,13 +296,12 @@ export default function RecordDetailPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* TISKOVÁ ŠABLONA PDF                                                        */}
-      {/* OPRAVA: position fixed + top/left -9999px místo absolute + w-0 h-0        */}
-      {/* Díky fixed se element pozicuje vůči viewportu, nedědí offset od rodičů.   */}
+      {/* TISKOVÁ ŠABLONA PDF — renderuje se přes createPortal přímo do document.body */}
+      {/* Díky tomu nedědí žádné offsety ani styly od rodičovských elementů stránky. */}
       {/* ========================================================================= */}
-      <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '800px', pointerEvents: 'none', zIndex: -9999 }}>
-        <div id="pdf-export-container" style={{ width: '800px', backgroundColor: '#ffffff', color: '#000000', padding: '40px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
-          
+      {typeof window !== 'undefined' && createPortal(
+        <div id="pdf-export-container" style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '800px', backgroundColor: '#ffffff', color: '#000000', padding: '40px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
+
           <div style={{ boxSizing: 'border-box', paddingBottom: '20px' }}>
             <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderBottom: '2px solid #000', paddingBottom: '12px', marginBottom: '25px' }}>
               <tbody>
@@ -455,8 +455,10 @@ export default function RecordDetailPage() {
             </div>
           </div>
 
-        </div>
-      </div>
+        </div>,
+        document.body
+      )}
+
     </div>
   );
 }
