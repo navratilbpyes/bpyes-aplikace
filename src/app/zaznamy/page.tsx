@@ -49,8 +49,7 @@ export default function RecordDetailPage() {
   }, [klient, record]);
 
   const [filterPosition, setFilterPosition] = useState<string>("all");
-  // OPRAVA: Defaultně vypnuto (zobrazí se kompletní protokol)
-  const [onlyDefects, setOnlyDefects] = useState<boolean>(false);
+  const [onlyDefects, setOnlyDefects] = useState<boolean>(true);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -140,15 +139,15 @@ export default function RecordDetailPage() {
       const element = document.getElementById('pdf-export-container');
       
       const opt = {
-        margin:       0, // Nulový margin, okraje řeší padding v HTML
+        margin:       0,
         filename:     pdfFileName,
         image:        { type: 'jpeg', quality: 1 },
         html2canvas:  { 
-          scale: 2, // Snížený scale z 4 na 2, předchází rozmazání/ořezům
+          scale: 3, 
           useCORS: true, 
           logging: false, 
-          scrollX: 0,
-          scrollY: 0
+          windowWidth: 800,
+          width: 800, // OPRAVA: explicitní šířka pro html2canvas
         },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
@@ -296,9 +295,11 @@ export default function RecordDetailPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* TISKOVÁ ŠABLONA PDF (OPRAVA SCROLLU - FIXED POSITION) */}
+      {/* TISKOVÁ ŠABLONA PDF                                                        */}
+      {/* OPRAVA: position fixed + top/left -9999px místo absolute + w-0 h-0        */}
+      {/* Díky fixed se element pozicuje vůči viewportu, nedědí offset od rodičů.   */}
       {/* ========================================================================= */}
-      <div style={{ position: 'fixed', left: '-9999px', top: '0px', width: '800px', zIndex: -1000 }}>
+      <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '800px', pointerEvents: 'none', zIndex: -9999 }}>
         <div id="pdf-export-container" style={{ width: '800px', backgroundColor: '#ffffff', color: '#000000', padding: '40px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
           
           <div style={{ boxSizing: 'border-box', paddingBottom: '20px' }}>
