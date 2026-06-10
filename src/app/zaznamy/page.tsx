@@ -131,36 +131,26 @@ export default function RecordDetailPage() {
   };
 
   const handleDownloadPDF = async () => {
-  setIsGeneratingPDF(true);
-  
-  try {
-    const html2canvas = (await import('html2canvas')).default;
-    const element = document.getElementById('pdf-export-container');
+    setIsGeneratingPDF(true);
+    toast({ title: "Připravuji PDF", description: "Dokument se generuje, čekejte prosím..." });
     
-    // DEBUG: zjisti skutečný offset elementu
-    const rect = element.getBoundingClientRect();
-    console.log('Element rect:', rect);
-    console.log('Element offsetTop:', element.offsetTop);
-    console.log('Element offsetLeft:', element.offsetLeft);
-    console.log('ScrollX:', window.scrollX, 'ScrollY:', window.scrollY);
-    
-    // Vyrenderuj canvas a otevři ho v novém okně pro vizuální kontrolu
-    const canvas = await html2canvas(element, {
-      scale: 1,
-      useCORS: true,
-      logging: true, // zapni logy
-      windowWidth: 800,
-      width: 800,
-    });
-    
-    window.open(canvas.toDataURL(), '_blank');
-    
-  } catch (error) {
-    console.error(error);
-  } finally {
-    setIsGeneratingPDF(false);
-  }
-};
+    try {
+      const html2pdf = (await import('html2pdf.js')).default;
+      const element = document.getElementById('pdf-export-container');
+      
+      const opt = {
+        margin:       0,
+        filename:     pdfFileName,
+        image:        { type: 'jpeg', quality: 1 },
+        html2canvas:  { 
+          scale: 3, 
+          useCORS: true, 
+          logging: false, 
+          windowWidth: 800,
+          width: 800, // OPRAVA: explicitní šířka pro html2canvas
+        },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
 
       await html2pdf().set(opt).from(element).save();
       toast({ title: "Úspěch", description: "PDF bylo úspěšně staženo." });
