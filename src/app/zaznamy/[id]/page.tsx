@@ -138,22 +138,41 @@ export default function RecordDetailPage() {
     try {
       const html2pdf = (await import('html2pdf.js')).default;
       const element = document.getElementById('pdf-export-container');
+      const wrapper = document.getElementById('pdf-wrapper');
+
+      // Trik proti oříznutí: Přesuneme šablonu do aktuálního zorného pole (ale schováme ji dospod z-indexem)
+      if (wrapper) {
+        wrapper.style.left = '0px';
+        wrapper.style.top = `${window.scrollY}px`;
+        wrapper.style.zIndex = '-9999';
+      }
+
+      // Dáme prohlížeči chvilku, aby překreslil DOM na nové pozici
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       const opt = {
-        margin:       20, 
+        margin:       20, // PŘESNĚ 2 CM OKRAJE ZE VŠECH STRAN
         filename:     pdfFileName,
         image:        { type: 'jpeg', quality: 1 },
         html2canvas:  { 
           scale: 2, 
           useCORS: true, 
           logging: false, 
-          windowWidth: 800
+          scrollY: 0,
+          scrollX: 0
         },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['css', 'legacy'] } 
+        pagebreak:    { mode: ['css', 'legacy'] } // SPRÁVNÉ DĚLENÍ STRÁNEK BEZ ROZŘÍZNUTÍ
       };
 
       await html2pdf().set(opt).from(element).save();
+
+      // Návrat šablony mimo obrazovku
+      if (wrapper) {
+        wrapper.style.left = '-9999px';
+        wrapper.style.top = '0px';
+      }
+
       toast({ title: "Úspěch", description: "PDF bylo úspěšně staženo." });
     } catch (error) {
       console.error("Chyba PDF:", error);
@@ -293,7 +312,6 @@ export default function RecordDetailPage() {
             </CardContent>
           </Card>
 
-          {/* NÁVRAT SEKCE NA WEB: Seznam zúčastněných osob */}
           <Card className="border-none shadow-sm bg-white">
             <CardHeader><CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-bold flex items-center gap-2"><Users className="h-4 w-4 text-slate-500" /> Zúčastněné osoby</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
@@ -313,10 +331,10 @@ export default function RecordDetailPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* TISKOVÁ ŠABLONA PDF (Claude fix šířky + Oprava dělení stránek a účastníků) */}
+      {/* TISKOVÁ ŠABLONA PDF S FIXEM OŘEZU A PŘESNÝMI OKRAJI */}
       {/* ========================================================================= */}
-      <div style={{ position: 'fixed', left: '-9999px', top: '0px', width: '800px', zIndex: -1000 }}>
-        <div id="pdf-export-container" style={{ width: '800px', backgroundColor: '#ffffff', color: '#000000', padding: '0px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
+      <div id="pdf-wrapper" style={{ position: 'absolute', left: '-9999px', top: '0px', width: '794px', zIndex: -1000 }}>
+        <div id="pdf-export-container" style={{ width: '794px', backgroundColor: '#ffffff', color: '#000000', padding: '0px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif', overflowWrap: 'break-word', wordWrap: 'break-word' }}>
           
           <div style={{ boxSizing: 'border-box', paddingBottom: '20px' }}>
             <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderBottom: '2px solid #000', paddingBottom: '12px', marginBottom: '25px' }}>
@@ -342,13 +360,13 @@ export default function RecordDetailPage() {
               </div>
             </div>
 
-            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '12px', backgroundColor: '#f8fafc', borderRadius: '4px', wordWrap: 'break-word' }}>
+            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '12px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
               <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Zpracovatel / Poskytovatel:</span>
               <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>BPyes s.r.o.</strong>
               <span style={{ fontSize: '11px', color: '#334155' }}>Specializovaný poskytovatel služeb v oblasti rizik BOZP a PO | <strong>IČO: 04399421</strong> | E-mail: navratil@bpyes.cz</span>
             </div>
 
-            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '30px', backgroundColor: '#f8fafc', borderRadius: '4px', wordWrap: 'break-word' }}>
+            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '30px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
               <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Kontrolovaný subjekt / Klient:</span>
               <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>{klient?.nazev || 'Neznámý subjekt'}</strong>
               <span style={{ fontSize: '11px', color: '#334155', display: 'block', marginBottom: '6px' }}>IČO: {klient?.ico || 'Neuvedeno'}</span>
@@ -384,7 +402,6 @@ export default function RecordDetailPage() {
 
           <div style={{ pageBreakBefore: 'always' }}></div>
 
-          {/* SEKCE 1: SHRNUTÍ A STATISTIKY V PDF */}
           <div style={{ padding: '10px 0' }}>
             <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '20px', color: '#000' }}>
               1. Shrnutí a statistiky
@@ -415,7 +432,6 @@ export default function RecordDetailPage() {
               </div>
             </div>
 
-            {/* NÁVRAT SEKCE DO PDF: Tabulka zúčastněných osob */}
             <div style={{ marginTop: '25px', pageBreakInside: 'avoid' }}>
               <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Zúčastněné osoby:</span>
               <table style={{ width: '100%', tableLayout: 'fixed', fontSize: '11px', borderCollapse: 'collapse', border: '1px solid #cbd5e1' }}>
@@ -443,7 +459,6 @@ export default function RecordDetailPage() {
 
           <div style={{ pageBreakBefore: 'always' }}></div>
 
-          {/* SEKCE 2: REGISTR BODŮ V PDF */}
           <div style={{ padding: '10px 0' }}>
             <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '20px', color: '#000' }}>
               2. {onlyDefects ? "Registr zjištěných nedostatků a nápravných opatření" : "Kompletní auditní protokol zjištění"}
