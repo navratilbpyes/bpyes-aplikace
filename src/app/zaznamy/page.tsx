@@ -49,7 +49,8 @@ export default function RecordDetailPage() {
   }, [klient, record]);
 
   const [filterPosition, setFilterPosition] = useState<string>("all");
-  const [onlyDefects, setOnlyDefects] = useState<boolean>(true);
+  // OPRAVA: Defaultně vypnuto (zobrazí se kompletní protokol)
+  const [onlyDefects, setOnlyDefects] = useState<boolean>(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -139,14 +140,15 @@ export default function RecordDetailPage() {
       const element = document.getElementById('pdf-export-container');
       
       const opt = {
-        margin:       0, // NULOVÝ MARGIN! (Okraje se tvoří pomocí HTML paddingu níže)
+        margin:       0, // Nulový margin, okraje řeší padding v HTML
         filename:     pdfFileName,
         image:        { type: 'jpeg', quality: 1 },
         html2canvas:  { 
-          scale: 3, 
+          scale: 2, // Snížený scale z 4 na 2, předchází rozmazání/ořezům
           useCORS: true, 
           logging: false, 
-          windowWidth: 800, // Pevná šířka okna pro generátor
+          scrollX: 0,
+          scrollY: 0
         },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
@@ -183,7 +185,6 @@ export default function RecordDetailPage() {
           <p className="text-sm text-muted-foreground">Provedeno dne {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : 'Neuvedeno'}</p>
         </div>
         
-        {/* OPRAVA: Tlačítko Upravit záznam je zpět */}
         <div className="flex flex-wrap gap-2 w-full md:w-auto">
           <Button variant="default" className="h-11 shadow-sm font-bold bg-blue-600 hover:bg-blue-700 text-white" onClick={handleDownloadPDF} disabled={isGeneratingPDF}>
             {isGeneratingPDF ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Printer className="h-4 w-4 mr-2" />} {isGeneratingPDF ? "Generuji PDF..." : "Stáhnout PDF report"}
@@ -295,9 +296,9 @@ export default function RecordDetailPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* TISKOVÁ ŠABLONA PDF (Opacity 0 místo -9999px + 40px Padding) */}
+      {/* TISKOVÁ ŠABLONA PDF (OPRAVA SCROLLU - FIXED POSITION) */}
       {/* ========================================================================= */}
-      <div className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none overflow-hidden -z-50">
+      <div style={{ position: 'fixed', left: '-9999px', top: '0px', width: '800px', zIndex: -1000 }}>
         <div id="pdf-export-container" style={{ width: '800px', backgroundColor: '#ffffff', color: '#000000', padding: '40px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
           
           <div style={{ boxSizing: 'border-box', paddingBottom: '20px' }}>
