@@ -12,7 +12,8 @@ import {
   Building, 
   MapPin, 
   FileText,
-  Loader2
+  Loader2,
+  Edit
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -31,10 +32,9 @@ export default function RecordDetailPage() {
   const record = useMemo(() => zaznamy.find(z => z.id === params.id), [zaznamy, params.id]);
   const klient = useMemo(() => klienti.find(k => k.id === record?.klientId), [klienti, record]);
   
-  // ROBUSTNÍ VERZE: Zvládne staré záznamy (pracovisteId) i nové záznamy s více pracovišti (pracovisteIds)
   const pracovisteList = useMemo(() => {
     if (!klient || !record) return [];
-    const prac = klient.pracoviste || []; // Fallback proti pádu
+    const prac = klient.pracoviste || [];
     
     if (record.pracovisteIds && Array.isArray(record.pracovisteIds)) {
       return prac.filter(p => record.pracovisteIds.includes(p.id));
@@ -110,7 +110,6 @@ export default function RecordDetailPage() {
     };
   }, [record]);
 
-  // SUPER BEZPEČNÝ NÁZEV PDF - už nikdy nespadne
   const pdfFileName = useMemo(() => {
     if (!record || !klient) return "export.pdf";
     const cleanKlient = (klient.nazev || "Neznamy").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9\s]/g, "").trim();
@@ -140,19 +139,16 @@ export default function RecordDetailPage() {
       const element = document.getElementById('pdf-export-container');
       
       const opt = {
-        margin:       [12, 12, 12, 12],
+        margin:       0, // NULOVÝ MARGIN! (Okraje se tvoří pomocí HTML paddingu níže)
         filename:     pdfFileName,
-        image:        { type: 'jpeg', quality: 0.98 },
+        image:        { type: 'jpeg', quality: 1 },
         html2canvas:  { 
-          scale: 4, 
+          scale: 3, 
           useCORS: true, 
           logging: false, 
-          windowWidth: 794,
-          scrollX: 0, 
-          scrollY: 0  
+          windowWidth: 800, // Pevná šířka okna pro generátor
         },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['css', 'legacy'] }
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
 
       await html2pdf().set(opt).from(element).save();
@@ -186,9 +182,14 @@ export default function RecordDetailPage() {
           <h1 className="text-3xl font-bold tracking-tight">{record.cislo} <span className="text-muted-foreground font-normal text-xl">R{record.revize || 0}</span></h1>
           <p className="text-sm text-muted-foreground">Provedeno dne {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : 'Neuvedeno'}</p>
         </div>
+        
+        {/* OPRAVA: Tlačítko Upravit záznam je zpět */}
         <div className="flex flex-wrap gap-2 w-full md:w-auto">
           <Button variant="default" className="h-11 shadow-sm font-bold bg-blue-600 hover:bg-blue-700 text-white" onClick={handleDownloadPDF} disabled={isGeneratingPDF}>
             {isGeneratingPDF ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Printer className="h-4 w-4 mr-2" />} {isGeneratingPDF ? "Generuji PDF..." : "Stáhnout PDF report"}
+          </Button>
+          <Button variant="secondary" className="h-11 shadow-sm" onClick={() => toast({ title: "Připravuje se", description: "Funkce editace záznamu bude zprovozněna v další fázi." })}>
+            <Edit className="h-4 w-4 mr-2" /> Upravit záznam
           </Button>
         </div>
       </div>
@@ -293,9 +294,11 @@ export default function RecordDetailPage() {
         </div>
       </div>
 
-      {/* TISKOVÁ ŠABLONA PDF */}
-      <div style={{ position: 'absolute', left: '-9999px', top: '0px', width: '794px', overflow: 'hidden', zIndex: -1000, backgroundColor: '#fff' }}>
-        <div id="pdf-export-container" style={{ width: '794px', maxWidth: '794px', fontFamily: 'Arial, sans-serif', padding: '24px', boxSizing: 'border-box', backgroundColor: '#fff' }}>
+      {/* ========================================================================= */}
+      {/* TISKOVÁ ŠABLONA PDF (Opacity 0 místo -9999px + 40px Padding) */}
+      {/* ========================================================================= */}
+      <div className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none overflow-hidden -z-50">
+        <div id="pdf-export-container" style={{ width: '800px', backgroundColor: '#ffffff', color: '#000000', padding: '40px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
           
           <div style={{ boxSizing: 'border-box', paddingBottom: '20px' }}>
             <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderBottom: '2px solid #000', paddingBottom: '12px', marginBottom: '25px' }}>
@@ -321,13 +324,13 @@ export default function RecordDetailPage() {
               </div>
             </div>
 
-            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '12px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
+            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '12px', backgroundColor: '#f8fafc', borderRadius: '4px', wordWrap: 'break-word' }}>
               <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Zpracovatel / Poskytovatel:</span>
               <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>BPyes s.r.o.</strong>
               <span style={{ fontSize: '11px', color: '#334155' }}>Specializovaný poskytovatel služeb v oblasti rizik BOZP a PO | <strong>IČO: 04399421</strong> | E-mail: navratil@bpyes.cz</span>
             </div>
 
-            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '30px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
+            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '30px', backgroundColor: '#f8fafc', borderRadius: '4px', wordWrap: 'break-word' }}>
               <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Kontrolovaný subjekt / Klient:</span>
               <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>{klient?.nazev || 'Neznámý subjekt'}</strong>
               <span style={{ fontSize: '11px', color: '#334155', display: 'block', marginBottom: '6px' }}>IČO: {klient?.ico || 'Neuvedeno'}</span>
