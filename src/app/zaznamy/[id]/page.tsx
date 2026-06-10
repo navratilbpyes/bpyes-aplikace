@@ -149,7 +149,6 @@ export default function RecordDetailPage() {
       await new Promise(resolve => setTimeout(resolve, 300));
 
       const opt = {
-        // Nahoře a dole 20 mm (prostora pro záhlaví a zápatí), levý a pravý bok 15 mm.
         margin:       [20, 15, 20, 15], 
         filename:     pdfFileName,
         image:        { type: 'jpeg', quality: 1 },
@@ -164,7 +163,6 @@ export default function RecordDetailPage() {
         pagebreak:    { mode: ['css', 'legacy'], avoid: '.avoid-break' }
       };
 
-      // Spuštění generování, protažení interním API knihovny pro vložení Záhlaví a Zápatí
       await html2pdf()
         .set(opt)
         .from(element)
@@ -176,19 +174,17 @@ export default function RecordDetailPage() {
           for (let i = 1; i <= totalPages; i++) {
             pdf.setPage(i);
             pdf.setFontSize(8);
-            pdf.setTextColor(150); // Nenápadná šedá barva
+            pdf.setTextColor(150);
 
-            // PŘIDÁNÍ ZÁHLAVÍ
-            pdf.text('BPyes s.r.o. - Profesionální auditorské a kontrolní systémy', 15, 12);
+            // ZÁHLAVÍ - čistě a jednoduše
+            pdf.text('BPyes s.r.o.', 15, 12);
 
-            // PŘIDÁNÍ ZÁPATÍ (Název souboru + Číslování stránek)
+            // ZÁPATÍ
             const pageWidth = pdf.internal.pageSize.getWidth();
             const pageHeight = pdf.internal.pageSize.getHeight();
             
-            // Jméno souboru dole vlevo
             pdf.text(pdfFileName, 15, pageHeight - 12);
             
-            // Strana X z Y dole vpravo
             const pageString = `Strana ${i} z ${totalPages}`;
             const textWidth = pdf.getTextWidth(pageString);
             pdf.text(pageString, pageWidth - 15 - textWidth, pageHeight - 12);
@@ -358,7 +354,6 @@ export default function RecordDetailPage() {
       </div>
 
       <div id="pdf-wrapper" style={{ position: 'absolute', left: '-9999px', top: '0px', width: '794px', zIndex: -1000 }}>
-        {/* Odstraněn padding, generování okrajů plně přebírá html2pdf */}
         <div id="pdf-export-container" style={{ width: '794px', backgroundColor: '#ffffff', color: '#000000', padding: '0px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif', wordBreak: 'break-word' }}>
           
           <div style={{ boxSizing: 'border-box', paddingBottom: '20px' }}>
@@ -425,7 +420,7 @@ export default function RecordDetailPage() {
             </table>
           </div>
 
-          <div className="html2pdf__page-break"></div>
+          <div style={{ pageBreakBefore: 'always', height: '1px', clear: 'both' }}></div>
 
           <div style={{ padding: '10px 0' }}>
             <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '20px', color: '#000' }}>
@@ -482,17 +477,18 @@ export default function RecordDetailPage() {
             </div>
           </div>
 
-          <div className="html2pdf__page-break"></div>
+          <div style={{ pageBreakBefore: 'always', height: '1px', clear: 'both' }}></div>
 
           <div style={{ padding: '10px 0' }}>
             <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '20px', color: '#000' }}>
               2. {onlyDefects ? "Registr zjištěných nedostatků a nápravných opatření" : "Kompletní auditní protokol zjištění"}
             </h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* OPRAVA BLOKU ZÁVAD: Žádný flexbox, pouze čisté HTML bloky */}
+            <div style={{ display: 'block' }}>
               {filteredKontrolniBody.map((kb: any) => {
                 const isDefect = kb.hodnoceni === 'N';
                 return (
-                  <div key={kb.id || kb.bod} className="avoid-break" style={{ border: '1px solid #cbd5e1', borderRadius: '4px', padding: '10px', backgroundColor: '#fff', pageBreakInside: 'avoid' }}>
+                  <div key={kb.id || kb.bod} className="avoid-break" style={{ marginBottom: '12px', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '10px', backgroundColor: '#fff', pageBreakInside: 'avoid', display: 'block' }}>
                     <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderBottom: '1px solid #f1f5f9', paddingBottom: '4px', marginBottom: '6px' }}>
                       <tbody>
                         <tr>
