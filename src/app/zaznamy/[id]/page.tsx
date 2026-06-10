@@ -50,7 +50,6 @@ export default function RecordDetailPage() {
   }, [klient, record]);
 
   const [filterPosition, setFilterPosition] = useState<string>("all");
-  // OPRAVA: Defaultně vypnuto (zobrazí se kompletní protokol)
   const [onlyDefects, setOnlyDefects] = useState<boolean>(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
@@ -141,26 +140,28 @@ export default function RecordDetailPage() {
       const element = document.getElementById('pdf-export-container');
       const wrapper = document.getElementById('pdf-wrapper');
 
-      // Dočasný přesun šablony přímo na souřadnice 0,0 zabrání špatnému měření a ořezům.
+      // Trik k zabránění oříznutí - Přesun šablony přímo na souřadnice prohlížeče
       if (wrapper) {
-        wrapper.style.top = '0px';
         wrapper.style.left = '0px';
+        wrapper.style.top = '0px';
+        wrapper.style.zIndex = '-9999';
       }
 
-      await new Promise(resolve => setTimeout(resolve, 150));
+      await new Promise(resolve => setTimeout(resolve, 200));
 
       const opt = {
-        margin:       15, // OPRAVA: Krásný 1.5 cm okraj, který zaručí dostatek místa
+        margin:       0, // NULOVÝ MARGIN = ŽÁDNÁ GILOTINA (okraje řeší padding níže v HTML)
         filename:     pdfFileName,
         image:        { type: 'jpeg', quality: 1 },
         html2canvas:  { 
           scale: 2, 
           useCORS: true, 
-          logging: false
+          logging: false,
+          windowWidth: 794,
+          width: 794
         },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        // OPRAVA: Inteligentní stránkování (avoid: '.avoid-break' zakazuje roztržení karet napůl)
-        pagebreak:    { mode: ['css', 'legacy'], avoid: '.avoid-break' } 
+        pagebreak:    { mode: ['css', 'legacy'], avoid: '.avoid-break' }
       };
 
       await html2pdf().set(opt).from(element).save();
@@ -169,10 +170,9 @@ export default function RecordDetailPage() {
       console.error("Chyba PDF:", error);
       toast({ title: "Chyba generování", description: "Nastala chyba při vytváření PDF.", variant: "destructive" });
     } finally {
-      // Návrat do úkrytu
+      // Úklid - schování wrapperu zpět mimo obrazovku
       const wrapper = document.getElementById('pdf-wrapper');
       if (wrapper) {
-        wrapper.style.top = '-9999px';
         wrapper.style.left = '-9999px';
       }
       setIsGeneratingPDF(false);
@@ -205,7 +205,6 @@ export default function RecordDetailPage() {
           <Button variant="default" className="h-11 shadow-sm font-bold bg-blue-600 hover:bg-blue-700 text-white" onClick={handleDownloadPDF} disabled={isGeneratingPDF}>
             {isGeneratingPDF ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Printer className="h-4 w-4 mr-2" />} {isGeneratingPDF ? "Generuji PDF..." : "Stáhnout PDF report"}
           </Button>
-          {/* OPRAVA: Tlačítko upravení záznamu je zpět */}
           <Button variant="secondary" className="h-11 shadow-sm" onClick={() => toast({ title: "Připravuje se", description: "Funkce editace záznamu bude zprovozněna v další fázi." })}>
             <Edit className="h-4 w-4 mr-2" /> Upravit záznam
           </Button>
@@ -329,10 +328,10 @@ export default function RecordDetailPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* TISKOVÁ ŠABLONA PDF (Pevná šířka 720px zajišťuje perfektní poměr na A4) */}
+      {/* TISKOVÁ ŠABLONA PDF S PADDINGEM 15MM = ZERO GUILLOTINE BUG */}
       {/* ========================================================================= */}
-      <div id="pdf-wrapper" style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '720px', zIndex: -1000 }}>
-        <div id="pdf-export-container" style={{ width: '720px', backgroundColor: '#ffffff', color: '#000000', padding: '0px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
+      <div id="pdf-wrapper" style={{ position: 'absolute', left: '-9999px', top: '0px', width: '794px', zIndex: -1000 }}>
+        <div id="pdf-export-container" style={{ width: '794px', backgroundColor: '#ffffff', color: '#000000', padding: '15mm', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif', wordBreak: 'break-word' }}>
           
           <div style={{ boxSizing: 'border-box', paddingBottom: '20px' }}>
             <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderBottom: '2px solid #000', paddingBottom: '12px', marginBottom: '25px' }}>
@@ -358,13 +357,13 @@ export default function RecordDetailPage() {
               </div>
             </div>
 
-            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '12px', backgroundColor: '#f8fafc', borderRadius: '4px', wordWrap: 'break-word' }}>
+            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '12px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
               <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Zpracovatel / Poskytovatel:</span>
               <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>BPyes s.r.o.</strong>
               <span style={{ fontSize: '11px', color: '#334155' }}>Specializovaný poskytovatel služeb v oblasti rizik BOZP a PO | <strong>IČO: 04399421</strong> | E-mail: navratil@bpyes.cz</span>
             </div>
 
-            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '30px', backgroundColor: '#f8fafc', borderRadius: '4px', wordWrap: 'break-word' }}>
+            <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '30px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
               <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Kontrolovaný subjekt / Klient:</span>
               <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>{klient?.nazev || 'Neznámý subjekt'}</strong>
               <span style={{ fontSize: '11px', color: '#334155', display: 'block', marginBottom: '6px' }}>IČO: {klient?.ico || 'Neuvedeno'}</span>
@@ -398,7 +397,6 @@ export default function RecordDetailPage() {
             </table>
           </div>
 
-          {/* Čistý a spolehlivý pagebreak */}
           <div className="html2pdf__page-break"></div>
 
           <div style={{ padding: '10px 0' }}>
@@ -444,8 +442,8 @@ export default function RecordDetailPage() {
                   {record?.ucastnici && record.ucastnici.length > 0 ? (
                     record.ucastnici.map((u: any, i: number) => (
                       <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                        <td style={{ padding: '6px 10px', fontWeight: 'medium', borderRight: '1px solid #cbd5e1', wordWrap: 'break-word' }}>{u.jmeno || 'Neuvedeno'}</td>
-                        <td style={{ padding: '6px 10px', color: '#475569', wordWrap: 'break-word' }}>{u.pozice || 'Bez zařazení'}</td>
+                        <td style={{ padding: '6px 10px', fontWeight: 'medium', borderRight: '1px solid #cbd5e1' }}>{u.jmeno || 'Neuvedeno'}</td>
+                        <td style={{ padding: '6px 10px', color: '#475569' }}>{u.pozice || 'Bez zařazení'}</td>
                       </tr>
                     ))
                   ) : (
