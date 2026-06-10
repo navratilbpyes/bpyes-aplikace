@@ -132,38 +132,66 @@ export default function RecordDetailPage() {
   };
 
   const handleDownloadPDF = async () => {
-    setIsGeneratingPDF(true);
-    toast({ title: "Připravuji PDF", description: "Dokument se generuje, čekejte prosím..." });
-    
-    try {
-      const html2pdf = (await import('html2pdf.js')).default;
-      const element = document.getElementById('pdf-export-container');
-      
-      const opt = {
-        margin:       [12, 12, 12, 12],
-        filename:     pdfFileName,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { 
-          scale: 4, 
-          useCORS: true, 
-          logging: false, 
-          windowWidth: 794,
-          scrollX: 0, 
-          scrollY: 0  
-        },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['css', 'legacy'] }
-      };
+  setIsGeneratingPDF(true);
+  toast({ title: "Připravuji PDF", description: "Dokument se generuje, čekejte prosím..." });
 
-      await html2pdf().set(opt).from(element).save();
-      toast({ title: "Úspěch", description: "PDF bylo úspěšně staženo." });
-    } catch (error) {
-      console.error("Chyba PDF:", error);
-      toast({ title: "Chyba generování", description: "Nastala chyba při vytváření PDF.", variant: "destructive" });
-    } finally {
-      setIsGeneratingPDF(false);
+  try {
+    const html2canvas = (await import('html2canvas')).default;
+    const { jsPDF } = await import('jspdf');
+    const element = document.getElementById('pdf-export-container');
+
+    if (!element) throw new Error('PDF container not found');
+
+    // Dočasně přepni na static aby html2canvas nepočítal offset
+    element.style.position = 'static';
+    element.style.top = 'auto';
+    element.style.left = 'auto';
+
+    // Počkej jeden frame aby se DOM překreslil
+    await new Promise(resolve => requestAnimationFrame(resolve));
+
+    const canvas = await html2canvas(element, {
+      scale: 3,
+      useCORS: true,
+      logging: false,
+      scrollX: 0,
+      scrollY: 0,
+      windowWidth: 800,
+      width: 800,
+      height: element.scrollHeight,
+    });
+
+    // Schovaný zpět
+    element.style.position = 'fixed';
+    element.style.top = '-9999px';
+    element.style.left = '-9999px';
+
+    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgHeightMm = (canvas.height / canvas.width) * pdfWidth * 3;
+    let position = 0;
+
+    pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeightMm);
+    let remainingHeight = imgHeightMm - pdfHeight;
+
+    while (remainingHeight > 0) {
+      position -= pdfHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeightMm);
+      remainingHeight -= pdfHeight;
     }
-  };
+
+    pdf.save(pdfFileName);
+    toast({ title: "Úspěch", description: "PDF bylo úspěšně staženo." });
+  } catch (error) {
+    console.error("Chyba PDF:", error);
+    toast({ title: "Chyba generování", description: "Nastala chyba při vytváření PDF.", variant: "destructive" });
+  } finally {
+    setIsGeneratingPDF(false);
+  }
+};
 
   if (!record) {
     return (
