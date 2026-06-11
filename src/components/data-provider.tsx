@@ -83,4 +83,39 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  //
+  // 3. Interceptor funkce setZaznamy pro automatický asynchronní zápis změn do cloudu
+  const setZaznamy: React.Dispatch<React.SetStateAction<any[]>> = (value) => {
+    setZaznamyState((prev) => {
+      const next = typeof value === 'function' ? value(prev) : value;
+      
+      // Vyhledáme nový nebo upravený záznam a propíšeme ho do Firestore kolekce
+      next.forEach(async (record: any) => {
+        if (!record.id) return;
+        const existing = prev.find(p => p.id === record.id);
+        if (!existing || JSON.stringify(existing) !== JSON.stringify(record)) {
+          try {
+            await setDoc(doc(db, 'zaznamy', record.id), record);
+          } catch (e) {
+            console.error("Chyba zápisu do Firebase:", e);
+          }
+        }
+      });
+      
+      return next;
+    });
+  };
+
+  return (
+    <DataContext.Provider value={{ klienti, zaznamy, setZaznamy, setKlienti: setKlientiState }}>
+      {children}
+    </DataContext.Provider>
+  );
+}
+
+export function useData() {
+  const context = useContext(DataContext);
+  if (!context) {
+    throw new Error('useData musí být použit uvnitř DataProvideru');
+  }
+  return context;
+}
