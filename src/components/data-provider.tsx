@@ -1,9 +1,14 @@
 'use client';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, doc, setDoc, getDoc } from 'firebase/firestore';
+import { 
+  getAuth, 
+  onAuthStateChanged, 
+  signOut, 
+  User 
+} from 'firebase/auth';
 
-// Vaše konfigurace z Google Firebase konzole
 const firebaseConfig = {
   apiKey: "AIzaSyAJ2o8AlTOXKbIAtDYSNnDUvTLChAiGeoQ",
   authDomain: "studio-2327834732-8ec09.firebaseapp.com",
@@ -13,13 +18,22 @@ const firebaseConfig = {
   appId: "1:60078641715:web:1ed05728df58a0272c4946"
 };
 
-// Bezpečná inicializace Firebase s ohledem na Next.js SSR (Server-Side Rendering)
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
+export const auth = getAuth(app);
+
+interface UserProfile {
+  role: 'admin' | 'client';
+  klientId?: string; // Vyplněno pouze pokud role === 'client'
+}
 
 interface DataContextType {
   klienti: any[];
   zaznamy: any[];
+  user: User | null;
+  userProfile: UserProfile | null;
+  authLoading: boolean;
+  logout: () => Promise<void>;
   setZaznamy: React.Dispatch<React.SetStateAction<any[]>>;
   setKlienti: React.Dispatch<React.SetStateAction<any[]>>;
 }
@@ -27,15 +41,51 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  
   const [klienti, setKlientiState] = useState<any[]>([]);
   const [zaznamy, setZaznamyState] = useState<any[]>([]);
 
-  // 1. Načítání a synchronizace klientů z Firestore v reálném čase
+  // 1. Sledování stavu přihlášení uživatele + načtení jeho role z Firestore
   useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
+      
+      if (firebaseUser) {
+        // Pokusíme se načíst profil uživatele (jeho roli) z kolekce 'uzivatele'
+        const userDocRef = doc(db, 'uzivatele', firebaseUser.uid);
+        const userDoc = await getDoc(userDocRef);
+        
+        if (userDoc.exists()) {
+          setUserProfile(userDoc.data() as UserProfile);
+        } else {
+          // Pokud profil neexistuje (např. první přihlášení admina přes Google),
+          // nastavíme výchozí roli admin a profil vytvoříme
+          const defaultAdminProfile: UserProfile = { role: 'admin' };
+          await setDoc(userDocRef, defaultAdminProfile);
+          setUserProfile(defaultAdminProfile);
+        }
+      } else {
+        setUserProfile(null);
+      }
+      setAuthLoading(false);
+    });
+
+    return () => unsubscribeAuth();
+  }, []);
+
+  // 2. Načítání a synchronizace klientů (Pouze pro Admina)
+  useEffect(() => {
+    if (!user || userProfile?.role !== 'admin') {
+      setKlientiState([]);
+      return;
+    }
+
     const unsubscribe = onSnapshot(collection(db, 'klienti'), (snapshot) => {
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
-      // Pokud je cloudová databáze čistá a prázdná, vložíme výchozí testovací subjekty
       if (docs.length === 0) {
         const defaultClients = [
           {
@@ -50,18 +100,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
               { jmeno: "Josef Novák", pozice: "Vedoucí provozu" },
               { jmeno: "Jan Kovář", pozice: "Mistr směny" }
             ]
-          },
-          {
-            id: "sklady-abc",
-            nazev: "Sklady ABC a.s.",
-            ico: "98765432",
-            pracoviste: [
-              { id: "p3", text: "Sklad A", nazev: "Skladová hala ABC", adresa: "Logistický park 45, Brno" }
-            ],
-            odpovedneOsoby: [
-              { jmeno: "Martin Skladník", pozice: "Manažer logistiky" },
-              { jmeno: "Eva Skladová", pozice: "Odpovědná osoba" }
-            ]
           }
         ];
         defaultClients.forEach(async (c) => {
@@ -72,23 +110,38 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [user, userProfile]);
 
-  // 2. Načítání a synchronizace auditních záznamů z Firestore v reálném čase
+  // 3. Načítání a synchronizace auditních záznamů s BEZPEČNOSTNÍM FILTREM ROLÍ
   useEffect(() => {
+    if (!user || !userProfile) {
+      setZaznamyState([]);
+      return;
+    }
+
     const unsubscribe = onSnapshot(collection(db, 'zaznamy'), (snapshot) => {
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setZaznamyState(docs);
+      
+      if (userProfile.role === 'admin') {
+        // Admin vidí kompletně všechny záznamy
+        setZaznamyState(docs);
+      } else {
+        // KLIENT VIDÍ POUZE ZÁZNAMY SVÉ VLASTNÍ FIRMY
+        const klientskeZaznamy = docs.filter(z => z.klientId === userProfile.klientId);
+        setZaznamyState(klientskeZaznamy);
+      }
     });
     return () => unsubscribe();
-  }, []);
+  }, [user, userProfile]);
 
-  // 3. Interceptor funkce setZaznamy pro automatický asynchronní zápis změn do cloudu
+  const logout = async () => {
+    await signOut(auth);
+  };
+
   const setZaznamy: React.Dispatch<React.SetStateAction<any[]>> = (value) => {
     setZaznamyState((prev) => {
       const next = typeof value === 'function' ? value(prev) : value;
       
-      // Vyhledáme nový nebo upravený záznam a propíšeme ho do Firestore kolekce
       next.forEach(async (record: any) => {
         if (!record.id) return;
         const existing = prev.find(p => p.id === record.id);
@@ -106,7 +159,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <DataContext.Provider value={{ klienti, zaznamy, setZaznamy, setKlienti: setKlientiState }}>
+    <DataContext.Provider value={{ 
+      klienti, 
+      zaznamy, 
+      user, 
+      userProfile, 
+      authLoading, 
+      logout, 
+      setZaznamy, 
+      setKlienti: setKlientiState 
+    }}>
       {children}
     </DataContext.Provider>
   );
