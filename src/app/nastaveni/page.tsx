@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useData } from "@/components/data-provider";
@@ -6,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Shield, Save, Award, Info } from "lucide-react";
+import { Shield, Save, Award, Info, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function SettingsPage() {
@@ -20,6 +19,16 @@ export default function SettingsPage() {
       description: "Nastavení auditora bylo úspěšně aktualizováno.",
     });
   };
+
+  // Bezpečnostní pojistka: Dokud se data z cloudu nenačtou, zobrazujeme loading obrazovku
+  if (!nastaveni) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+        <Loader2 className="h-8 w-8 text-primary animate-spin" />
+        <p className="text-muted-foreground text-sm font-medium">Načítám nastavení z cloudu...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-8">
@@ -48,7 +57,7 @@ export default function SettingsPage() {
                   <Label htmlFor="nazev">Název společnosti</Label>
                   <Input 
                     id="nazev" 
-                    value={nastaveni.nazev} 
+                    value={nastaveni.nazev || ""} 
                     onChange={(e) => setNastaveni({...nastaveni, nazev: e.target.value})} 
                   />
                 </div>
@@ -56,7 +65,7 @@ export default function SettingsPage() {
                   <Label htmlFor="ico">IČO</Label>
                   <Input 
                     id="ico" 
-                    value={nastaveni.ico} 
+                    value={nastaveni.ico || ""} 
                     onChange={(e) => setNastaveni({...nastaveni, ico: e.target.value})} 
                   />
                 </div>
@@ -65,7 +74,7 @@ export default function SettingsPage() {
                 <Label htmlFor="adresa">Sídlo společnosti</Label>
                 <Input 
                   id="adresa" 
-                  value={nastaveni.adresa} 
+                  value={nastaveni.adresa || ""} 
                   onChange={(e) => setNastaveni({...nastaveni, adresa: e.target.value})} 
                 />
               </div>
@@ -89,7 +98,7 @@ export default function SettingsPage() {
                 <Label htmlFor="auditor">Jméno auditora</Label>
                 <Input 
                   id="auditor" 
-                  value={nastaveni.auditor} 
+                  value={nastaveni.auditor || ""} 
                   onChange={(e) => setNastaveni({...nastaveni, auditor: e.target.value})} 
                 />
               </div>
@@ -97,7 +106,7 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 <Label>Čísla certifikací</Label>
                 <div className="space-y-3">
-                  {nastaveni.certifikace.map((cert, index) => (
+                  {(nastaveni.certifikace || []).map((cert: string, index: number) => (
                     <div key={index} className="flex gap-2">
                       <Input 
                         value={cert} 
@@ -109,7 +118,14 @@ export default function SettingsPage() {
                       />
                     </div>
                   ))}
-                  <Button type="button" variant="outline" size="sm">Přidat další certifikát</Button>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setNastaveni({...nastaveni, certifikace: [...(nastaveni.certifikace || []), ""]})}
+                  >
+                    Přidat další certifikát
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -128,7 +144,7 @@ export default function SettingsPage() {
             <Info className="h-5 w-5 shrink-0" />
             <div className="space-y-1">
               <p className="font-bold">O aplikaci BPyes AuditFlow</p>
-              <p className="text-sm opacity-90">Verze 1.0.0. Aplikace automaticky ukládá vaše data do lokálního úložiště prohlížeče každých 30 sekund.</p>
+              <p className="text-sm opacity-90">Verze 1.0.0. Aplikace bezpečně synchronizuje svá data s podnikovým řešením Google Firebase.</p>
             </div>
           </CardContent>
         </Card>
