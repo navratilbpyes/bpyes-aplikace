@@ -51,7 +51,7 @@ interface DefectFormState {
   datumOdstraneni: string;
   zaznamProvedl: string;
   zaznamProvedlManualni: string;
-  foto?: string;
+  foto?: string[]; // Změněno na pole pro podporu více fotografií
 }
 
 const createEmptyDefect = (): DefectFormState => ({
@@ -66,7 +66,8 @@ const createEmptyDefect = (): DefectFormState => ({
   odstraneno: false,
   datumOdstraneni: "",
   zaznamProvedl: "",
-  zaznamProvedlManualni: ""
+  zaznamProvedlManualni: "",
+  foto: []
 });
 
 const GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTqBDqcv7REG4fkbLQHUqOQP13KzwB-wAAEaotZldSvZMvTpzfc8OlJvo8isBWkmQBpjYTm-I_X6Lls/pub?output=csv";
@@ -105,7 +106,7 @@ export default function NewInspectionPage() {
     poznamka: ''
   });
 
-  const [checklist, setChecklist] = useState<Record<number, KontrolniBod & { foto?: string, doporuceni?: string, showDoporuceni?: boolean }>>({});
+  const [checklist, setChecklist] = useState<Record<number, KontrolniBod & { foto?: string[], doporuceni?: string, showDoporuceni?: boolean }>>({});
   const [pointDefects, setPointDefects] = useState<Record<number, DefectFormState[]>>({});
   const [googleZavady, setGoogleZavady] = useState<Record<string, Record<number, TypickaZavada[]>>>({});
   const [customPoints, setCustomPoints] = useState<ChecklistPoint[]>([]);
@@ -264,7 +265,7 @@ export default function NewInspectionPage() {
         lokalizace: primaryDefect?.lokalizace || "",
         terminOdstraneni: primaryDefect?.terminOdstraneni || "",
         odpovednaOsoba: primaryDefect?.odpovednaOsoba === 'manual' ? primaryDefect.odpovednaOsobaManualni : (primaryDefect?.odpovednaOsoba || ""),
-        foto: primaryDefect?.foto || ""
+        foto: primaryDefect?.foto || []
       });
 
       if (isDefect) {
@@ -283,13 +284,12 @@ export default function NewInspectionPage() {
             zavaznost: def.zavaznost === 'none' ? "" : def.zavaznost,
             datumOdstraneni: def.odstraneno ? def.datumOdstraneni : undefined,
             zaznamProvedl: def.odstraneno ? (def.zaznamProvedl === 'manual' ? def.zaznamProvedlManualni : def.zaznamProvedl) : undefined,
-            foto: def.foto
+            foto: def.foto || []
           } as any);
         });
       }
     });
 
-    // ROBUSTNÍ ZABEZPEČENÍ ČÍSLA KONTROLY (Už nespadne)
     const generatedCislo = generateRecordNumber(year, countInYear, formData.typKontroly);
     const safeCislo = generatedCislo ? generatedCislo : `2026/000/${formData.typKontroly}`;
 
@@ -309,12 +309,16 @@ export default function NewInspectionPage() {
     localStorage.removeItem('bpyes_draft_kontrola');
     setShowSaveModal(false);
     toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola uložena.` });
-    router.push(`/zaznamy/${newRecord.id}`);
+    
+    // Zpoždění zajistí, že data mají čas se propsat do Provideru/Storage
+    setTimeout(() => {
+      router.push(`/zaznamy/${newRecord.id}`);
+    }, 400);
   };
 
   const renderDefectForm = (def: DefectFormState, idx: number, pointId: number) => {
     const dostupneZavady = pointId ? (googleZavady[formData.typKontroly]?.[pointId] || []) : [];
-    const updateFn = (f: any, v: any) => updateDefect(pointId, idx, f, v);
+    const updateFn = (f: keyof DefectFormState, v: any) => updateDefect(pointId, idx, f, v);
     const removeFn = () => setPointDefects(p => ({ ...p, [pointId]: p[pointId].filter((_, i) => i !== idx) }));
     const ukazatSablony = !!pointId && pointId < 90000;
 
@@ -399,22 +403,51 @@ export default function NewInspectionPage() {
         <div className="pt-2">
           <div className="relative inline-block">
             <Button variant="outline" size="sm" className="text-muted-foreground cursor-pointer">
-              <Camera className="h-4 w-4 mr-2" /> {def.foto ? "Změnit fotku" : "Přidat fotodokumentaci"}
+              <Camera className="h-4 w-4 mr-2" /> Přidat fotodokumentaci
             </Button>
-            <Input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
+            <Input type="file" accept="image/*" multiple className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const r = new FileReader();
-                r.onloadend = () => updateFn('foto', r.result as string);
-                r.readAsDataURL(file);
+                const files = Array.from(e.target.files || []);
+                if (files.length === 0) return;
+                
+                const currentPhotos = def.foto || [];
+                const newPhotos: string[] = [];
+                let loadedCount = 0;
+
+                files.forEach(file => {
+                  const r = new FileReader();
+                  r.onloadend = () => {
+                    newPhotos.push(r.result as string);
+                    loadedCount++;
+                    if (loadedCount === files.length) {
+                      updateFn('foto', [...currentPhotos, ...newPhotos]);
+                    }
+                  };
+                  r.readAsDataURL(file);
+                });
               }}
             />
           </div>
-          {def.foto && (
-            <div className="relative mt-3 inline-block border rounded-md p-1 bg-muted/30">
-              <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow" onClick={() => updateFn('foto', '')}><X className="h-3 w-3" /></Button>
-              <img src={def.foto} alt="Závada" className="h-40 w-auto object-cover rounded shadow-sm" />
+          
+          {def.foto && def.foto.length > 0 && (
+            <div className="flex flex-wrap gap-3 mt-4 bg-muted/20 p-3 rounded-md border border-dashed">
+              {def.foto.map((photoStr, photoIdx) => (
+                <div key={photoIdx} className="relative inline-block">
+                  <Button 
+                    variant="destructive" 
+                    size="icon" 
+                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow z-10" 
+                    onClick={() => {
+                      const newArr = [...(def.foto || [])];
+                      newArr.splice(photoIdx, 1);
+                      updateFn('foto', newArr);
+                    }}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                  <img src={photoStr} alt="Závada" className="h-24 w-auto object-cover rounded shadow-sm border border-slate-200" />
+                </div>
+              ))}
             </div>
           )}
         </div>
