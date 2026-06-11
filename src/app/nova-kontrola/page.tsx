@@ -51,7 +51,7 @@ interface DefectFormState {
   datumOdstraneni: string;
   zaznamProvedl: string;
   zaznamProvedlManualni: string;
-  foto?: string[]; // Změněno na pole pro podporu více fotografií
+  foto?: string[];
 }
 
 const createEmptyDefect = (): DefectFormState => ({
@@ -114,6 +114,7 @@ export default function NewInspectionPage() {
   const [filterPosition, setFilterPosition] = useState<string>("all");
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [revisionNumber, setRevisionNumber] = useState("0");
+  const [isSaving, setIsSaving] = useState(false);
 
   const selectedKlient = klienti.find(k => k.id === formData.klientId);
 
@@ -237,6 +238,7 @@ export default function NewInspectionPage() {
   };
 
   const executeSave = (isDraft: boolean = false) => {
+    setIsSaving(true);
     const year = new Date(formData.datum).getFullYear();
     const countInYear = zaznamy.filter(z => new Date(z.datum).getFullYear() === year).length + 1;
     
@@ -305,15 +307,23 @@ export default function NewInspectionPage() {
       updatedAt: new Date().toISOString()
     };
 
-    setZaznamy(prev => [...prev, newRecord as any]);
-    localStorage.removeItem('bpyes_draft_kontrola');
-    setShowSaveModal(false);
-    toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola uložena.` });
+    // Vynucený synchronní zápis do localStorage před spuštěním přesměrování
+    const updatedZaznamy = [...zaznamy, newRecord as any];
+    setZaznamy(updatedZaznamy);
+    try {
+      localStorage.setItem('bpyes_data_zaznamy', JSON.stringify(updatedZaznamy));
+      localStorage.setItem('zaznamy', JSON.stringify(updatedZaznamy));
+      localStorage.removeItem('bpyes_draft_kontrola');
+    } catch (e) {
+      console.error("Local storage error:", e);
+    }
     
-    // Zpoždění zajistí, že data mají čas se propsat do Provideru/Storage
+    setShowSaveModal(false);
+    toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola úspěšně uložena.` });
+    
     setTimeout(() => {
       router.push(`/zaznamy/${newRecord.id}`);
-    }, 400);
+    }, 1500);
   };
 
   const renderDefectForm = (def: DefectFormState, idx: number, pointId: number) => {
@@ -638,7 +648,10 @@ export default function NewInspectionPage() {
             </CardContent>
             <div className="p-4 border-t flex justify-end gap-2 bg-muted/20">
               <Button variant="outline" onClick={() => setShowSaveModal(false)}>Zrušit</Button>
-              <Button onClick={() => executeSave(false)}>Potvrdit a uložit</Button>
+              <Button onClick={() => executeSave(false)} disabled={isSaving}>
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Potvrdit a uložit
+              </Button>
             </div>
           </Card>
         </div>
@@ -916,8 +929,8 @@ export default function NewInspectionPage() {
           <Button variant="ghost" disabled={step === 1} onClick={() => { setStep(s => s - 1); window.scrollTo(0, 0); }} className="h-11 px-6"><ChevronLeft className="mr-2 h-4 w-4" /> Zpět</Button>
           <div className="flex gap-2">
             {step === 3 && <Button variant="outline" className="h-11 px-6" onClick={() => executeSave(true)}>Uložit rozpracované</Button>}
-            <Button onClick={step === 3 ? () => setShowSaveModal(true) : handleNext} className="h-11 px-8 shadow-sm">
-              {step === 3 ? "Uložit a dokončit" : "Pokračovat"}
+            <Button onClick={step === 3 ? () => setShowSaveModal(true) : handleNext} disabled={isSaving} className="h-11 px-8 shadow-sm">
+              {step === 3 ? (isSaving ? "Ukládám..." : "Uložit a dokončit") : "Pokračovat"}
               {step !== 3 && <ChevronRight className="ml-2 h-4 w-4" />}
             </Button>
           </div>
