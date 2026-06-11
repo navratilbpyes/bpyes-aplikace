@@ -3,7 +3,7 @@
 import { useData } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { 
   ChevronLeft, 
@@ -21,11 +21,81 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/app/lib/utils";
 
+const TEXTS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRiXWE13sHgXwCiFobHGpI3zvKR8nIOnzLtLxWdK7kyn2c4BhZDOwOf5ulUycMyfF1xJXonFSTG88JS/pub?gid=1978510431&single=true&output=csv";
+
+const defaultTexts = {
+  hlavicka_line1: "BEZPEČNOST PRÁCE & POŽÁRNÍ OCHRANA",
+  hlavicka_line2: "Profesionální auditorské a kontrolní systémy",
+  nadpis_zpracovatel: "Zpracovatel / Poskytovatel:",
+  nazev_spolecnosti: "BPyes s.r.o.",
+  udaje_spolecnosti: "Specializovaný poskytovatel služeb v oblasti rizik BOZP a PO | IČO: 04399421 | E-mail: navratil@bpyes.cz",
+  nadpis_klient: "Kontrolovaný subjekt / Klient:",
+  nadpis_misto: "Místo prověrky:",
+  nadpis_prohlaseni: "Prohlášení a konstatování o seznámení:",
+  text_prohlaseni: "Kontrolovaný subjekt / zástupce klienta svým níže uvedeným podpisem stvrzuje, že byl v plném rozsahu, prokazatelně a jasně seznámen se všemi zjištěnými legislativními nedostatky, systémovými neshodami a doporučeními, která jsou detailně specifikována uvnitř této auditní zprávy. Souhlasí s navrženými nápravnými opatřeními a zavazuje se k jejich vyřešení a odstranění v definovaných zákonných či dohodnutých termínech.",
+  titulek_provedl: "Provedl (Za BPyes):",
+  podtitulek_provedl: "Specialista BOZP a PO",
+  titulek_zastupce: "Zástupce klienta / subjektu:",
+  podtitulek_zastupce: "Osoba seznámená s reportem",
+  nadpis_statistika: "1. Shrnutí a statistiky",
+  stat_celkem: "CELKEM BODŮ",
+  stat_vyhovuje: "VYHOVUJE",
+  stat_neshody: "NESHODY (N)",
+  stat_nehodnoceno: "NEHODNOCENO",
+  vyhodnoceni_specialisty: "Závěrečné vyhodnocení:",
+  zucastnene_osoby: "Zúčastněné osoby:",
+  tab_jmeno: "Jméno a příjmení",
+  tab_pozice: "Pracovní pozice / Vztah k subjektu",
+  nadpis_zavady: "2. Registr zjištěných nedostatků a nápravných opatření",
+  nadpis_komplet: "2. Kompletní auditní protokol zjištění",
+  karta_kapitola: "KAPITOLA:",
+  karta_otazka: "Kontrolovaný bod / Otázka:",
+  karta_opatreni: "Návrh opatření:",
+  karta_lokalizace: "Lokalizace a termín:",
+  karta_termin: "Termín:",
+  karta_odpovednost: "Pozice:"
+};
+
+function parseCSV(str: string) {
+  const arr: string[][] = [];
+  let quote = false;
+  let row = 0, col = 0;
+  for (let c = 0; c < str.length; c++) {
+    let cc = str[c], nc = str[c+1];
+    arr[row] = arr[row] || [];
+    arr[row][col] = arr[row][col] || '';
+    if (cc == '"' && quote && nc == '"') { arr[row][col] += cc; ++c; continue; }
+    if (cc == '"') { quote = !quote; continue; }
+    if (cc == ',' && !quote) { ++col; continue; }
+    if (cc == '\r' && nc == '\n' && !quote) { ++row; col = 0; ++c; continue; }
+    if (cc == '\n' && !quote) { ++row; col = 0; continue; }
+    if (cc == '\r' && !quote) { ++row; col = 0; continue; }
+    arr[row][col] += cc;
+  }
+  return arr;
+}
+
 export default function RecordDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
   const { zaznamy, klienti } = useData();
+
+  const [t, setT] = useState<Record<string, string>>(defaultTexts);
+
+  useEffect(() => {
+    fetch(TEXTS_URL)
+      .then(res => res.text())
+      .then(csv => {
+        const rows = parseCSV(csv);
+        const map: Record<string, string> = {};
+        rows.forEach(r => {
+          if(r[0] && r[1]) map[r[0].trim()] = r[1].trim();
+        });
+        setT(prev => ({ ...prev, ...map }));
+      })
+      .catch(console.error);
+  }, []);
 
   const record = useMemo(() => zaznamy.find(z => z.id === params.id), [zaznamy, params.id]);
   const klient = useMemo(() => klienti.find(k => k.id === record?.klientId), [klienti, record]);
@@ -49,8 +119,6 @@ export default function RecordDetailPage() {
   const [filterPosition, setFilterPosition] = useState<string>("all");
   const [onlyDefects, setOnlyDefects] = useState<boolean>(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-
-  // Stavy pro sbalování/rozbalování sekcí v UI
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   const toggleGroup = (sec: string) => {
@@ -100,7 +168,6 @@ export default function RecordDetailPage() {
     });
   }, [record, visibleSections, onlyDefects, filterPosition]);
 
-  // Seskupení pro sbalovací Akordeony v UI
   const groupedKontrolniBody = useMemo(() => {
     const groups: { sekce: string; items: any[] }[] = [];
     const secMap = new Map<string, number>();
@@ -180,7 +247,7 @@ export default function RecordDetailPage() {
         filename:     pdfFileName,
         image:        { type: 'jpeg', quality: 1 },
         html2canvas:  { 
-          scale: 2, 
+          scale: 4, 
           useCORS: true, 
           logging: false
         },
@@ -203,7 +270,7 @@ export default function RecordDetailPage() {
             pdf.setFontSize(9);
             pdf.setTextColor(130);
 
-            pdf.text('BPyes s.r.o.', 20, 12);
+            pdf.text(t.nazev_spolecnosti || "BPyes s.r.o.", 20, 12);
 
             const pageWidth = pdf.internal.pageSize.getWidth();
             const pageHeight = pdf.internal.pageSize.getHeight();
@@ -308,13 +375,12 @@ export default function RecordDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
           <Card className="border-none shadow-sm">
-            <CardHeader><CardTitle className="text-lg">{onlyDefects ? "Registr zjištěných neshod a závad" : "Kompletní protokol prověrky"} ({filteredKontrolniBody.length})</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-lg">{onlyDefects ? t.nadpis_zavady : t.nadpis_komplet} ({filteredKontrolniBody.length})</CardTitle></CardHeader>
             <CardContent className="space-y-6">
               {groupedKontrolniBody.map((group) => {
                 const { sekce, items } = group;
                 const isCollapsed = collapsedGroups[sekce];
                 
-                // Kalkulace statistik pro danou sekci
                 const groupStats = {
                   V: items.filter(i => i.hodnoceni === 'V').length,
                   N: items.filter(i => i.hodnoceni === 'N').length,
@@ -323,7 +389,6 @@ export default function RecordDetailPage() {
 
                 return (
                   <div key={sekce} className="space-y-3">
-                    {/* Interaktivní hlavička sekce (Akordeon) */}
                     <div 
                       onClick={() => toggleGroup(sekce)}
                       className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors gap-3 sm:gap-0"
@@ -331,15 +396,14 @@ export default function RecordDetailPage() {
                       <h3 className="font-bold text-slate-800 text-sm uppercase">{sekce}</h3>
                       <div className="flex items-center gap-4">
                         <div className="flex gap-2 text-[10px] font-bold uppercase tracking-wider">
-                          {groupStats.V > 0 && <span className="text-green-700 bg-green-100 px-2 py-0.5 rounded">Vyhovuje: {groupStats.V}</span>}
-                          {groupStats.N > 0 && <span className="text-red-700 bg-red-100 px-2 py-0.5 rounded">Neshody: {groupStats.N}</span>}
-                          {groupStats.NA > 0 && <span className="text-slate-600 bg-slate-200 px-2 py-0.5 rounded">Ostatní: {groupStats.NA}</span>}
+                          {groupStats.V > 0 && <span className="text-green-700 bg-green-100 px-2 py-0.5 rounded">{t.stat_vyhovuje}: {groupStats.V}</span>}
+                          {groupStats.N > 0 && <span className="text-red-700 bg-red-100 px-2 py-0.5 rounded">{t.stat_neshody}: {groupStats.N}</span>}
+                          {groupStats.NA > 0 && <span className="text-slate-600 bg-slate-200 px-2 py-0.5 rounded">{t.stat_nehodnoceno}: {groupStats.NA}</span>}
                         </div>
                         <ChevronDown className={cn("h-5 w-5 text-slate-500 transition-transform", isCollapsed && "-rotate-90")} />
                       </div>
                     </div>
 
-                    {/* Obsah sekce (skrytý pokud je sbaleno) */}
                     {!isCollapsed && (
                       <div className="space-y-4 pl-1 sm:pl-2 ml-1 sm:ml-2 border-l-2 border-blue-100">
                         {items.map((kb: any) => {
@@ -364,10 +428,10 @@ export default function RecordDetailPage() {
 
                               {isDefect && (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-muted/30 p-3 rounded-lg border">
-                                  <div><span className="text-muted-foreground block mb-0.5">Návrh opatření:</span><p className="font-medium text-slate-900">{kb.navrhOpatreni || 'Není definováno'}</p></div>
-                                  <div><span className="text-muted-foreground block mb-0.5">Místo zjištění:</span><p className="font-bold text-blue-900">{kb.lokalizace || 'Celé pracoviště'}</p></div>
-                                  <div><span className="text-muted-foreground block mb-0.5">Termín odstranění:</span><p className="font-medium">{kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</p></div>
-                                  <div><span className="text-muted-foreground block mb-0.5">Odpovědná pozice:</span><p className="font-bold text-black">{kb.odpovednaOsoba || 'Neuvedena'}</p></div>
+                                  <div><span className="text-muted-foreground block mb-0.5">{t.karta_opatreni}</span><p className="font-medium text-slate-900">{kb.navrhOpatreni || 'Není definováno'}</p></div>
+                                  <div><span className="text-muted-foreground block mb-0.5">{t.nadpis_misto}</span><p className="font-bold text-blue-900">{kb.lokalizace || 'Celé pracoviště'}</p></div>
+                                  <div><span className="text-muted-foreground block mb-0.5">{t.karta_termin}</span><p className="font-medium">{kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</p></div>
+                                  <div><span className="text-muted-foreground block mb-0.5">{t.karta_odpovednost}</span><p className="font-bold text-black">{kb.odpovednaOsoba || 'Neuvedena'}</p></div>
                                 </div>
                               )}
                               {photos.length > 0 && (
@@ -431,8 +495,8 @@ export default function RecordDetailPage() {
               <tbody>
                 <tr>
                   <td style={{ textAlign: 'left', verticalAlign: 'middle', padding: '5px 0' }}>
-                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', letterSpacing: '2px', display: 'block', textTransform: 'uppercase' }}>BEZPEČNOST PRÁCE & POŽÁRNÍ OCHRANA</span>
-                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>Profesionální auditorské a kontrolní systémy</span>
+                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', letterSpacing: '2px', display: 'block', textTransform: 'uppercase' }}>{t.hlavicka_line1}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>{t.hlavicka_line2}</span>
                   </td>
                   <td style={{ textAlign: 'right', verticalAlign: 'middle', width: '160px', padding: '5px 0' }}>
                     <img src="/logo.png" alt="Logo" style={{ maxHeight: '42px', maxWidth: '100%', objectFit: 'contain' }} />
@@ -451,23 +515,23 @@ export default function RecordDetailPage() {
             </div>
 
             <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '12px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
-              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Zpracovatel / Poskytovatel:</span>
-              <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>BPyes s.r.o.</strong>
-              <span style={{ fontSize: '11px', color: '#334155' }}>Specializovaný poskytovatel služeb v oblasti rizik BOZP a PO | <strong>IČO: 04399421</strong> | E-mail: navratil@bpyes.cz</span>
+              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>{t.nadpis_zpracovatel}</span>
+              <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>{t.nazev_spolecnosti}</strong>
+              <span style={{ fontSize: '11px', color: '#334155' }}>{t.udaje_spolecnosti}</span>
             </div>
 
             <div style={{ border: '1px solid #cbd5e1', padding: '15px', marginBottom: '30px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
-              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>Kontrolovaný subjekt / Klient:</span>
+              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '5px' }}>{t.nadpis_klient}</span>
               <strong style={{ fontSize: '14px', color: '#000', display: 'block', marginBottom: '2px' }}>{klient?.nazev || 'Neznámý subjekt'}</strong>
               <span style={{ fontSize: '11px', color: '#334155', display: 'block', marginBottom: '6px' }}>IČO: {klient?.ico || 'Neuvedeno'}</span>
-              <strong style={{ fontSize: '11px', color: '#0f172a' }}>Místo prověrky: {pracovisteList.map(p => p.nazev).join(', ') || 'Celý areál'}</strong><br />
+              <strong style={{ fontSize: '11px', color: '#0f172a' }}>{t.nadpis_misto} {pracovisteList.map(p => p.nazev).join(', ') || 'Celý areál'}</strong><br />
               <span style={{ fontSize: '11px', color: '#475569' }}>{pracovisteList.map(p => p.adresa).join(', ') || ''}</span>
             </div>
 
             <div style={{ border: '2px solid #000', padding: '12px', borderRadius: '6px', backgroundColor: '#f8fafc', margin: '30px 0' }}>
-              <span style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 'bold', color: '#0f172a', display: 'block', marginBottom: '4px' }}>Prohlášení a konstatování o seznámení:</span>
+              <span style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 'bold', color: '#0f172a', display: 'block', marginBottom: '4px' }}>{t.nadpis_prohlaseni}</span>
               <p style={{ fontSize: '11px', color: '#334155', margin: 0, textAlign: 'justify', lineHeight: '1.5' }}>
-                Kontrolovaný subjekt / zástupce klienta svým níže uvedeným podpisem stvrzuje, že byl v plném rozsahu, prokazatelně a jasně seznámen se všemi zjištěnými legislativními nedostatky, systémovými neshodami a doporučeními, která jsou detailně specifikována uvnitř této auditní zprávy. Souhlasí s navrženými nápravnými opatřeními a zavazuje se k jejich vyřešení a odstranění v definovaných zákonných či dohodnutých termínech.
+                {t.text_prohlaseni}
               </p>
             </div>
 
@@ -476,14 +540,14 @@ export default function RecordDetailPage() {
                 <tr>
                   <td style={{ width: '45%', textAlign: 'center', verticalAlign: 'top' }}>
                     <div style={{ borderBottom: '1px solid #000', width: '90%', margin: '0 auto 12px auto', height: '25px' }}></div>
-                    <strong style={{ fontSize: '11px', textTransform: 'uppercase', display: 'block', color: '#000' }}>Provedl (Za BPyes):</strong>
-                    <span style={{ fontSize: '10px', color: '#64748b', display: 'block', marginTop: '2px' }}>Specialista BOZP a PO</span>
+                    <strong style={{ fontSize: '11px', textTransform: 'uppercase', display: 'block', color: '#000' }}>{t.titulek_provedl}</strong>
+                    <span style={{ fontSize: '10px', color: '#64748b', display: 'block', marginTop: '2px' }}>{t.podtitulek_provedl}</span>
                   </td>
                   <td style={{ width: '10%' }}></td>
                   <td style={{ width: '45%', textAlign: 'center', verticalAlign: 'top' }}>
                     <div style={{ borderBottom: '1px solid #000', width: '90%', margin: '0 auto 12px auto', height: '25px' }}></div>
-                    <strong style={{ fontSize: '11px', textTransform: 'uppercase', display: 'block', color: '#000' }}>Zástupce klienta / subjektu:</strong>
-                    <span style={{ fontSize: '10px', color: '#64748b', display: 'block', marginTop: '2px' }}>Osoba seznámená s reportem</span>
+                    <strong style={{ fontSize: '11px', textTransform: 'uppercase', display: 'block', color: '#000' }}>{t.titulek_zastupce}</strong>
+                    <span style={{ fontSize: '10px', color: '#64748b', display: 'block', marginTop: '2px' }}>{t.podtitulek_zastupce}</span>
                   </td>
                 </tr>
               </tbody>
@@ -494,29 +558,29 @@ export default function RecordDetailPage() {
 
           <div style={{ padding: '10px 0' }}>
             <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '20px', color: '#000' }}>
-              1. Shrnutí a statistiky
+              {t.nadpis_statistika}
             </h2>
             <table style={{ width: '100%', tableLayout: 'fixed', textAlign: 'center', borderCollapse: 'collapse', marginBottom: '25px' }}>
               <tbody>
                 <tr>
                   <td style={{ width: '25%', padding: '10px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc' }}>
-                    <strong style={{ fontSize: '18px', display: 'block', color: '#000' }}>{stats.total}</strong><span style={{ fontSize: '9px', fontWeight: 'bold', color: '#475569' }}>CELKEM BODŮ</span>
+                    <strong style={{ fontSize: '18px', display: 'block', color: '#000' }}>{stats.total}</strong><span style={{ fontSize: '9px', fontWeight: 'bold', color: '#475569' }}>{t.stat_celkem}</span>
                   </td>
                   <td style={{ width: '25%', padding: '10px', border: '1px solid #cbd5e1', backgroundColor: '#f0fdf4', color: '#166534' }}>
-                    <strong style={{ fontSize: '18px', display: 'block' }}>{stats.V}</strong><span style={{ fontSize: '9px', fontWeight: 'bold' }}>VYHOVUJE</span>
+                    <strong style={{ fontSize: '18px', display: 'block' }}>{stats.V}</strong><span style={{ fontSize: '9px', fontWeight: 'bold' }}>{t.stat_vyhovuje}</span>
                   </td>
                   <td style={{ width: '25%', padding: '10px', border: '1px solid #cbd5e1', backgroundColor: '#fef2f2', color: '#991b1b' }}>
-                    <strong style={{ fontSize: '18px', display: 'block' }}>{stats.N}</strong><span style={{ fontSize: '9px', fontWeight: 'bold', color: '#991b1b' }}>NESHODY (N)</span>
+                    <strong style={{ fontSize: '18px', display: 'block' }}>{stats.N}</strong><span style={{ fontSize: '9px', fontWeight: 'bold', color: '#991b1b' }}>{t.stat_neshody}</span>
                   </td>
                   <td style={{ width: '25%', padding: '10px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', color: '#64748b' }}>
-                    <strong style={{ fontSize: '18px', display: 'block' }}>{stats.NK + stats.NA}</strong><span style={{ fontSize: '9px', fontWeight: 'bold' }}>NEHODNOCENO</span>
+                    <strong style={{ fontSize: '18px', display: 'block' }}>{stats.NK + stats.NA}</strong><span style={{ fontSize: '9px', fontWeight: 'bold' }}>{t.stat_nehodnoceno}</span>
                   </td>
                 </tr>
               </tbody>
             </table>
 
             <div style={{ marginBottom: '25px' }}>
-              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Závěrečné vyhodnocení:</span>
+              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>{t.vyhodnoceni_specialisty}</span>
               <div style={{ padding: '12px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', borderRadius: '4px', fontSize: '11px', fontStyle: 'italic', lineHeight: '1.5', textAlign: 'justify' }}>
                 {record.poznamka || "Při prověrce nebylo vloženo žádné doprovodné textové hodnocení."}
               </div>
@@ -526,12 +590,12 @@ export default function RecordDetailPage() {
               <tbody>
                 <tr>
                   <td style={{ padding: 0 }}>
-                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Zúčastněné osoby:</span>
+                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>{t.zucastnene_osoby}</span>
                     <table style={{ width: '100%', tableLayout: 'fixed', fontSize: '11px', borderCollapse: 'collapse', border: '1px solid #cbd5e1' }}>
                       <thead>
                         <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1px solid #cbd5e1' }}>
-                          <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 'bold', borderRight: '1px solid #cbd5e1', width: '50%' }}>Jméno a příjmení</th>
-                          <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 'bold', width: '50%' }}>Pracovní pozice / Vztah k subjektu</th>
+                          <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 'bold', borderRight: '1px solid #cbd5e1', width: '50%' }}>{t.tab_jmeno}</th>
+                          <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 'bold', width: '50%' }}>{t.tab_pozice}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -557,14 +621,13 @@ export default function RecordDetailPage() {
 
           <div style={{ padding: '10px 0' }}>
             <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '20px', color: '#000' }}>
-              2. {onlyDefects ? "Registr zjištěných nedostatků a nápravných opatření" : "Kompletní auditní protokol zjištění"}
+              {onlyDefects ? t.nadpis_zavady : t.nadpis_komplet}
             </h2>
             <div style={{ display: 'block' }}>
               {filteredKontrolniBody.map((kb: any) => {
                 const isDefect = kb.hodnoceni === 'N';
                 const photos = extractPhotos(kb);
                 return (
-                  // OPRAVA: POUŽITÍ TABULKY JAKO OBALU ZABRÁNÍ ROZŘÍZNUTÍ RÁMEČKU (Table-Wrap Hack)
                   <table key={kb.id || kb.bod} className="avoid-break" style={{ width: '100%', marginBottom: '15px', pageBreakInside: 'avoid', breakInside: 'avoid', borderCollapse: 'collapse' }}>
                     <tbody>
                       <tr style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
@@ -574,7 +637,7 @@ export default function RecordDetailPage() {
                               <tbody>
                                 <tr>
                                   <td style={{ textAlign: 'left', fontSize: '11px', fontWeight: 'bold', color: '#000' }}>
-                                    <span style={{ color: isDefect ? '#991b1b' : '#166534', marginRight: '6px' }}>[{kb.bod}]</span> KAPITOLA: <span style={{ textTransform: 'uppercase', color: '#475569', fontSize: '10px' }}>{kb.sekce || 'Ostatní'}</span>
+                                    <span style={{ color: isDefect ? '#991b1b' : '#166534', marginRight: '6px' }}>[{kb.bod}]</span> {t.karta_kapitola} <span style={{ textTransform: 'uppercase', color: '#475569', fontSize: '10px' }}>{kb.sekce || 'Ostatní'}</span>
                                   </td>
                                   <td style={{ textAlign: 'right', fontSize: '9px', fontWeight: 'bold', color: isDefect ? '#991b1b' : '#166534' }}>
                                     {isDefect ? '❌ NESHODA' : kb.hodnoceni === 'V' ? '✅ VYHOVUJE' : '– NEHODNOCENO'}
@@ -583,7 +646,7 @@ export default function RecordDetailPage() {
                               </tbody>
                             </table>
                             <div style={{ fontSize: '11px', marginBottom: '6px' }}>
-                              <span style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', display: 'block' }}>Kontrolovaný bod / Otázka:</span>
+                              <span style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', display: 'block' }}>{t.karta_otazka}</span>
                               <strong style={{ color: '#0f172a' }}>{kb.otazka || kb.popis || 'Bez popisu'}</strong>
                             </div>
                             {isDefect && (
@@ -591,14 +654,14 @@ export default function RecordDetailPage() {
                                 <tbody>
                                   <tr>
                                     <td style={{ padding: '6px', width: '55%', verticalAlign: 'top', borderRight: '1px solid #e2e8f0' }}>
-                                      <span style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Návrh opatření:</span>
+                                      <span style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>{t.karta_opatreni}</span>
                                       <span style={{ color: '#334155', display: 'block', marginTop: '2px' }}>{kb.navrhOpatreni || 'Není definováno'}</span>
                                     </td>
                                     <td style={{ padding: '6px', width: '45%', verticalAlign: 'top' }}>
-                                      <span style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Lokalizace a termín:</span>
+                                      <span style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>{t.karta_lokalizace}</span>
                                       <strong style={{ color: '#1e3a8a', display: 'block', marginTop: '2px' }}>{kb.lokalizace || 'Objekt společnosti'}</strong>
-                                      <span style={{ display: 'block', marginTop: '4px' }}>Termín: {kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</span>
-                                      <span style={{ display: 'block', marginTop: '2px' }}>Pozice: {kb.odpovednaOsoba || 'Neuvedena'}</span>
+                                      <span style={{ display: 'block', marginTop: '4px' }}>{t.karta_termin} {kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</span>
+                                      <span style={{ display: 'block', marginTop: '2px' }}>{t.karta_odpovednost} {kb.odpovednaOsoba || 'Neuvedena'}</span>
                                     </td>
                                   </tr>
                                 </tbody>
