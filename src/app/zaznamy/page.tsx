@@ -136,7 +136,7 @@ export default function RecordDetailPage() {
   };
 
   // Funkce pro změnu stavu vyřešení neshody klientem
-  const handleToggleResolve = async (bodId: string || number) => {
+  const handleToggleResolve = async (bodId: string | number) => {
     if (!record) return;
 
     const updatedBody = record.kontrolniBody.map((kb: any) => {
