@@ -1,6 +1,6 @@
 'use client';
 
-import { useData } from "@/components/data-provider";
+import { useData, db } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useState, useEffect, useMemo } from "react";
@@ -34,7 +34,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { KontrolniBod, Zavada } from "@/app/lib/types";
 
 // Firebase importy přímo z Google knihoven
-import { getApp } from "firebase/app";
+import { doc, collection, setDoc } from "firebase/firestore";
 import { getFirestore, doc, collection, setDoc } from "firebase/firestore";
 
 interface TypickaZavada {
@@ -303,8 +303,7 @@ export default function NewInspectionPage() {
       const safeCislo = generatedCislo ? generatedCislo : `2026/000/${formData.typKontroly}`;
 
       // Bezpečné načtení Firebase instance
-      const dbInstance = getFirestore(getApp());
-      const newRecordRef = doc(collection(dbInstance, 'zaznamy'));
+      const newRecordRef = doc(collection(db, 'zaznamy'));
 
       const newRecord = {
         id: newRecordRef.id,
