@@ -18,7 +18,7 @@ import {
   CheckSquare,
   Square,
   Filter,
-  Loader2 // <-- Zde chyběla tato ikonka načítání!
+  Loader2
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -33,9 +33,8 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { KontrolniBod, Zavada } from "@/app/lib/types";
 
-// Firebase importy přímo z Google knihoven
+// Čisté importy pouze pro práci s dokumenty
 import { doc, collection, setDoc } from "firebase/firestore";
-import { getFirestore, doc, collection, setDoc } from "firebase/firestore";
 
 interface TypickaZavada {
   nazev: string;
@@ -242,7 +241,6 @@ export default function NewInspectionPage() {
     window.scrollTo(0, 0);
   };
 
-  // Finálně opravená metoda s bezpečným zápisem do Firebase
   const executeSave = async (isDraft: boolean = false) => {
     setIsSaving(true);
     try {
@@ -302,7 +300,7 @@ export default function NewInspectionPage() {
       const generatedCislo = generateRecordNumber(year, countInYear, formData.typKontroly);
       const safeCislo = generatedCislo ? generatedCislo : `2026/000/${formData.typKontroly}`;
 
-      // Bezpečné načtení Firebase instance
+      // Bezpečné načtení reference přes sdílenou db
       const newRecordRef = doc(collection(db, 'zaznamy'));
 
       const newRecord = {
@@ -317,17 +315,17 @@ export default function NewInspectionPage() {
         updatedAt: new Date().toISOString()
       };
 
-      // Nejdřív počkáme na Firebase cloud
+      // Zápis do cloudu
       await setDoc(newRecordRef, newRecord);
 
-      // Pak aktualizujeme prohlížeč
+      // Aktualizace lokálního zobrazení
       setZaznamy(prev => {
         if (prev.some(p => p.id === newRecord.id)) return prev;
         return [...prev, newRecord as any];
       });
       
       setShowSaveModal(false);
-      toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola úspěšně odeslána a uložena.` });
+      toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola úspěšně odeslána do cloudu.` });
       
       setTimeout(() => {
         router.push(`/zaznamy/${newRecord.id}`);
