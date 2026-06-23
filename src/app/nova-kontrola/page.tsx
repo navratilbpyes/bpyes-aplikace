@@ -31,6 +31,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { KontrolniBod, Zavada } from "@/app/lib/types";
+import { doc, collection } from "firebase/firestore"; // Přidán import pro generování ID
+import { db } from "@/components/data-provider"; // Přidán import db
 
 interface TypickaZavada {
   nazev: string;
@@ -237,93 +239,95 @@ export default function NewInspectionPage() {
     window.scrollTo(0, 0);
   };
 
-  const executeSave = (isDraft: boolean = false) => {
+  const executeSave = async (isDraft: boolean = false) => {
     setIsSaving(true);
-    const year = new Date(formData.datum).getFullYear();
-    const countInYear = zaznamy.filter(z => new Date(z.datum).getFullYear() === year).length + 1;
-    
-    const finalKontrolniBody: any[] = [];
-    const aggregatedZavady: Zavada[] = [];
-    let defectCounter = 1;
+    try {
+      const year = new Date(formData.datum).getFullYear();
+      const countInYear = zaznamy.filter(z => new Date(z.datum).getFullYear() === year).length + 1;
+      
+      const finalKontrolniBody: any[] = [];
+      const aggregatedZavady: Zavada[] = [];
+      let defectCounter = 1;
 
-    activeChecklistFlat.forEach(basePoint => {
-      const pointState = checklist[basePoint.id];
-      if (!pointState || !pointState.hodnoceni || pointState.hodnoceni === 'NK') return;
+      activeChecklistFlat.forEach(basePoint => {
+        const pointState = checklist[basePoint.id];
+        if (!pointState || !pointState.hodnoceni || pointState.hodnoceni === 'NK') return;
 
-      const isDefect = pointState.hodnoceni === 'N';
-      const defectsForThisPoint = pointDefects[basePoint.id] || [];
-      const primaryDefect = isDefect && defectsForThisPoint.length > 0 ? defectsForThisPoint[0] : null;
+        const isDefect = pointState.hodnoceni === 'N';
+        const defectsForThisPoint = pointDefects[basePoint.id] || [];
+        const primaryDefect = isDefect && defectsForThisPoint.length > 0 ? defectsForThisPoint[0] : null;
 
-      finalKontrolniBody.push({
-        bod: basePoint.id,
-        otazka: basePoint.text || "Nepopsaný bod",
-        sekce: basePoint.sekce,
-        hodnoceni: pointState.hodnoceni,
-        doporuceni: pointState.doporuceni || "",
-        showDoporuceni: pointState.showDoporuceni || false,
-        poznamka: pointState.poznamka || "",
-        popis: primaryDefect?.popis || "",
-        navrhOpatreni: primaryDefect?.navrhOpatreni || "",
-        lokalizace: primaryDefect?.lokalizace || "",
-        terminOdstraneni: primaryDefect?.terminOdstraneni || "",
-        odpovednaOsoba: primaryDefect?.odpovednaOsoba === 'manual' ? primaryDefect.odpovednaOsobaManualni : (primaryDefect?.odpovednaOsoba || ""),
-        foto: primaryDefect?.foto || []
+        finalKontrolniBody.push({
+          bod: basePoint.id,
+          otazka: basePoint.text || "Nepopsaný bod",
+          sekce: basePoint.sekce,
+          hodnoceni: pointState.hodnoceni,
+          doporuceni: pointState.doporuceni || "",
+          showDoporuceni: pointState.showDoporuceni || false,
+          poznamka: pointState.poznamka || "",
+          popis: primaryDefect?.popis || "",
+          navrhOpatreni: primaryDefect?.navrhOpatreni || "",
+          lokalizace: primaryDefect?.lokalizace || "",
+          terminOdstraneni: primaryDefect?.terminOdstraneni || "",
+          odpovednaOsoba: primaryDefect?.odpovednaOsoba === 'manual' ? primaryDefect.odpovednaOsobaManualni : (primaryDefect?.odpovednaOsoba || ""),
+          foto: primaryDefect?.foto || []
+        });
+
+        if (isDefect) {
+          defectsForThisPoint.forEach(def => {
+            aggregatedZavady.push({
+              id: def.uid,
+              cislo: defectCounter++,
+              bodKontroly: basePoint.id,
+              sekce: basePoint.sekce,
+              popis: def.popis || "",
+              navrhOpatreni: def.navrhOpatreni || "",
+              terminOdstraneni: def.terminOdstraneni || "",
+              odpovednaOsoba: def.odpovednaOsoba === 'manual' ? def.odpovednaOsobaManualni : def.odpovednaOsoba,
+              stavOdstraneni: def.odstraneno ? 'odstranena' : 'otevrena',
+              lokalizace: def.lokalizace,
+              zavaznost: def.zavaznost === 'none' ? "" : def.zavaznost,
+              datumOdstraneni: def.odstraneno ? def.datumOdstraneni : undefined,
+              zaznamProvedl: def.odstraneno ? (def.zaznamProvedl === 'manual' ? def.zaznamProvedlManualni : def.zaznamProvedl) : undefined,
+              foto: def.foto || []
+            } as any);
+          });
+        }
       });
 
-      if (isDefect) {
-        defectsForThisPoint.forEach(def => {
-          aggregatedZavady.push({
-            id: def.uid,
-            cislo: defectCounter++,
-            bodKontroly: basePoint.id,
-            sekce: basePoint.sekce,
-            popis: def.popis || "",
-            navrhOpatreni: def.navrhOpatreni || "",
-            terminOdstraneni: def.terminOdstraneni || "",
-            odpovednaOsoba: def.odpovednaOsoba === 'manual' ? def.odpovednaOsobaManualni : def.odpovednaOsoba,
-            stavOdstraneni: def.odstraneno ? 'odstranena' : 'otevrena',
-            lokalizace: def.lokalizace,
-            zavaznost: def.zavaznost === 'none' ? "" : def.zavaznost,
-            datumOdstraneni: def.odstraneno ? def.datumOdstraneni : undefined,
-            zaznamProvedl: def.odstraneno ? (def.zaznamProvedl === 'manual' ? def.zaznamProvedlManualni : def.zaznamProvedl) : undefined,
-            foto: def.foto || []
-          } as any);
-        });
-      }
-    });
+      const generatedCislo = generateRecordNumber(year, countInYear, formData.typKontroly);
+      const safeCislo = generatedCislo ? generatedCislo : `2026/000/${formData.typKontroly}`;
 
-    const generatedCislo = generateRecordNumber(year, countInYear, formData.typKontroly);
-    const safeCislo = generatedCislo ? generatedCislo : `2026/000/${formData.typKontroly}`;
+      // Generování unikátního Firebase ID
+      const newRecordRef = doc(collection(db, 'zaznamy'));
 
-    const newRecord = {
-      id: Math.random().toString(36).substring(7),
-      cislo: safeCislo,
-      revize: parseInt(revisionNumber) || 0,
-      ...formData,
-      kontrolniBody: finalKontrolniBody,
-      zavady: aggregatedZavady,
-      stav: isDraft ? 'otevreny' : 'uzavreny' as any,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+      const newRecord = {
+        id: newRecordRef.id, // Použijeme korektní Firebase ID
+        cislo: safeCislo,
+        revize: parseInt(revisionNumber) || 0,
+        ...formData, // Obsahuje klientId, což zajistí viditelnost pro klienta
+        kontrolniBody: finalKontrolniBody,
+        zavady: aggregatedZavady,
+        stav: isDraft ? 'otevreny' : 'uzavreny' as any,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
 
-    // Vynucený synchronní zápis do localStorage před spuštěním přesměrování
-    const updatedZaznamy = [...zaznamy, newRecord as any];
-    setZaznamy(updatedZaznamy);
-    try {
-      localStorage.setItem('bpyes_data_zaznamy', JSON.stringify(updatedZaznamy));
-      localStorage.setItem('zaznamy', JSON.stringify(updatedZaznamy));
-      localStorage.removeItem('bpyes_draft_kontrola');
+      // Zápis nového záznamu do stavu, což spouští sync do Firebase přes data-provider.tsx
+      setZaznamy(prev => [...prev, newRecord as any]);
+      
+      setShowSaveModal(false);
+      toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola úspěšně odeslána do cloudu.` });
+      
+      setTimeout(() => {
+        router.push(`/zaznamy/${newRecord.id}`);
+      }, 1500);
+
     } catch (e) {
-      console.error("Local storage error:", e);
+       console.error("Chyba při ukládání záznamu:", e);
+       toast({ title: "Chyba uložení", description: "Nepodařilo se uložit záznam.", variant: "destructive" });
+       setIsSaving(false);
     }
-    
-    setShowSaveModal(false);
-    toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola úspěšně uložena.` });
-    
-    setTimeout(() => {
-      router.push(`/zaznamy/${newRecord.id}`);
-    }, 1500);
   };
 
   const renderDefectForm = (def: DefectFormState, idx: number, pointId: number) => {
