@@ -302,7 +302,6 @@ export default function NewInspectionPage() {
       const safeCislo = generatedCislo ? generatedCislo : `2026/000/${formData.typKontroly}`;
 
       // Získání instance databáze a vytvoření reference
-      const db = getFirestore(getApp());
       const newRecordRef = doc(collection(db, 'zaznamy'));
 
       const newRecord = {
