@@ -287,10 +287,10 @@ export default function NewInspectionPage() {
               terminOdstraneni: def.terminOdstraneni || "",
               odpovednaOsoba: def.odpovednaOsoba === 'manual' ? def.odpovednaOsobaManualni : def.odpovednaOsoba,
               stavOdstraneni: def.odstraneno ? 'odstranena' : 'otevrena',
-              lokalizace: def.lokalizace,
+              lokalizace: def.lokalizace || "",
               zavaznost: def.zavaznost === 'none' ? "" : def.zavaznost,
-              datumOdstraneni: def.odstraneno ? def.datumOdstraneni : undefined,
-              zaznamProvedl: def.odstraneno ? (def.zaznamProvedl === 'manual' ? def.zaznamProvedlManualni : def.zaznamProvedl) : undefined,
+              datumOdstraneni: def.odstraneno ? def.datumOdstraneni : "",
+              zaznamProvedl: def.odstraneno ? (def.zaznamProvedl === 'manual' ? def.zaznamProvedlManualni : def.zaznamProvedl) : "",
               foto: def.foto || []
             } as any);
           });
@@ -300,7 +300,6 @@ export default function NewInspectionPage() {
       const generatedCislo = generateRecordNumber(year, countInYear, formData.typKontroly);
       const safeCislo = generatedCislo ? generatedCislo : `2026/000/${formData.typKontroly}`;
 
-      // Bezpečné načtení reference přes sdílenou db
       const newRecordRef = doc(collection(db, 'zaznamy'));
 
       const newRecord = {
@@ -315,20 +314,24 @@ export default function NewInspectionPage() {
         updatedAt: new Date().toISOString()
       };
 
-      // Zápis do cloudu
-      await setDoc(newRecordRef, newRecord);
+      // ZDE JE TO NUKLEÁRNÍ ŘEŠENÍ: 
+      // Všechny "undefined" hodnoty, které by Firebase zablokovaly, se tiše smažou.
+      const sanitizedRecord = JSON.parse(JSON.stringify(newRecord));
+
+      // Zápis očištěného záznamu do cloudu
+      await setDoc(newRecordRef, sanitizedRecord);
 
       // Aktualizace lokálního zobrazení
       setZaznamy(prev => {
-        if (prev.some(p => p.id === newRecord.id)) return prev;
-        return [...prev, newRecord as any];
+        if (prev.some(p => p.id === sanitizedRecord.id)) return prev;
+        return [...prev, sanitizedRecord as any];
       });
       
       setShowSaveModal(false);
       toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola úspěšně odeslána do cloudu.` });
       
       setTimeout(() => {
-        router.push(`/zaznamy/${newRecord.id}`);
+        router.push(`/zaznamy/${sanitizedRecord.id}`);
       }, 500);
 
     } catch (e) {
