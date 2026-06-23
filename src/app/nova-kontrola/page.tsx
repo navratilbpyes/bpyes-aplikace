@@ -1,6 +1,6 @@
 'use client';
 
-import { useData } from "@/components/data-provider";
+import { useData, db } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useState, useEffect, useMemo } from "react";
