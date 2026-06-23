@@ -1,6 +1,6 @@
 'use client';
 
-import { useData, db } from "@/components/data-provider";
+import { useData } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useState, useEffect, useMemo } from "react";
@@ -17,7 +17,8 @@ import {
   Camera,
   CheckSquare,
   Square,
-  Filter
+  Filter,
+  Loader2 // <-- Zde chyběla tato ikonka načítání!
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -32,9 +33,9 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { KontrolniBod, Zavada } from "@/app/lib/types";
 
-// Nové importy pro přímý a bezpečný zápis do Firebase
-import { doc, collection, setDoc, getFirestore } from "firebase/firestore"; 
+// Firebase importy přímo z Google knihoven
 import { getApp } from "firebase/app";
+import { getFirestore, doc, collection, setDoc } from "firebase/firestore";
 
 interface TypickaZavada {
   nazev: string;
@@ -241,7 +242,7 @@ export default function NewInspectionPage() {
     window.scrollTo(0, 0);
   };
 
-  // ZDE JE HLAVNÍ OPRAVA - PŘÍMÝ A POČKANÝ ZÁPIS DO FIREBASE
+  // Finálně opravená metoda s bezpečným zápisem do Firebase
   const executeSave = async (isDraft: boolean = false) => {
     setIsSaving(true);
     try {
@@ -301,8 +302,9 @@ export default function NewInspectionPage() {
       const generatedCislo = generateRecordNumber(year, countInYear, formData.typKontroly);
       const safeCislo = generatedCislo ? generatedCislo : `2026/000/${formData.typKontroly}`;
 
-      // Získání instance databáze a vytvoření reference
-      const newRecordRef = doc(collection(db, 'zaznamy'));
+      // Bezpečné načtení Firebase instance
+      const dbInstance = getFirestore(getApp());
+      const newRecordRef = doc(collection(dbInstance, 'zaznamy'));
 
       const newRecord = {
         id: newRecordRef.id,
@@ -316,27 +318,25 @@ export default function NewInspectionPage() {
         updatedAt: new Date().toISOString()
       };
 
-      // 1. NEJPRVE BEZPEČNĚ ULOŽÍME DO FIREBASE (S asynchronním čekáním `await`)
+      // Nejdřív počkáme na Firebase cloud
       await setDoc(newRecordRef, newRecord);
 
-      // 2. AŽ POTÉ propíšeme do lokálního stavu
+      // Pak aktualizujeme prohlížeč
       setZaznamy(prev => {
-         // Ochrana proti duplikaci, pokud by Firebase onSnapshot reagoval rychleji
-         if (prev.some(p => p.id === newRecord.id)) return prev;
-         return [...prev, newRecord as any];
+        if (prev.some(p => p.id === newRecord.id)) return prev;
+        return [...prev, newRecord as any];
       });
       
       setShowSaveModal(false);
-      toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola byla úspěšně nahrána do cloudu.` });
+      toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola úspěšně odeslána a uložena.` });
       
-      // 3. PŘESMĚROVÁNÍ (až když je vše na 100% zapsané)
       setTimeout(() => {
         router.push(`/zaznamy/${newRecord.id}`);
       }, 500);
 
     } catch (e) {
        console.error("Chyba při ukládání záznamu do Firebase:", e);
-       toast({ title: "Chyba uložení", description: "Záznam se nepodařilo uložit do databáze. Zkuste to prosím znovu.", variant: "destructive" });
+       toast({ title: "Chyba uložení", description: "Záznam se nepodařilo uložit do cloudu.", variant: "destructive" });
        setIsSaving(false);
     }
   };
