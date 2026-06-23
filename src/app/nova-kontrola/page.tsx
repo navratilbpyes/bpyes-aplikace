@@ -31,8 +31,10 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { KontrolniBod, Zavada } from "@/app/lib/types";
-import { doc, collection } from "firebase/firestore"; // Přidán import pro generování ID
-import { db } from "@/components/data-provider"; // Přidán import db
+
+// Nové importy pro přímý a bezpečný zápis do Firebase
+import { doc, collection, setDoc, getFirestore } from "firebase/firestore"; 
+import { getApp } from "firebase/app";
 
 interface TypickaZavada {
   nazev: string;
@@ -239,6 +241,7 @@ export default function NewInspectionPage() {
     window.scrollTo(0, 0);
   };
 
+  // ZDE JE HLAVNÍ OPRAVA - PŘÍMÝ A POČKANÝ ZÁPIS DO FIREBASE
   const executeSave = async (isDraft: boolean = false) => {
     setIsSaving(true);
     try {
@@ -298,14 +301,15 @@ export default function NewInspectionPage() {
       const generatedCislo = generateRecordNumber(year, countInYear, formData.typKontroly);
       const safeCislo = generatedCislo ? generatedCislo : `2026/000/${formData.typKontroly}`;
 
-      // Generování unikátního Firebase ID
+      // Získání instance databáze a vytvoření reference
+      const db = getFirestore(getApp());
       const newRecordRef = doc(collection(db, 'zaznamy'));
 
       const newRecord = {
-        id: newRecordRef.id, // Použijeme korektní Firebase ID
+        id: newRecordRef.id,
         cislo: safeCislo,
         revize: parseInt(revisionNumber) || 0,
-        ...formData, // Obsahuje klientId, což zajistí viditelnost pro klienta
+        ...formData,
         kontrolniBody: finalKontrolniBody,
         zavady: aggregatedZavady,
         stav: isDraft ? 'otevreny' : 'uzavreny' as any,
@@ -313,19 +317,27 @@ export default function NewInspectionPage() {
         updatedAt: new Date().toISOString()
       };
 
-      // Zápis nového záznamu do stavu, což spouští sync do Firebase přes data-provider.tsx
-      setZaznamy(prev => [...prev, newRecord as any]);
+      // 1. NEJPRVE BEZPEČNĚ ULOŽÍME DO FIREBASE (S asynchronním čekáním `await`)
+      await setDoc(newRecordRef, newRecord);
+
+      // 2. AŽ POTÉ propíšeme do lokálního stavu
+      setZaznamy(prev => {
+         // Ochrana proti duplikaci, pokud by Firebase onSnapshot reagoval rychleji
+         if (prev.some(p => p.id === newRecord.id)) return prev;
+         return [...prev, newRecord as any];
+      });
       
       setShowSaveModal(false);
-      toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola úspěšně odeslána do cloudu.` });
+      toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola byla úspěšně nahrána do cloudu.` });
       
+      // 3. PŘESMĚROVÁNÍ (až když je vše na 100% zapsané)
       setTimeout(() => {
         router.push(`/zaznamy/${newRecord.id}`);
-      }, 1500);
+      }, 500);
 
     } catch (e) {
-       console.error("Chyba při ukládání záznamu:", e);
-       toast({ title: "Chyba uložení", description: "Nepodařilo se uložit záznam.", variant: "destructive" });
+       console.error("Chyba při ukládání záznamu do Firebase:", e);
+       toast({ title: "Chyba uložení", description: "Záznam se nepodařilo uložit do databáze. Zkuste to prosím znovu.", variant: "destructive" });
        setIsSaving(false);
     }
   };
