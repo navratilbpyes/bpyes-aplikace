@@ -22,6 +22,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/app/lib/utils";
@@ -47,6 +48,42 @@ function parseCSV(str: string) {
   return arr;
 }
 
+// Funkce pro zmenšení obrázku klienta
+const compressImage = (file: File): Promise<string> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1024;
+        const MAX_HEIGHT = 1024;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
 export default function RecordDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -54,8 +91,8 @@ export default function RecordDetailPage() {
   const { zaznamy, klienti, userProfile, setZaznamy } = useData();
 
   const [t, setT] = useState<Record<string, string>>({
-    nadpis_zavady: "2. Registr zjištěných nedostatků a nápravných opatření",
-    nadpis_komplet: "2. Kompletní auditní protokol zjištění",
+    nadpis_zavady: "Registr zjištěných nedostatků a nápravných opatření",
+    nadpis_komplet: "Kompletní auditní protokol zjištění",
     karta_opatreni: "Návrh opatření:",
     nadpis_misto: "Místo prověrky:",
     karta_termin: "Termín:",
@@ -66,9 +103,9 @@ export default function RecordDetailPage() {
   
   const [isLoading, setIsLoading] = useState(true);
   
-  // Stavy pro klientský formulář odstranění
+  // Stavy pro klientský formulář odstranění (přidána poznámka)
   const [resolvingBod, setResolvingBod] = useState<string | number | null>(null);
-  const [resolveData, setResolveData] = useState({ datum: '', jmeno: '', foto: [] as string[] });
+  const [resolveData, setResolveData] = useState({ datum: '', jmeno: '', poznamka: '', foto: [] as string[] });
 
   const isAdmin = userProfile?.role === 'admin';
 
@@ -82,7 +119,15 @@ export default function RecordDetailPage() {
     fetch(TEXTS_URL).then(res => res.text()).then(csv => {
         const rows = parseCSV(csv);
         const map: Record<string, string> = {};
-        rows.forEach(r => { if(r[0] && r[1]) map[r[0].trim()] = r[1].trim(); });
+        rows.forEach(r => { 
+          if(r[0] && r[1]) {
+            // Čištění čísel u nadpisů pro Google Sheets synchronizaci
+            let val = r[1].trim();
+            if (r[0].trim() === 'nadpis_komplet' && val.startsWith('2. ')) val = val.substring(3).trim();
+            if (r[0].trim() === 'nadpis_zavady' && val.startsWith('2. ')) val = val.substring(3).trim();
+            map[r[0].trim()] = val;
+          }
+        });
         setT(prev => ({ ...prev, ...map }));
       }).catch(console.error);
   }, []);
@@ -104,7 +149,6 @@ export default function RecordDetailPage() {
 
   const toggleGroup = (sec: string) => setCollapsedGroups(prev => ({ ...prev, [sec]: !prev[sec] }));
 
-  // Potvrzení odstranění klientem
   const handleConfirmResolve = async (bodId: string | number) => {
     if (!record) return;
     if (!resolveData.jmeno.trim()) {
@@ -119,6 +163,7 @@ export default function RecordDetailPage() {
           vyresenoKlientem: true,
           datumVyreseniKlientem: resolveData.datum,
           jmenoVyresitele: resolveData.jmeno,
+          poznamkaKlienta: resolveData.poznamka,
           fotoVyreseni: resolveData.foto
         };
       }
@@ -134,12 +179,11 @@ export default function RecordDetailPage() {
     }
   };
 
-  // Zrušení odstranění
   const handleCancelResolve = async (bodId: string | number) => {
     if (!record) return;
     const updatedBody = record.kontrolniBody.map((kb: any) => {
       if ((kb.id || kb.bod) === bodId) {
-        return { ...kb, vyresenoKlientem: false, datumVyreseniKlientem: null, jmenoVyresitele: null, fotoVyreseni: [] };
+        return { ...kb, vyresenoKlientem: false, datumVyreseniKlientem: null, jmenoVyresitele: null, poznamkaKlienta: null, fotoVyreseni: [] };
       }
       return kb;
     });
@@ -162,6 +206,10 @@ export default function RecordDetailPage() {
       setVisibleSections(initial);
     }
   }, [allSectionsInRecord]);
+
+  const toggleSection = (sectionName: string) => {
+    setVisibleSections(prev => ({ ...prev, [sectionName]: prev[sectionName] === false }));
+  };
 
   const uniquePositionsInRecord = useMemo(() => {
     if (!record?.kontrolniBody) return [];
@@ -192,7 +240,7 @@ export default function RecordDetailPage() {
   }, [filteredKontrolniBody]);
 
   if (!record) {
-    if (isLoading) return <div className="min-h-[50vh] flex flex-col items-center justify-center space-y-4"><Loader2 className="h-8 w-8 text-primary animate-spin" /><p className="text-muted-foreground text-sm font-medium">Načítám report...</p></div>;
+    if (isLoading) return <div className="min-h-[50vh] flex flex-col items-center justify-center space-y-4"><Loader2 className="h-8 w-8 text-primary animate-spin" /><p className="text-muted-foreground text-sm font-medium">Načítám report z cloudu...</p></div>;
     return <div className="p-8 text-center space-y-4"><p className="text-muted-foreground italic">Záznam nebyl nalezen.</p><Button onClick={() => router.push("/")}><ChevronLeft className="mr-2 h-4 w-4" /> Zpět</Button></div>;
   }
 
@@ -325,14 +373,20 @@ export default function RecordDetailPage() {
                                              <div><span className="text-xs text-muted-foreground block">Odstranil(a)</span><p className="font-bold">{kb.jmenoVyresitele || 'Neuvedeno'}</p></div>
                                              <div className="text-right"><span className="text-xs text-muted-foreground block">Datum</span><p className="font-bold">{kb.datumVyreseniKlientem ? new Date(kb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</p></div>
                                            </div>
+                                           {kb.poznamkaKlienta && (
+                                             <div className="mt-1 pt-2 border-t border-blue-50">
+                                               <span className="text-xs text-muted-foreground block mb-0.5">Zanechaná poznámka:</span>
+                                               <p className="text-sm font-medium text-slate-800 whitespace-pre-wrap">{kb.poznamkaKlienta}</p>
+                                             </div>
+                                           )}
                                            {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
-                                             <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t">
+                                             <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-blue-50">
                                                {kb.fotoVyreseni.map((f: string, i: number) => (
                                                  <a href={f} target="_blank" rel="noreferrer" key={i}><img src={f} alt="Důkaz" className="h-16 w-16 object-cover rounded border hover:opacity-80 transition-opacity" /></a>
                                                ))}
                                              </div>
                                            )}
-                                           <Button variant="outline" size="sm" onClick={() => handleCancelResolve(bodId)} className="mt-2 w-full text-red-600 hover:bg-red-50 border-red-200">Zrušit a vrátit do řešení</Button>
+                                           <Button variant="outline" size="sm" onClick={() => handleCancelResolve(bodId)} className="mt-3 w-full text-red-600 hover:bg-red-50 border-red-200">Zrušit a vrátit do řešení</Button>
                                          </div>
                                       ) : (
                                         resolvingBod === bodId ? (
@@ -341,15 +395,21 @@ export default function RecordDetailPage() {
                                                <div className="space-y-1.5"><Label className="text-xs font-bold text-slate-700">Datum odstranění *</Label><Input type="date" value={resolveData.datum} onChange={e => setResolveData(prev => ({...prev, datum: e.target.value}))} className="h-9" /></div>
                                                <div className="space-y-1.5"><Label className="text-xs font-bold text-slate-700">Jméno a příjmení *</Label><Input placeholder="Vaše jméno..." value={resolveData.jmeno} onChange={e => setResolveData(prev => ({...prev, jmeno: e.target.value}))} className="h-9" /></div>
                                              </div>
+                                             <div className="space-y-1.5 mt-2">
+                                               <Label className="text-xs font-bold text-slate-700">Poznámka k odstranění (volitelné)</Label>
+                                               <Textarea placeholder="Stručně popište, jak byla závada odstraněna..." value={resolveData.poznamka} onChange={e => setResolveData(prev => ({...prev, poznamka: e.target.value}))} className="h-16 text-xs bg-slate-50" />
+                                             </div>
                                              <div className="space-y-1.5">
                                                 <Label className="text-xs font-bold text-slate-700 flex items-center gap-1"><Camera className="h-3 w-3"/> Fotografie důkazu (volitelné)</Label>
-                                                <Input type="file" accept="image/*" multiple onChange={(e) => {
+                                                <Input type="file" accept="image/*" multiple onChange={async (e) => {
                                                     const files = Array.from(e.target.files || []);
-                                                    files.forEach(file => {
-                                                      const r = new FileReader();
-                                                      r.onloadend = () => { setResolveData(prev => ({...prev, foto: [...prev.foto, r.result as string]})); };
-                                                      r.readAsDataURL(file);
-                                                    });
+                                                    if (files.length === 0) return;
+                                                    const newPhotos: string[] = [];
+                                                    for (const file of files) {
+                                                      const compressed = await compressImage(file);
+                                                      newPhotos.push(compressed);
+                                                    }
+                                                    setResolveData(prev => ({...prev, foto: [...prev.foto, ...newPhotos]}));
                                                 }} className="text-xs h-9 cursor-pointer" />
                                                 {resolveData.foto.length > 0 && (
                                                   <div className="flex flex-wrap gap-2 mt-3 p-2 bg-slate-50 rounded border border-dashed">
@@ -368,7 +428,7 @@ export default function RecordDetailPage() {
                                              </div>
                                           </div>
                                         ) : (
-                                          <Button onClick={() => { setResolvingBod(bodId); setResolveData({ datum: new Date().toISOString().split('T')[0], jmeno: '', foto: [] }); }} size="sm" className="bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 hover:text-blue-800 shadow-sm self-start font-bold h-9 px-4">
+                                          <Button onClick={() => { setResolvingBod(bodId); setResolveData({ datum: new Date().toISOString().split('T')[0], jmeno: '', poznamka: '', foto: [] }); }} size="sm" className="bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 hover:text-blue-800 shadow-sm self-start font-bold h-9 px-4">
                                              Začít hlásit odstranění
                                           </Button>
                                         )
@@ -383,13 +443,19 @@ export default function RecordDetailPage() {
                                         <CheckCircle2 className="h-5 w-5 shrink-0" />
                                         <span>Klient nahlásil vyřešení této závady. Zkontrolujte stav.</span>
                                       </div>
-                                      <div className="bg-white/80 p-3 rounded-md flex flex-col gap-1.5 border border-emerald-100 shadow-sm">
-                                        <div className="flex justify-between items-center border-b border-emerald-100 pb-2 mb-1">
+                                      <div className="bg-white/80 p-3 rounded-md flex flex-col gap-2 border border-emerald-100 shadow-sm">
+                                        <div className="flex justify-between items-start border-b border-emerald-100 pb-2 mb-1">
                                           <div><span className="text-[10px] uppercase font-bold text-emerald-600/70 block">Osoba hlásící nápravu</span><p className="font-bold">{kb.jmenoVyresitele || 'Neuvedeno'}</p></div>
                                           <div className="text-right"><span className="text-[10px] uppercase font-bold text-emerald-600/70 block">Datum řešení</span><p className="font-bold">{kb.datumVyreseniKlientem ? new Date(kb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</p></div>
                                         </div>
+                                        {kb.poznamkaKlienta && (
+                                          <div>
+                                            <span className="text-[10px] uppercase font-bold text-emerald-600/70 block mb-0.5">Komentář klienta k odstranění</span>
+                                            <p className="font-medium text-slate-800 whitespace-pre-wrap">{kb.poznamkaKlienta}</p>
+                                          </div>
+                                        )}
                                         {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
-                                           <div>
+                                           <div className="pt-2">
                                              <span className="text-[10px] uppercase font-bold text-emerald-600/70 block mb-1">Přiložené fotodůkazy</span>
                                              <div className="flex flex-wrap gap-2">
                                                {kb.fotoVyreseni.map((f: string, i: number) => (
