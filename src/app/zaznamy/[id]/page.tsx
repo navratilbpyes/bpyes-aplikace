@@ -8,7 +8,7 @@ import { useParams, useRouter } from "next/navigation";
 import { 
   ChevronLeft, Printer, Building, MapPin, FileText,
   Loader2, Edit, ChevronDown, CheckCircle2, Clock, X, Camera,
-  CheckSquare, AlertTriangle
+  CheckSquare, AlertTriangle, Square
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -123,6 +123,9 @@ export default function RecordDetailPage() {
 
   const handlePrint = () => {
     setIsPreparingPdf(true);
+    const allOpen: Record<string, boolean> = {};
+    groupedKontrolniBody.forEach(group => { allOpen[group.sekce] = false; });
+    setCollapsedGroups(allOpen);
     setTimeout(() => {
       window.print();
       setIsPreparingPdf(false);
