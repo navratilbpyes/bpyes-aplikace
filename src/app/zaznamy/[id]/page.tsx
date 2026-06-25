@@ -6,18 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { 
-  ChevronLeft, 
-  Printer, 
-  Building, 
-  MapPin, 
-  FileText,
-  Loader2,
-  Edit,
-  ChevronDown,
-  CheckCircle2,
-  Clock,
-  X,
-  Camera
+  ChevronLeft, Printer, Building, MapPin, FileText,
+  Loader2, Edit, ChevronDown, CheckCircle2, Clock, X, Camera
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -30,13 +20,10 @@ import { cn } from "@/app/lib/utils";
 const TEXTS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRiXWE13sHgXwCiFobHGpI3zvKR8nIOnzLtLxWdK7kyn2c4BhZDOwOf5ulUycMyfF1xJXonFSTG88JS/pub?gid=1978510431&single=true&output=csv";
 
 function parseCSV(str: string) {
-  const arr: string[][] = [];
-  let quote = false;
-  let row = 0, col = 0;
+  const arr: string[][] = []; let quote = false; let row = 0, col = 0;
   for (let c = 0; c < str.length; c++) {
     let cc = str[c], nc = str[c+1];
-    arr[row] = arr[row] || [];
-    arr[row][col] = arr[row][col] || '';
+    arr[row] = arr[row] || []; arr[row][col] = arr[row][col] || '';
     if (cc == '"' && quote && nc == '"') { arr[row][col] += cc; ++c; continue; }
     if (cc == '"') { quote = !quote; continue; }
     if (cc == ',' && !quote) { ++col; continue; }
@@ -48,7 +35,6 @@ function parseCSV(str: string) {
   return arr;
 }
 
-// Funkce pro zmenšení obrázku klienta
 const compressImage = (file: File): Promise<string> => {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -56,24 +42,11 @@ const compressImage = (file: File): Promise<string> => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1024;
-        const MAX_HEIGHT = 1024;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
-          }
-        }
-        canvas.width = width;
-        canvas.height = height;
+        const MAX_WIDTH = 1024; const MAX_HEIGHT = 1024;
+        let width = img.width; let height = img.height;
+        if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
+        else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
+        canvas.width = width; canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, width, height);
         resolve(canvas.toDataURL('image/jpeg', 0.7));
@@ -102,8 +75,7 @@ export default function RecordDetailPage() {
   });
   
   const [isLoading, setIsLoading] = useState(true);
-  
-  // Stavy pro klientský formulář odstranění (přidána poznámka)
+  const [isPreparingPdf, setIsPreparingPdf] = useState(false);
   const [resolvingBod, setResolvingBod] = useState<string | number | null>(null);
   const [resolveData, setResolveData] = useState({ datum: '', jmeno: '', poznamka: '', foto: [] as string[] });
 
@@ -121,7 +93,6 @@ export default function RecordDetailPage() {
         const map: Record<string, string> = {};
         rows.forEach(r => { 
           if(r[0] && r[1]) {
-            // Čištění čísel u nadpisů pro Google Sheets synchronizaci
             let val = r[1].trim();
             if (r[0].trim() === 'nadpis_komplet' && val.startsWith('2. ')) val = val.substring(3).trim();
             if (r[0].trim() === 'nadpis_zavady' && val.startsWith('2. ')) val = val.substring(3).trim();
@@ -149,27 +120,36 @@ export default function RecordDetailPage() {
 
   const toggleGroup = (sec: string) => setCollapsedGroups(prev => ({ ...prev, [sec]: !prev[sec] }));
 
+  // OPRAVENÁ FUNKCE PRO PDF
+  const handlePrint = () => {
+    setIsPreparingPdf(true);
+    
+    // 1. Otevře úplně všechny sekce (false znamená, že není sbalená)
+    const allOpen: Record<string, boolean> = {};
+    groupedKontrolniBody.forEach(group => {
+      allOpen[group.sekce] = false;
+    });
+    setCollapsedGroups(allOpen);
+
+    // 2. Dáme prohlížeči 1 sekundu na překreslení DOMu a načtení obrázků
+    setTimeout(() => {
+      window.print();
+      setIsPreparingPdf(false);
+    }, 1000);
+  };
+
   const handleConfirmResolve = async (bodId: string | number) => {
     if (!record) return;
     if (!resolveData.jmeno.trim()) {
       toast({ title: "Chybí jméno", description: "Zadejte prosím své jméno a příjmení.", variant: "destructive" });
       return;
     }
-
     const updatedBody = record.kontrolniBody.map((kb: any) => {
       if ((kb.id || kb.bod) === bodId) {
-        return { 
-          ...kb, 
-          vyresenoKlientem: true,
-          datumVyreseniKlientem: resolveData.datum,
-          jmenoVyresitele: resolveData.jmeno,
-          poznamkaKlienta: resolveData.poznamka,
-          fotoVyreseni: resolveData.foto
-        };
+        return { ...kb, vyresenoKlientem: true, datumVyreseniKlientem: resolveData.datum, jmenoVyresitele: resolveData.jmeno, poznamkaKlienta: resolveData.poznamka, fotoVyreseni: resolveData.foto };
       }
       return kb;
     });
-
     try {
       setZaznamy((prev: any[]) => prev.map(z => z.id === record.id ? { ...z, kontrolniBody: updatedBody } : z));
       setResolvingBod(null);
@@ -207,10 +187,6 @@ export default function RecordDetailPage() {
     }
   }, [allSectionsInRecord]);
 
-  const toggleSection = (sectionName: string) => {
-    setVisibleSections(prev => ({ ...prev, [sectionName]: prev[sectionName] === false }));
-  };
-
   const uniquePositionsInRecord = useMemo(() => {
     if (!record?.kontrolniBody) return [];
     const positions = record.kontrolniBody.filter((kb: any) => kb.hodnoceni === 'N' && kb.odpovednaOsoba).map((kb: any) => kb.odpovednaOsoba);
@@ -246,20 +222,30 @@ export default function RecordDetailPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative overflow-hidden">
+      
+      {/* HLAVIČKA A TLAČÍTKA */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="p-0 h-auto text-muted-foreground hover:bg-transparent" onClick={() => router.push("/")}><ChevronLeft className="h-4 w-4" /> Zpět na přehled</Button>
-            <span className="text-xs font-bold uppercase tracking-wider text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">{record.stav === 'uzavreny' ? 'Uzavřený report' : 'Koncept'}</span>
-            <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 px-2 py-0.5 rounded border border-slate-200">Role: {isAdmin ? 'Admin' : 'Client'}</span>
+            <Button variant="ghost" size="sm" className="p-0 h-auto text-muted-foreground hover:bg-transparent print:hidden" onClick={() => router.push("/")}>
+              <ChevronLeft className="h-4 w-4" /> Zpět na přehled
+            </Button>
+            <span className={cn("text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded border", record.stav === 'uzavreny' ? "text-green-700 bg-green-50 border-green-200" : "text-amber-700 bg-amber-50 border-amber-200")}>
+              {record.stav === 'uzavreny' ? 'Uzavřený report' : 'Koncept (V řešení)'}
+            </span>
+            <span className="print:hidden text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 px-2 py-0.5 rounded border border-slate-200">
+              Role: {isAdmin ? 'Admin' : 'Client'}
+            </span>
           </div>
           <h1 className="text-3xl font-bold tracking-tight">{record.cislo} <span className="text-muted-foreground font-normal text-xl">R{record.revize || 0}</span></h1>
           <p className="text-sm text-muted-foreground">Provedeno dne {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : 'Neuvedeno'}</p>
         </div>
         
-        <div className="flex flex-wrap gap-2 w-full md:w-auto">
-          <Button variant="default" className="h-11 shadow-sm font-bold bg-blue-600 hover:bg-blue-700 text-white">
-            <Printer className="h-4 w-4 mr-2" /> Stáhnout PDF report
+        {/* Tlačítka schováme pro tisk pomocí print:hidden */}
+        <div className="flex flex-wrap gap-2 w-full md:w-auto print:hidden">
+          <Button variant="default" className="h-11 shadow-sm font-bold bg-blue-600 hover:bg-blue-700 text-white" onClick={handlePrint} disabled={isPreparingPdf}>
+            {isPreparingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Printer className="h-4 w-4 mr-2" />}
+            {isPreparingPdf ? "Příprava k tisku..." : "Stáhnout PDF report"}
           </Button>
           {isAdmin && (
             <Button variant="secondary" className="h-11 shadow-sm" onClick={() => router.push(`/upravit-zaznam/${record.id}`)}>
@@ -269,7 +255,8 @@ export default function RecordDetailPage() {
         </div>
       </div>
 
-      <Card className="border-blue-100 bg-blue-50/20">
+      {/* DISPEČINK / FILTRY - Taktéž schováno pro tisk */}
+      <Card className="border-blue-100 bg-blue-50/20 print:hidden">
         <CardHeader className="py-4 space-y-4">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-3">
             <div>
@@ -277,7 +264,7 @@ export default function RecordDetailPage() {
                 <FileText className="h-4 w-4" /> 
                 {isAdmin ? "Manažerský dispečink pro exporty" : "Klientský dispečink reportu"}
               </CardTitle>
-              <CardDescription className="text-xs">Filtrujte kapitoly a odpovědnosti.</CardDescription>
+              <CardDescription className="text-xs">Filtrujte kapitoly a odpovědnosti pro export nebo tisk.</CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
               {uniquePositionsInRecord.length > 0 && (
@@ -303,38 +290,38 @@ export default function RecordDetailPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
-          <Card className="border-none shadow-sm">
-            <CardHeader><CardTitle className="text-lg">{onlyDefects ? t.nadpis_zavady : t.nadpis_komplet} ({filteredKontrolniBody.length})</CardTitle></CardHeader>
-            <CardContent className="space-y-6">
+          <Card className="border-none shadow-sm print:shadow-none">
+            <CardHeader className="print:px-0"><CardTitle className="text-lg">{onlyDefects ? t.nadpis_zavady : t.nadpis_komplet} ({filteredKontrolniBody.length})</CardTitle></CardHeader>
+            <CardContent className="space-y-6 print:px-0">
               {groupedKontrolniBody.map((group) => {
                 const { sekce, items } = group;
                 const isCollapsed = collapsedGroups[sekce];
                 const groupStats = { N: items.filter(i => i.hodnoceni === 'N').length };
 
                 return (
-                  <div key={sekce} className="space-y-3">
-                    <div onClick={() => toggleGroup(sekce)} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
+                  <div key={sekce} className="space-y-3 print:break-inside-avoid">
+                    <div onClick={() => toggleGroup(sekce)} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors print:bg-white print:border-b-2 print:border-b-black print:rounded-none">
                       <h3 className="font-bold text-slate-800 text-sm uppercase">{sekce}</h3>
                       <div className="flex items-center gap-4">
                         <div className="flex gap-2 text-[10px] font-bold uppercase tracking-wider">
-                          {groupStats.N > 0 && <span className="text-red-700 bg-red-100 px-2 py-0.5 rounded">{t.stat_neshody}: {groupStats.N}</span>}
+                          {groupStats.N > 0 && <span className="text-red-700 bg-red-100 px-2 py-0.5 rounded print:border print:border-red-500">{t.stat_neshody}: {groupStats.N}</span>}
                         </div>
-                        <ChevronDown className={cn("h-5 w-5 text-slate-500 transition-transform", isCollapsed && "-rotate-90")} />
+                        <ChevronDown className={cn("h-5 w-5 text-slate-500 transition-transform print:hidden", isCollapsed && "-rotate-90")} />
                       </div>
                     </div>
 
                     {!isCollapsed && (
-                      <div className="space-y-4 pl-2 ml-2 border-l-2 border-blue-100">
+                      <div className="space-y-4 pl-2 ml-2 border-l-2 border-blue-100 print:border-none print:pl-0 print:ml-0">
                         {items.map((kb: any) => {
                           const isDefect = kb.hodnoceni === 'N';
                           const bodId = kb.id || kb.bod;
                           const isResolvedByClient = !!kb.vyresenoKlientem;
 
                           return (
-                            <div key={bodId} className={cn("p-4 border rounded-xl space-y-4 transition-all bg-white", isDefect ? "border-slate-200 shadow-sm" : "bg-slate-50/40 border-slate-100 text-slate-600")}>
+                            <div key={bodId} className={cn("p-4 border rounded-xl space-y-4 transition-all bg-white print:break-inside-avoid", isDefect ? "border-slate-200 shadow-sm" : "bg-slate-50/40 border-slate-100 text-slate-600 print:border-b")}>
                               <div className="flex justify-between items-start gap-2">
                                 <div className="flex items-center gap-2">
-                                  <span className={cn("font-mono text-xs font-bold h-6 w-6 rounded-md flex items-center justify-center shrink-0", isDefect ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800")}>{kb.bod}</span>
+                                  <span className={cn("font-mono text-xs font-bold h-6 w-6 rounded-md flex items-center justify-center shrink-0", isDefect ? "bg-red-100 text-red-800 print:border print:border-red-400" : "bg-green-100 text-green-800 print:border print:border-green-400")}>{kb.bod}</span>
                                   <div>
                                     <h4 className="font-bold text-[14px] leading-tight text-slate-900">{kb.otazka || kb.popis}</h4>
                                     <span className="text-[10px] text-muted-foreground font-bold uppercase">{kb.sekce || 'Ostatní'}</span>
@@ -342,7 +329,7 @@ export default function RecordDetailPage() {
                                 </div>
                                 <div className="flex items-center gap-1.5 shrink-0">
                                   {isDefect && isResolvedByClient && (
-                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1"><Clock className="h-3 w-3" /> Vyřešeno klientem</span>
+                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1"><Clock className="h-3 w-3" /> Vyřešeno</span>
                                   )}
                                   <span className={cn("text-[10px] font-bold uppercase px-2 py-0.5 rounded border", isDefect ? (isResolvedByClient ? "bg-slate-50 text-slate-500" : "bg-red-50 text-red-700 border-red-200") : "bg-green-50 text-green-700 border-green-200")}>
                                     {isDefect ? 'Neshoda' : 'Vyhovuje'}
@@ -352,16 +339,15 @@ export default function RecordDetailPage() {
 
                               {isDefect && (
                                 <div className="space-y-4">
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-3 rounded-lg border">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-3 rounded-lg border print:bg-white print:border-slate-300">
                                     <div><span className="text-muted-foreground block mb-0.5">{t.karta_opatreni}</span><p className="font-medium text-slate-900">{kb.navrhOpatreni || 'Není definováno'}</p></div>
                                     <div><span className="text-muted-foreground block mb-0.5">{t.nadpis_misto}</span><p className="font-bold text-blue-900">{kb.lokalizace || 'Celé pracoviště'}</p></div>
                                     <div><span className="text-muted-foreground block mb-0.5">{t.karta_termin}</span><p className="font-medium">{kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</p></div>
                                     <div><span className="text-muted-foreground block mb-0.5">{t.karta_odpovednost}</span><p className="font-bold text-black">{kb.odpovednaOsoba || 'Neuvedena'}</p></div>
                                   </div>
 
-                                  {/* INTERAKTIVNÍ FORMULÁŘ POUZE PRO KLIENTA */}
                                   {!isAdmin && (
-                                    <div className="flex flex-col p-4 rounded-lg border border-blue-200 bg-blue-50/60 mt-4 space-y-4">
+                                    <div className="flex flex-col p-4 rounded-lg border border-blue-200 bg-blue-50/60 mt-4 space-y-4 print:hidden">
                                       <div className="space-y-0.5">
                                         <p className="text-sm font-bold text-blue-900">Odstranili jste tento nedostatek?</p>
                                         <p className="text-[11px] font-medium text-blue-700">Vyplňte detaily o nápravě pro revizi auditorem.</p>
@@ -436,15 +422,14 @@ export default function RecordDetailPage() {
                                     </div>
                                   )}
 
-                                  {/* POHLED PRO AUDITORA KDYŽ JE HOTOVO */}
-                                  {isAdmin && isResolvedByClient && (
-                                    <div className="flex flex-col gap-3 text-sm p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 mt-4 shadow-inner">
+                                  {isResolvedByClient && (
+                                    <div className="flex flex-col gap-3 text-sm p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 mt-4 shadow-inner print:bg-white print:border-emerald-300">
                                       <div className="flex items-center gap-2 font-bold text-emerald-800">
                                         <CheckCircle2 className="h-5 w-5 shrink-0" />
-                                        <span>Klient nahlásil vyřešení této závady. Zkontrolujte stav.</span>
+                                        <span>Závada nahlášena jako vyřešená</span>
                                       </div>
-                                      <div className="bg-white/80 p-3 rounded-md flex flex-col gap-2 border border-emerald-100 shadow-sm">
-                                        <div className="flex justify-between items-start border-b border-emerald-100 pb-2 mb-1">
+                                      <div className="bg-white/80 p-3 rounded-md flex flex-col gap-1.5 border border-emerald-100 shadow-sm print:shadow-none">
+                                        <div className="flex justify-between items-center border-b border-emerald-100 pb-2 mb-1">
                                           <div><span className="text-[10px] uppercase font-bold text-emerald-600/70 block">Osoba hlásící nápravu</span><p className="font-bold">{kb.jmenoVyresitele || 'Neuvedeno'}</p></div>
                                           <div className="text-right"><span className="text-[10px] uppercase font-bold text-emerald-600/70 block">Datum řešení</span><p className="font-bold">{kb.datumVyreseniKlientem ? new Date(kb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</p></div>
                                         </div>
@@ -455,7 +440,7 @@ export default function RecordDetailPage() {
                                           </div>
                                         )}
                                         {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
-                                           <div className="pt-2">
+                                           <div className="print:hidden">
                                              <span className="text-[10px] uppercase font-bold text-emerald-600/70 block mb-1">Přiložené fotodůkazy</span>
                                              <div className="flex flex-wrap gap-2">
                                                {kb.fotoVyreseni.map((f: string, i: number) => (
@@ -481,12 +466,17 @@ export default function RecordDetailPage() {
           </Card>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-6 print:hidden">
           <Card className="border-none shadow-sm bg-white">
             <CardHeader><CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-bold">Detaily kontroly</CardTitle></CardHeader>
             <CardContent className="space-y-4 text-sm">
               <div className="flex gap-3"><Building className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Klient</span><p className="font-bold">{klient?.nazev || 'Neznámý'}</p></div></div>
-              <div className="flex gap-3"><MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Pracoviště</span><p className="font-bold">{pracovisteList.map(p => p.nazev).join(', ') || 'Neznámé'}</p></div></div>
+              <div className="flex gap-3"><MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                <div>
+                  <span className="text-xs text-muted-foreground block">Pracoviště</span>
+                  <p className="font-bold">{pracovisteList.map(p => p.nazev).join(', ') || 'Neznámé'}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
