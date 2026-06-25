@@ -262,7 +262,7 @@ export default function RecordDetailPage() {
             <Printer className="h-4 w-4 mr-2" /> Stáhnout PDF report
           </Button>
           {isAdmin && (
-            <Button variant="secondary" className="h-11 shadow-sm" onClick={() => toast({ title: "Editace záznamu", description: "Pro úpravu existujících záznamů připravíme samostatný formulář v dalším kroku vývoje." })}>
+            <Button variant="secondary" className="h-11 shadow-sm" onClick={() => router.push(`/upravit-zaznam/${record.id}`)}>
               <Edit className="h-4 w-4 mr-2" /> Upravit záznam
             </Button>
           )}
