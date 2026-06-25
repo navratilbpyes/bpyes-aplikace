@@ -240,7 +240,6 @@ export default function NewInspectionPage() {
       const generatedCislo = generateRecordNumber(year, countInYear, formData.typKontroly);
       const safeCislo = generatedCislo ? generatedCislo : `2026/000/${formData.typKontroly}`;
       
-      // ZDE JE BEZPEČNOSTNÍ POJISTKA - NIKDY NEZAVŘE REPORT S NESHODOU
       const hasUnresolvedDefects = finalKontrolniBody.some(kb => kb.hodnoceni === 'N');
       const finalStav = (isDraft || hasUnresolvedDefects) ? 'otevreny' : 'uzavreny';
 
@@ -490,3 +489,5 @@ export default function NewInspectionPage() {
         </div>
       </div>
     </div>
+  );
+}
