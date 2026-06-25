@@ -11,10 +11,8 @@ export default function Dashboard() {
   const { zaznamy, klienti, userProfile } = useData();
   const router = useRouter();
 
-  // Zjistíme, zda je přihlášený uživatel administrátor
   const isAdmin = userProfile?.role === 'admin';
 
-  // Výpočet: Závady k řešení (počítáme neshody 'N' v otevřených záznamech)
   const zavadyKReseni = zaznamy.reduce((acc, z) => {
     if (z.stav !== 'uzavreny' && z.kontrolniBody) {
       return acc + z.kontrolniBody.filter((b: any) => b.hodnoceni === 'N').length;
@@ -22,7 +20,6 @@ export default function Dashboard() {
     return acc;
   }, 0);
 
-  // Výpočet: Záznamy za aktuální měsíc
   const zaznamyTentoMesic = zaznamy.filter(z => {
     if (!z.datum) return false;
     const d = new Date(z.datum);
@@ -40,7 +37,6 @@ export default function Dashboard() {
           </p>
         </div>
         
-        {/* Tlačítko pro novou kontrolu uvidí POUZE admin */}
         {isAdmin && (
           <Button asChild className="bg-slate-900 hover:bg-slate-800 font-bold shrink-0">
             <Link href="/nova-kontrola">
@@ -50,10 +46,8 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Statistiky se dynamicky mění podle role */}
       <div className={`grid gap-4 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
         
-        {/* Kartu "Celkem klientů" uvidí POUZE admin */}
         {isAdmin && (
           <Card className="border-none shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -66,47 +60,54 @@ export default function Dashboard() {
           </Card>
         )}
         
-        <Card className="border-none shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              {isAdmin ? "Otevřené záznamy" : "Celkem mých reportů"}
-            </CardTitle>
-            <FileText className="h-4 w-4 text-amber-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black text-slate-900">
-              {isAdmin ? zaznamy.filter(z => z.stav !== 'uzavreny').length : zaznamy.length}
-            </div>
-          </CardContent>
-        </Card>
+        {/* INTERAKTIVNÍ KARTA: Otevřené záznamy */}
+        <Link href="/zaznamy?filter=all" className="block focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-xl rounded-xl transition-transform hover:scale-[1.02]">
+          <Card className="border-none shadow-sm h-full hover:bg-blue-50/30 transition-colors">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                {isAdmin ? "Celkem reportů" : "Celkem mých reportů"}
+              </CardTitle>
+              <FileText className="h-4 w-4 text-amber-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-black text-slate-900">
+                {zaznamy.length}
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card className="border-none shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Závady k řešení</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black text-slate-900">{zavadyKReseni}</div>
-          </CardContent>
-        </Card>
+        {/* INTERAKTIVNÍ KARTA: Závady k řešení */}
+        <Link href="/zaznamy?filter=open" className="block focus:outline-none focus:ring-2 focus:ring-red-500 rounded-xl transition-transform hover:scale-[1.02]">
+          <Card className="border-none shadow-sm h-full hover:bg-red-50/30 transition-colors">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Závady k řešení</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-black text-slate-900">{zavadyKReseni}</div>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card className="border-none shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Záznamy tento měsíc</CardTitle>
-            <Calendar className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black text-slate-900">{zaznamyTentoMesic}</div>
-          </CardContent>
-        </Card>
+        {/* INTERAKTIVNÍ KARTA: Záznamy tento měsíc */}
+        <Link href="/zaznamy?filter=month" className="block focus:outline-none focus:ring-2 focus:ring-green-500 rounded-xl transition-transform hover:scale-[1.02]">
+          <Card className="border-none shadow-sm h-full hover:bg-green-50/30 transition-colors">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Záznamy tento měsíc</CardTitle>
+              <Calendar className="h-4 w-4 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-black text-slate-900">{zaznamyTentoMesic}</div>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-4 pt-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold tracking-tight">Poslední záznamy</h2>
-          {isAdmin && (
-            <Link href="/zaznamy" className="text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors">Všechny záznamy &rarr;</Link>
-          )}
+          <Link href="/zaznamy" className="text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors">Všechny záznamy &rarr;</Link>
         </div>
         
         <div className="border border-slate-200 rounded-xl bg-white shadow-sm overflow-hidden">
@@ -115,7 +116,6 @@ export default function Dashboard() {
               <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold border-b border-slate-200">
                 <tr>
                   <th className="px-6 py-4">Číslo zprávy</th>
-                  {/* Sloupec Klient ukazujeme jen Adminovi (Klient ví, kým je) */}
                   {isAdmin && <th className="px-6 py-4">Kontrolovaný subjekt</th>}
                   <th className="px-6 py-4">Typ kontroly</th>
                   <th className="px-6 py-4">Datum</th>
@@ -139,7 +139,7 @@ export default function Dashboard() {
                       <td className="px-6 py-4 text-slate-600 font-medium">{z.typKontroly}</td>
                       <td className="px-6 py-4 text-slate-600">{z.datum ? new Date(z.datum).toLocaleDateString('cs-CZ') : '-'}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide ${z.stav === 'uzavreny' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
+                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide border ${z.stav === 'uzavreny' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
                           {z.stav === 'uzavreny' ? 'Uzavřeno' : 'V řešení'}
                         </span>
                       </td>
