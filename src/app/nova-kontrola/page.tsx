@@ -95,6 +95,43 @@ function parseCSV(str: string) {
   return arr;
 }
 
+// POMOCNÁ FUNKCE PRO ZMENŠENÍ A KOMPRESI OBRÁZKU PŘED ULOŽENÍM
+const compressImage = (file: File): Promise<string> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1024;
+        const MAX_HEIGHT = 1024;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        // Výstup zkomprimujeme jako JPEG na 70% kvality
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
 export default function NewInspectionPage() {
   const { klienti, zaznamy, setZaznamy } = useData();
   const { toast } = useToast();
@@ -314,14 +351,10 @@ export default function NewInspectionPage() {
         updatedAt: new Date().toISOString()
       };
 
-      // ZDE JE TO NUKLEÁRNÍ ŘEŠENÍ: 
-      // Všechny "undefined" hodnoty, které by Firebase zablokovaly, se tiše smažou.
       const sanitizedRecord = JSON.parse(JSON.stringify(newRecord));
 
-      // Zápis očištěného záznamu do cloudu
       await setDoc(newRecordRef, sanitizedRecord);
 
-      // Aktualizace lokálního zobrazení
       setZaznamy(prev => {
         if (prev.some(p => p.id === sanitizedRecord.id)) return prev;
         return [...prev, sanitizedRecord as any];
@@ -334,9 +367,10 @@ export default function NewInspectionPage() {
         router.push(`/zaznamy/${sanitizedRecord.id}`);
       }, 500);
 
-    } catch (e) {
+    } catch (e: any) {
        console.error("Chyba při ukládání záznamu do Firebase:", e);
-       toast({ title: "Chyba uložení", description: "Záznam se nepodařilo uložit do cloudu.", variant: "destructive" });
+       // Zobrazíme přesnou chybu uživateli pro případný další debug
+       toast({ title: "Chyba uložení", description: e.message?.includes('size') ? "Záznam je příliš velký. Smažte některé fotografie." : "Nepodařilo se uložit záznam.", variant: "destructive" });
        setIsSaving(false);
     }
   };
@@ -430,26 +464,21 @@ export default function NewInspectionPage() {
             <Button variant="outline" size="sm" className="text-muted-foreground cursor-pointer">
               <Camera className="h-4 w-4 mr-2" /> Přidat fotodokumentaci
             </Button>
+            {/* ZDE VOLÁME NOVOU FUNKCI PRO ZMENŠENÍ FOTEK */}
             <Input type="file" accept="image/*" multiple className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
-              onChange={(e) => {
+              onChange={async (e) => {
                 const files = Array.from(e.target.files || []);
                 if (files.length === 0) return;
                 
                 const currentPhotos = def.foto || [];
                 const newPhotos: string[] = [];
-                let loadedCount = 0;
 
-                files.forEach(file => {
-                  const r = new FileReader();
-                  r.onloadend = () => {
-                    newPhotos.push(r.result as string);
-                    loadedCount++;
-                    if (loadedCount === files.length) {
-                      updateFn('foto', [...currentPhotos, ...newPhotos]);
-                    }
-                  };
-                  r.readAsDataURL(file);
-                });
+                for (const file of files) {
+                  const compressedDataUrl = await compressImage(file);
+                  newPhotos.push(compressedDataUrl);
+                }
+                
+                updateFn('foto', [...currentPhotos, ...newPhotos]);
               }}
             />
           </div>
