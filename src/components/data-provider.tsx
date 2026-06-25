@@ -61,11 +61,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (userDoc.exists()) {
           setUserProfile(userDoc.data() as UserProfile);
         } else {
-          // Pokud profil neexistuje (např. první přihlášení admina přes Google),
-          // nastavíme výchozí roli admin a profil vytvoříme
-          const defaultAdminProfile: UserProfile = { role: 'admin' };
-          await setDoc(userDocRef, defaultAdminProfile);
-          setUserProfile(defaultAdminProfile);
+          // Pokud profil neexistuje, uživateli přiřadíme bezpečnou roli "client" bez klientId
+          // Tím zabráníme, aby se omylem stal adminem, ale zároveň ho to pustí do portálu.
+          // Aby něco viděl, musíte mu klientId ve Firebase doplnit ručně.
+          const defaultClientProfile: UserProfile = { role: 'client' };
+          await setDoc(userDocRef, defaultClientProfile);
+          setUserProfile(defaultClientProfile);
         }
       } else {
         setUserProfile(null);
@@ -127,8 +128,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setZaznamyState(docs);
       } else {
         // KLIENT VIDÍ POUZE ZÁZNAMY SVÉ VLASTNÍ FIRMY
-        const klientskeZaznamy = docs.filter(z => z.klientId === userProfile.klientId);
-        setZaznamyState(klientskeZaznamy);
+        // A pokud nemá přiřazené klientId, neuvidí vůbec nic (bezpečnostní pojistka)
+        if (!userProfile.klientId) {
+            setZaznamyState([]);
+        } else {
+            const klientskeZaznamy = docs.filter(z => z.klientId === userProfile.klientId);
+            setZaznamyState(klientskeZaznamy);
+        }
       }
     });
     return () => unsubscribe();
