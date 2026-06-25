@@ -7,7 +7,7 @@ import { useState, useEffect, useMemo } from "react";
 import { 
   CheckCircle2, ChevronRight, ChevronLeft, Plus, X, AlertTriangle,
   Calendar as CalendarIcon, User as UserIcon, StickyNote, Camera,
-  CheckSquare, Square, Filter, Loader2
+  CheckSquare, Square, Filter, Loader2, Info
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -103,7 +103,6 @@ export default function EditInspectionPage() {
   const [revisionNumber, setRevisionNumber] = useState("0");
   const [isSaving, setIsSaving] = useState(false);
 
-  // Inicializace dat pro editaci
   useEffect(() => {
     if (!recordToEdit || isLoaded) return;
     setFormData({
@@ -114,7 +113,6 @@ export default function EditInspectionPage() {
       ucastnici: recordToEdit.ucastnici?.length > 0 ? recordToEdit.ucastnici : [{ jmeno: '', pozice: '' }],
       poznamka: recordToEdit.poznamka || ''
     });
-    // Zvýšíme revizi o 1
     setRevisionNumber(String((recordToEdit.revize || 0) + 1));
 
     const initialChecklist: any = {};
@@ -250,7 +248,6 @@ export default function EditInspectionPage() {
         const defectsForThisPoint = pointDefects[basePoint.id] || [];
         const primaryDefect = isDefect && defectsForThisPoint.length > 0 ? defectsForThisPoint[0] : null;
         
-        // ZACHOVÁVÁME KLIENTSKÁ DATA (důležité pro editaci)
         const existingKb = recordToEdit.kontrolniBody?.find((kb: any) => kb.bod === basePoint.id);
 
         finalKontrolniBody.push({
@@ -267,7 +264,6 @@ export default function EditInspectionPage() {
           terminOdstraneni: primaryDefect?.terminOdstraneni || "",
           odpovednaOsoba: primaryDefect?.odpovednaOsoba === 'manual' ? primaryDefect.odpovednaOsobaManualni : (primaryDefect?.odpovednaOsoba || ""),
           foto: primaryDefect?.foto || [],
-          // Bezpečný přesun klientských reakcí
           vyresenoKlientem: existingKb?.vyresenoKlientem || false,
           datumVyreseniKlientem: existingKb?.datumVyreseniKlientem || "",
           jmenoVyresitele: existingKb?.jmenoVyresitele || "",
@@ -293,7 +289,7 @@ export default function EditInspectionPage() {
 
       const updatedRecord = {
         id: recordToEdit.id,
-        cislo: recordToEdit.cislo, // Původní číslo
+        cislo: recordToEdit.cislo,
         revize: parseInt(revisionNumber) || 0,
         ...formData,
         kontrolniBody: finalKontrolniBody,
@@ -315,7 +311,7 @@ export default function EditInspectionPage() {
       setTimeout(() => { router.push(`/zaznamy/${sanitizedRecord.id}`); }, 500);
     } catch (e: any) {
        console.error("Chyba editace:", e);
-       toast({ title: "Chyba uložení", description: e.message?.includes('size') ? "Záznam je příliš velký. Smažte některé fotografie." : "Nepodařilo se uložit záznam.", variant: "destructive" });
+       toast({ title: "Chyba uložení", description: "Nepodařilo se uložit záznam.", variant: "destructive" });
        setIsSaving(false);
     }
   };
@@ -416,7 +412,13 @@ export default function EditInspectionPage() {
   };
 
   const renderPoint = (point: ChecklistPoint, isCustom: boolean = false) => {
-    const state = checklist[point.id]; const defects = pointDefects[point.id] || [];
+    const state = checklist[point.id]; 
+    const defects = pointDefects[point.id] || [];
+    
+    // Načtení informací o tom, zda to klient už řešil
+    const existingKb = recordToEdit?.kontrolniBody?.find((kb: any) => kb.bod === point.id);
+    const isResolvedByClient = existingKb?.vyresenoKlientem;
+
     return (
       <div key={point.id} className="pt-8 first:pt-0 space-y-4 relative group">
         {isCustom && <Button variant="ghost" size="icon" className="absolute top-2 right-0 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setCustomPoints(prev => prev.filter(p => p.id !== point.id))}><X className="h-4 w-4" /></Button>}
@@ -429,12 +431,47 @@ export default function EditInspectionPage() {
             <Button key="D" variant="outline" data-state={state?.showDoporuceni ? 'active' : 'inactive'} className={cn("h-12 min-w-[50px] font-bold shadow-none transition-all", "bg-blue-100 text-blue-700 data-[state=active]:bg-blue-600 data-[state=active]:text-white")} onClick={() => setChecklist(prev => ({ ...prev, [point.id]: { ...(prev[point.id] || { bod: point.id, hodnoceni: '' }), showDoporuceni: !prev[point.id]?.showDoporuceni } }))}>D</Button>
           </div>
         </div>
+        
         {state?.showDoporuceni && <div className="space-y-2 mt-4 ml-8"><Label className="text-xs text-blue-700 font-semibold">Doporučení auditora k tomuto bodu</Label><Textarea value={state.doporuceni || ""} onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], doporuceni: e.target.value }}))} className="bg-blue-50/50 border-blue-200" /></div>}
+        
         {state?.hodnoceni && state.hodnoceni !== 'NA' && (
           <div className="space-y-4 ml-8">
+            
+            {/* VELKÉ ZELENÉ UPOZORNĚNÍ PRO AUDITORA */}
+            {isResolvedByClient && state.hodnoceni === 'N' && (
+               <div className="p-4 rounded-xl bg-emerald-50 border-2 border-emerald-400 shadow-sm mt-4">
+                 <div className="flex items-center gap-2 font-bold text-emerald-800 mb-2">
+                   <Info className="h-5 w-5" />
+                   <span>POZOR: Klient u této závady nahlásil vyřešení!</span>
+                 </div>
+                 <div className="text-sm text-emerald-800 space-y-1 bg-white/60 p-3 rounded-lg border border-emerald-200">
+                   <p><span className="font-semibold">Nahlásil(a):</span> {existingKb.jmenoVyresitele} ({existingKb.datumVyreseniKlientem ? new Date(existingKb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'})</p>
+                   {existingKb.poznamkaKlienta && <p className="italic">"{existingKb.poznamkaKlienta}"</p>}
+                   
+                   {/* Náhled fotek přímo v editaci */}
+                   {existingKb.fotoVyreseni && existingKb.fotoVyreseni.length > 0 && (
+                     <div className="pt-2 mt-2 border-t border-emerald-200/50">
+                       <span className="text-[10px] uppercase font-bold text-emerald-600 block mb-1">Přiložené fotodůkazy od klienta:</span>
+                       <div className="flex flex-wrap gap-2">
+                         {existingKb.fotoVyreseni.map((f: string, i: number) => (
+                           <a href={f} target="_blank" rel="noreferrer" key={i}>
+                             <img src={f} alt="Důkaz" className="h-12 w-12 object-cover rounded border border-emerald-300 hover:scale-110 transition-transform" />
+                           </a>
+                         ))}
+                       </div>
+                     </div>
+                   )}
+                 </div>
+                 <p className="pt-3 text-[11px] font-bold uppercase text-emerald-600">
+                   Pokud je zaslaný důkaz v pořádku, klikněte výše na tlačítko [V] Vyhovuje. Závada tím z protokolu zmizí.
+                 </p>
+               </div>
+            )}
+
             {state.hodnoceni === 'N' && (
               <div className="p-4 bg-amber-50/50 rounded-xl border border-amber-200 space-y-6"><div className="flex items-center gap-2 text-amber-800 font-bold text-sm uppercase"><AlertTriangle className="h-4 w-4" /> Evidence nedostatků</div><div className="space-y-6">{defects.map((def, idx) => renderDefectForm(def, idx, point.id))}</div><Button variant="outline" className="w-full border-dashed border-amber-300 text-amber-800 hover:bg-amber-100" onClick={() => setPointDefects(prev => ({ ...prev, [point.id]: [...(prev[point.id] || []), createEmptyDefect()] }))}><Plus className="h-4 w-4 mr-2" /> Přidat další závadu pod tento bod</Button></div>
             )}
+            
             <div className="flex items-center gap-2">
               {!state.poznamka && <Button variant="ghost" size="sm" onClick={() => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: " " }}))} className="text-muted-foreground"><Plus className="h-3 w-3 mr-1" /> Přidat interní poznámku</Button>}
               {state.poznamka && <div className="flex-1 space-y-2 mt-2"><Label className="text-xs text-muted-foreground flex items-center gap-1"><StickyNote className="h-3 w-3" /> Interní poznámka k hodnocení bodu</Label><Textarea value={state.poznamka} onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: e.target.value }}))} className="bg-muted/30" /></div>}
