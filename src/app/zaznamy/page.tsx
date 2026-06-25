@@ -1,7 +1,7 @@
 'use client';
 
 import { useData } from "@/components/data-provider";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FileText, Search, Plus, Filter, Loader2 } from "lucide-react";
@@ -23,9 +23,7 @@ function ZaznamyList() {
 
   const filtered = zaznamy.filter(z => {
      if(search && !z.cislo.toLowerCase().includes(search.toLowerCase())) return false;
-     
      if(filter === 'open' && z.stav === 'uzavreny') return false;
-     
      if(filter === 'month') {
         if (!z.datum) return false;
         const d = new Date(z.datum);
@@ -79,7 +77,10 @@ function ZaznamyList() {
                 {filtered.length > 0 ? (
                   filtered.map(z => (
                     <tr key={z.id} className="hover:bg-blue-50/50 cursor-pointer transition-colors bg-white" onClick={() => router.push(`/zaznamy/${z.id}`)}>
-                      <td className="px-6 py-4 font-bold text-blue-700 flex items-center gap-2"><FileText className="h-4 w-4 text-blue-400" /> {z.cislo}</td>
+                      <td className="px-6 py-4 font-bold text-blue-700 flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-blue-400" /> {z.cislo} 
+                        <span className="text-muted-foreground font-normal text-xs ml-1">R{z.revize || 0}</span>
+                      </td>
                       {isAdmin && <td className="px-6 py-4 font-medium text-slate-900">{klienti.find(k => k.id === z.klientId)?.nazev || 'Neznámý klient'}</td>}
                       <td className="px-6 py-4 text-slate-600 font-medium">{z.typKontroly}</td>
                       <td className="px-6 py-4 text-slate-600">{z.datum ? new Date(z.datum).toLocaleDateString('cs-CZ') : '-'}</td>
@@ -109,7 +110,6 @@ function ZaznamyList() {
   );
 }
 
-// Suspense je nutné pro použití useSearchParams v Next.js 14+
 export default function Page() {
   return <Suspense fallback={<div className="p-8 text-center flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-600"/></div>}><ZaznamyList /></Suspense>;
 }
