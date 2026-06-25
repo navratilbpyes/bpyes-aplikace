@@ -15,25 +15,18 @@ import {
   Edit,
   ChevronDown,
   CheckCircle2,
-  Clock
+  Clock,
+  X,
+  Camera
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/app/lib/utils";
 
 const TEXTS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRiXWE13sHgXwCiFobHGpI3zvKR8nIOnzLtLxWdK7kyn2c4BhZDOwOf5ulUycMyfF1xJXonFSTG88JS/pub?gid=1978510431&single=true&output=csv";
-
-const defaultTexts = {
-  nadpis_zavady: "2. Registr zjištěných nedostatků a nápravných opatření",
-  nadpis_komplet: "2. Kompletní auditní protokol zjištění",
-  karta_opatreni: "Návrh opatření:",
-  nadpis_misto: "Místo prověrky:",
-  karta_termin: "Termín:",
-  karta_odpovednost: "Pozice:",
-  stat_vyhovuje: "VYHOVUJE",
-  stat_neshody: "NESHODY (N)"
-};
 
 function parseCSV(str: string) {
   const arr: string[][] = [];
@@ -60,34 +53,38 @@ export default function RecordDetailPage() {
   const { toast } = useToast();
   const { zaznamy, klienti, userProfile, setZaznamy } = useData();
 
-  const [t, setT] = useState<Record<string, string>>(defaultTexts);
+  const [t, setT] = useState<Record<string, string>>({
+    nadpis_zavady: "2. Registr zjištěných nedostatků a nápravných opatření",
+    nadpis_komplet: "2. Kompletní auditní protokol zjištění",
+    karta_opatreni: "Návrh opatření:",
+    nadpis_misto: "Místo prověrky:",
+    karta_termin: "Termín:",
+    karta_odpovednost: "Pozice:",
+    stat_vyhovuje: "VYHOVUJE",
+    stat_neshody: "NESHODY (N)"
+  });
+  
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Stavy pro klientský formulář odstranění
+  const [resolvingBod, setResolvingBod] = useState<string | number | null>(null);
+  const [resolveData, setResolveData] = useState({ datum: '', jmeno: '', foto: [] as string[] });
 
-  // Bezpečnostní ověření role přímo z databáze
   const isAdmin = userProfile?.role === 'admin';
 
   useEffect(() => {
-    if (zaznamy && zaznamy.length > 0) {
-      setIsLoading(false);
-    }
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 2000);
+    if (zaznamy && zaznamy.length > 0) setIsLoading(false);
+    const timer = setTimeout(() => setIsLoading(false), 2000);
     return () => clearTimeout(timer);
   }, [zaznamy]);
 
   useEffect(() => {
-    fetch(TEXTS_URL)
-      .then(res => res.text())
-      .then(csv => {
+    fetch(TEXTS_URL).then(res => res.text()).then(csv => {
         const rows = parseCSV(csv);
         const map: Record<string, string> = {};
-        rows.forEach(r => {
-          if(r[0] && r[1]) map[r[0].trim()] = r[1].trim();
-        });
+        rows.forEach(r => { if(r[0] && r[1]) map[r[0].trim()] = r[1].trim(); });
         setT(prev => ({ ...prev, ...map }));
-      })
-      .catch(console.error);
+      }).catch(console.error);
   }, []);
 
   const record = useMemo(() => zaznamy.find(z => z.id === params.id), [zaznamy, params.id]);
@@ -96,13 +93,8 @@ export default function RecordDetailPage() {
   const pracovisteList = useMemo(() => {
     if (!klient || !record) return [];
     const prac = klient.pracoviste || [];
-    if (record.pracovisteIds && Array.isArray(record.pracovisteIds)) {
-      return prac.filter(p => record.pracovisteIds.includes(p.id));
-    }
-    if (record.pracovisteId) {
-      const oldPrac = prac.find(p => p.id === record.pracovisteId);
-      return oldPrac ? [oldPrac] : [];
-    }
+    if (record.pracovisteIds && Array.isArray(record.pracovisteIds)) return prac.filter(p => record.pracovisteIds.includes(p.id));
+    if (record.pracovisteId) return prac.filter(p => p.id === record.pracovisteId);
     return [];
   }, [klient, record]);
 
@@ -110,46 +102,54 @@ export default function RecordDetailPage() {
   const [onlyDefects, setOnlyDefects] = useState<boolean>(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
-  const toggleGroup = (sec: string) => {
-    setCollapsedGroups(prev => ({ ...prev, [sec]: !prev[sec] }));
-  };
+  const toggleGroup = (sec: string) => setCollapsedGroups(prev => ({ ...prev, [sec]: !prev[sec] }));
 
-  // HLAVNÍ FUNKCE PRO KLIENTA: Označení neshody za vyřešenou
-  const handleToggleResolve = async (bodId: string | number) => {
+  // Potvrzení odstranění klientem
+  const handleConfirmResolve = async (bodId: string | number) => {
     if (!record) return;
+    if (!resolveData.jmeno.trim()) {
+      toast({ title: "Chybí jméno", description: "Zadejte prosím své jméno a příjmení.", variant: "destructive" });
+      return;
+    }
 
     const updatedBody = record.kontrolniBody.map((kb: any) => {
       if ((kb.id || kb.bod) === bodId) {
-        // Přepínáme stav "vyresenoKlientem"
-        const currentStatus = !!kb.vyresenoKlientem;
-        return { ...kb, vyresenoKlientem: !currentStatus };
+        return { 
+          ...kb, 
+          vyresenoKlientem: true,
+          datumVyreseniKlientem: resolveData.datum,
+          jmenoVyresitele: resolveData.jmeno,
+          fotoVyreseni: resolveData.foto
+        };
       }
       return kb;
     });
 
     try {
-      // Zapíšeme okamžitě změnu do cloudu přes data-provider
       setZaznamy((prev: any[]) => prev.map(z => z.id === record.id ? { ...z, kontrolniBody: updatedBody } : z));
-      toast({
-        title: "Stav aktualizován",
-        description: "Vaše řešení bylo úspěšně odesláno do cloudu.",
-      });
+      setResolvingBod(null);
+      toast({ title: "Závada odstraněna", description: "Úspěšně jste nahlásili odstranění závady auditorovi." });
     } catch (e) {
-      toast({
-        title: "Chyba",
-        description: "Nepodařilo se synchronizovat stav s databází.",
-        variant: "destructive"
-      });
+      toast({ title: "Chyba", description: "Nepodařilo se uložit data.", variant: "destructive" });
     }
+  };
+
+  // Zrušení odstranění
+  const handleCancelResolve = async (bodId: string | number) => {
+    if (!record) return;
+    const updatedBody = record.kontrolniBody.map((kb: any) => {
+      if ((kb.id || kb.bod) === bodId) {
+        return { ...kb, vyresenoKlientem: false, datumVyreseniKlientem: null, jmenoVyresitele: null, fotoVyreseni: [] };
+      }
+      return kb;
+    });
+    setZaznamy((prev: any[]) => prev.map(z => z.id === record.id ? { ...z, kontrolniBody: updatedBody } : z));
+    toast({ title: "Zrušeno", description: "Závada byla vrácena do řešení." });
   };
 
   const allSectionsInRecord = useMemo(() => {
     const sections = new Set<string>();
-    if (record?.kontrolniBody) {
-      record.kontrolniBody.forEach((kb: any) => {
-        if (kb.sekce) sections.add(kb.sekce);
-      });
-    }
+    if (record?.kontrolniBody) record.kontrolniBody.forEach((kb: any) => { if (kb.sekce) sections.add(kb.sekce); });
     return Array.from(sections) as string[];
   }, [record]);
 
@@ -163,15 +163,9 @@ export default function RecordDetailPage() {
     }
   }, [allSectionsInRecord]);
 
-  const toggleSection = (sectionName: string) => {
-    setVisibleSections(prev => ({ ...prev, [sectionName]: prev[sectionName] === false }));
-  };
-
   const uniquePositionsInRecord = useMemo(() => {
     if (!record?.kontrolniBody) return [];
-    const positions = record.kontrolniBody
-      .filter((kb: any) => kb.hodnoceni === 'N' && kb.odpovednaOsoba)
-      .map((kb: any) => kb.odpovednaOsoba);
+    const positions = record.kontrolniBody.filter((kb: any) => kb.hodnoceni === 'N' && kb.odpovednaOsoba).map((kb: any) => kb.odpovednaOsoba);
     return Array.from(new Set(positions)) as string[];
   }, [record]);
 
@@ -189,51 +183,27 @@ export default function RecordDetailPage() {
   const groupedKontrolniBody = useMemo(() => {
     const groups: { sekce: string; items: any[] }[] = [];
     const secMap = new Map<string, number>();
-
     filteredKontrolniBody.forEach((kb: any) => {
       const sec = kb.sekce || "Ostatní";
-      if (!secMap.has(sec)) {
-        secMap.set(sec, groups.length);
-        groups.push({ sekce: sec, items: [] });
-      }
+      if (!secMap.has(sec)) { secMap.set(sec, groups.length); groups.push({ sekce: sec, items: [] }); }
       groups[secMap.get(sec)!].items.push(kb);
     });
     return groups;
   }, [filteredKontrolniBody]);
 
   if (!record) {
-    if (isLoading) {
-      return (
-        <div className="min-h-[50vh] flex flex-col items-center justify-center space-y-4">
-          <Loader2 className="h-8 w-8 text-primary animate-spin" />
-          <p className="text-muted-foreground text-sm font-medium">Načítám report z cloudu...</p>
-        </div>
-      );
-    }
-    return (
-      <div className="p-8 text-center space-y-4">
-        <p className="text-muted-foreground italic">Záznam nebyl nalezen.</p>
-        <Button onClick={() => router.push("/")}><ChevronLeft className="mr-2 h-4 w-4" /> Zpět</Button>
-      </div>
-    );
+    if (isLoading) return <div className="min-h-[50vh] flex flex-col items-center justify-center space-y-4"><Loader2 className="h-8 w-8 text-primary animate-spin" /><p className="text-muted-foreground text-sm font-medium">Načítám report...</p></div>;
+    return <div className="p-8 text-center space-y-4"><p className="text-muted-foreground italic">Záznam nebyl nalezen.</p><Button onClick={() => router.push("/")}><ChevronLeft className="mr-2 h-4 w-4" /> Zpět</Button></div>;
   }
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative overflow-hidden">
-      
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="p-0 h-auto text-muted-foreground hover:bg-transparent" onClick={() => router.push("/")}>
-              <ChevronLeft className="h-4 w-4" /> Zpět
-            </Button>
-            <span className="text-xs font-bold uppercase tracking-wider text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">
-              {record.stav === 'uzavreny' ? 'Uzavřený report' : 'Koncept'}
-            </span>
-            {/* LOKÁLNÍ DEBUG ŠTÍTEK */}
-            <span className="text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-500 px-2 py-0.5 rounded border border-slate-200">
-              Role: {userProfile?.role || 'Neznámá'}
-            </span>
+            <Button variant="ghost" size="sm" className="p-0 h-auto text-muted-foreground hover:bg-transparent" onClick={() => router.push("/")}><ChevronLeft className="h-4 w-4" /> Zpět na přehled</Button>
+            <span className="text-xs font-bold uppercase tracking-wider text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">{record.stav === 'uzavreny' ? 'Uzavřený report' : 'Koncept'}</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 px-2 py-0.5 rounded border border-slate-200">Role: {isAdmin ? 'Admin' : 'Client'}</span>
           </div>
           <h1 className="text-3xl font-bold tracking-tight">{record.cislo} <span className="text-muted-foreground font-normal text-xl">R{record.revize || 0}</span></h1>
           <p className="text-sm text-muted-foreground">Provedeno dne {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : 'Neuvedeno'}</p>
@@ -241,11 +211,10 @@ export default function RecordDetailPage() {
         
         <div className="flex flex-wrap gap-2 w-full md:w-auto">
           <Button variant="default" className="h-11 shadow-sm font-bold bg-blue-600 hover:bg-blue-700 text-white">
-            <Printer className="h-4 w-4 mr-2" /> Stáhnout PDF
+            <Printer className="h-4 w-4 mr-2" /> Stáhnout PDF report
           </Button>
-          {/* Tlačítko vidí pouze ADMIN */}
           {isAdmin && (
-            <Button variant="secondary" className="h-11 shadow-sm">
+            <Button variant="secondary" className="h-11 shadow-sm" onClick={() => toast({ title: "Editace záznamu", description: "Pro úpravu existujících záznamů připravíme samostatný formulář v dalším kroku vývoje." })}>
               <Edit className="h-4 w-4 mr-2" /> Upravit záznam
             </Button>
           )}
@@ -256,7 +225,10 @@ export default function RecordDetailPage() {
         <CardHeader className="py-4 space-y-4">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-3">
             <div>
-              <CardTitle className="text-sm font-bold flex items-center gap-2 text-blue-900"><FileText className="h-4 w-4" /> Klientský dispečink reportu</CardTitle>
+              <CardTitle className="text-sm font-bold flex items-center gap-2 text-blue-900">
+                <FileText className="h-4 w-4" /> 
+                {isAdmin ? "Manažerský dispečink pro exporty" : "Klientský dispečink reportu"}
+              </CardTitle>
               <CardDescription className="text-xs">Filtrujte kapitoly a odpovědnosti.</CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
@@ -289,11 +261,7 @@ export default function RecordDetailPage() {
               {groupedKontrolniBody.map((group) => {
                 const { sekce, items } = group;
                 const isCollapsed = collapsedGroups[sekce];
-                
-                const groupStats = {
-                  V: items.filter(i => i.hodnoceni === 'V').length,
-                  N: items.filter(i => i.hodnoceni === 'N').length,
-                };
+                const groupStats = { N: items.filter(i => i.hodnoceni === 'N').length };
 
                 return (
                   <div key={sekce} className="space-y-3">
@@ -318,9 +286,7 @@ export default function RecordDetailPage() {
                             <div key={bodId} className={cn("p-4 border rounded-xl space-y-4 transition-all bg-white", isDefect ? "border-slate-200 shadow-sm" : "bg-slate-50/40 border-slate-100 text-slate-600")}>
                               <div className="flex justify-between items-start gap-2">
                                 <div className="flex items-center gap-2">
-                                  <span className={cn("font-mono text-xs font-bold h-6 w-6 rounded-md flex items-center justify-center shrink-0", isDefect ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800")}>
-                                    {kb.bod}
-                                  </span>
+                                  <span className={cn("font-mono text-xs font-bold h-6 w-6 rounded-md flex items-center justify-center shrink-0", isDefect ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800")}>{kb.bod}</span>
                                   <div>
                                     <h4 className="font-bold text-[14px] leading-tight text-slate-900">{kb.otazka || kb.popis}</h4>
                                     <span className="text-[10px] text-muted-foreground font-bold uppercase">{kb.sekce || 'Ostatní'}</span>
@@ -328,9 +294,7 @@ export default function RecordDetailPage() {
                                 </div>
                                 <div className="flex items-center gap-1.5 shrink-0">
                                   {isDefect && isResolvedByClient && (
-                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
-                                      <Clock className="h-3 w-3" /> Vyřešeno klientem
-                                    </span>
+                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1"><Clock className="h-3 w-3" /> Vyřešeno klientem</span>
                                   )}
                                   <span className={cn("text-[10px] font-bold uppercase px-2 py-0.5 rounded border", isDefect ? (isResolvedByClient ? "bg-slate-50 text-slate-500" : "bg-red-50 text-red-700 border-red-200") : "bg-green-50 text-green-700 border-green-200")}>
                                     {isDefect ? 'Neshoda' : 'Vyhovuje'}
@@ -347,30 +311,94 @@ export default function RecordDetailPage() {
                                     <div><span className="text-muted-foreground block mb-0.5">{t.karta_odpovednost}</span><p className="font-bold text-black">{kb.odpovednaOsoba || 'Neuvedena'}</p></div>
                                   </div>
 
-                                  {/* INTERAKTIVNÍ ROZHRANÍ POUZE PRO KLIENTA */}
+                                  {/* INTERAKTIVNÍ FORMULÁŘ POUZE PRO KLIENTA */}
                                   {!isAdmin && (
-                                    <div className="flex items-center justify-between p-3 rounded-lg border border-blue-200 bg-blue-50/50 mt-4">
+                                    <div className="flex flex-col p-4 rounded-lg border border-blue-200 bg-blue-50/60 mt-4 space-y-4">
                                       <div className="space-y-0.5">
                                         <p className="text-sm font-bold text-blue-900">Odstranili jste tento nedostatek?</p>
-                                        <p className="text-[11px] font-medium text-blue-700">Označte bod jako splněný pro revizi auditorem.</p>
+                                        <p className="text-[11px] font-medium text-blue-700">Vyplňte detaily o nápravě pro revizi auditorem.</p>
                                       </div>
-                                      <Button 
-                                        type="button" 
-                                        size="sm" 
-                                        variant={isResolvedByClient ? "outline" : "default"}
-                                        className={cn("h-9 px-4 font-bold text-xs shadow-sm transition-all", !isResolvedByClient && "bg-blue-600 hover:bg-blue-700 text-white border-none")}
-                                        onClick={() => handleToggleResolve(bodId)}
-                                      >
-                                        {isResolvedByClient ? "Zrušit potvrzení" : "Označit za vyřešené"}
-                                      </Button>
+
+                                      {isResolvedByClient ? (
+                                         <div className="bg-white p-3 rounded border border-blue-100 text-sm space-y-3">
+                                           <div className="flex justify-between items-start">
+                                             <div><span className="text-xs text-muted-foreground block">Odstranil(a)</span><p className="font-bold">{kb.jmenoVyresitele || 'Neuvedeno'}</p></div>
+                                             <div className="text-right"><span className="text-xs text-muted-foreground block">Datum</span><p className="font-bold">{kb.datumVyreseniKlientem ? new Date(kb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</p></div>
+                                           </div>
+                                           {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
+                                             <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t">
+                                               {kb.fotoVyreseni.map((f: string, i: number) => (
+                                                 <a href={f} target="_blank" rel="noreferrer" key={i}><img src={f} alt="Důkaz" className="h-16 w-16 object-cover rounded border hover:opacity-80 transition-opacity" /></a>
+                                               ))}
+                                             </div>
+                                           )}
+                                           <Button variant="outline" size="sm" onClick={() => handleCancelResolve(bodId)} className="mt-2 w-full text-red-600 hover:bg-red-50 border-red-200">Zrušit a vrátit do řešení</Button>
+                                         </div>
+                                      ) : (
+                                        resolvingBod === bodId ? (
+                                          <div className="space-y-4 bg-white p-4 rounded border border-blue-100 shadow-sm animate-in fade-in zoom-in-95 duration-200">
+                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                               <div className="space-y-1.5"><Label className="text-xs font-bold text-slate-700">Datum odstranění *</Label><Input type="date" value={resolveData.datum} onChange={e => setResolveData(prev => ({...prev, datum: e.target.value}))} className="h-9" /></div>
+                                               <div className="space-y-1.5"><Label className="text-xs font-bold text-slate-700">Jméno a příjmení *</Label><Input placeholder="Vaše jméno..." value={resolveData.jmeno} onChange={e => setResolveData(prev => ({...prev, jmeno: e.target.value}))} className="h-9" /></div>
+                                             </div>
+                                             <div className="space-y-1.5">
+                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1"><Camera className="h-3 w-3"/> Fotografie důkazu (volitelné)</Label>
+                                                <Input type="file" accept="image/*" multiple onChange={(e) => {
+                                                    const files = Array.from(e.target.files || []);
+                                                    files.forEach(file => {
+                                                      const r = new FileReader();
+                                                      r.onloadend = () => { setResolveData(prev => ({...prev, foto: [...prev.foto, r.result as string]})); };
+                                                      r.readAsDataURL(file);
+                                                    });
+                                                }} className="text-xs h-9 cursor-pointer" />
+                                                {resolveData.foto.length > 0 && (
+                                                  <div className="flex flex-wrap gap-2 mt-3 p-2 bg-slate-50 rounded border border-dashed">
+                                                    {resolveData.foto.map((f, i) => (
+                                                      <div key={i} className="relative group">
+                                                         <img src={f} className="h-14 w-14 object-cover rounded shadow-sm" />
+                                                         <button onClick={() => setResolveData(prev => ({...prev, foto: prev.foto.filter((_, idx) => idx !== i)}))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow"><X className="h-3 w-3" /></button>
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                )}
+                                             </div>
+                                             <div className="flex items-center gap-2 pt-2 border-t">
+                                               <Button size="sm" onClick={() => handleConfirmResolve(bodId)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-9">Odeslat ke kontrole</Button>
+                                               <Button size="sm" variant="ghost" onClick={() => setResolvingBod(null)} className="h-9 text-slate-500 hover:text-slate-900">Zrušit</Button>
+                                             </div>
+                                          </div>
+                                        ) : (
+                                          <Button onClick={() => { setResolvingBod(bodId); setResolveData({ datum: new Date().toISOString().split('T')[0], jmeno: '', foto: [] }); }} size="sm" className="bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 hover:text-blue-800 shadow-sm self-start font-bold h-9 px-4">
+                                             Začít hlásit odstranění
+                                          </Button>
+                                        )
+                                      )}
                                     </div>
                                   )}
 
-                                  {/* POHLED PRO AUDITORA */}
+                                  {/* POHLED PRO AUDITORA KDYŽ JE HOTOVO */}
                                   {isAdmin && isResolvedByClient && (
-                                    <div className="flex items-center gap-2 text-xs font-semibold p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800">
-                                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                                      <span>Klient nahlásil vyřešení této závady. Zkontrolujte stav.</span>
+                                    <div className="flex flex-col gap-3 text-sm p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 mt-4 shadow-inner">
+                                      <div className="flex items-center gap-2 font-bold text-emerald-800">
+                                        <CheckCircle2 className="h-5 w-5 shrink-0" />
+                                        <span>Klient nahlásil vyřešení této závady. Zkontrolujte stav.</span>
+                                      </div>
+                                      <div className="bg-white/80 p-3 rounded-md flex flex-col gap-1.5 border border-emerald-100 shadow-sm">
+                                        <div className="flex justify-between items-center border-b border-emerald-100 pb-2 mb-1">
+                                          <div><span className="text-[10px] uppercase font-bold text-emerald-600/70 block">Osoba hlásící nápravu</span><p className="font-bold">{kb.jmenoVyresitele || 'Neuvedeno'}</p></div>
+                                          <div className="text-right"><span className="text-[10px] uppercase font-bold text-emerald-600/70 block">Datum řešení</span><p className="font-bold">{kb.datumVyreseniKlientem ? new Date(kb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</p></div>
+                                        </div>
+                                        {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
+                                           <div>
+                                             <span className="text-[10px] uppercase font-bold text-emerald-600/70 block mb-1">Přiložené fotodůkazy</span>
+                                             <div className="flex flex-wrap gap-2">
+                                               {kb.fotoVyreseni.map((f: string, i: number) => (
+                                                 <a href={f} target="_blank" rel="noreferrer" key={i}><img src={f} alt="Důkaz" className="h-16 w-16 object-cover rounded border border-emerald-200 hover:scale-105 transition-transform cursor-zoom-in" /></a>
+                                               ))}
+                                             </div>
+                                           </div>
+                                        )}
+                                      </div>
                                     </div>
                                   )}
                                 </div>
@@ -387,18 +415,12 @@ export default function RecordDetailPage() {
           </Card>
         </div>
 
-        {/* Postranní lišta */}
         <div className="space-y-6">
           <Card className="border-none shadow-sm bg-white">
             <CardHeader><CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-bold">Detaily kontroly</CardTitle></CardHeader>
             <CardContent className="space-y-4 text-sm">
-              <div className="flex gap-3"><Building className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Klient</span><p className="font-bold">{klient?.nazev || 'Kovárna Novák s.r.o.'}</p></div></div>
-              <div className="flex gap-3"><MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-xs text-muted-foreground block">Pracoviště</span>
-                  <p className="font-bold">{pracovisteList.map(p => p.nazev).join(', ') || 'Hlavní provozovna'}</p>
-                </div>
-              </div>
+              <div className="flex gap-3"><Building className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Klient</span><p className="font-bold">{klient?.nazev || 'Neznámý'}</p></div></div>
+              <div className="flex gap-3"><MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" /><div><span className="text-xs text-muted-foreground block">Pracoviště</span><p className="font-bold">{pracovisteList.map(p => p.nazev).join(', ') || 'Neznámé'}</p></div></div>
             </CardContent>
           </Card>
         </div>
