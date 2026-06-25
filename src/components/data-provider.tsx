@@ -24,7 +24,7 @@ export const auth = getAuth(app);
 
 interface UserProfile {
   role: 'admin' | 'client';
-  klientId?: string; // Vyplněno pouze pokud role === 'client'
+  klientId?: string;
 }
 
 interface DataContextType {
@@ -48,22 +48,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [klienti, setKlientiState] = useState<any[]>([]);
   const [zaznamy, setZaznamyState] = useState<any[]>([]);
 
-  // 1. Sledování stavu přihlášení uživatele + načtení jeho role z Firestore
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       
       if (firebaseUser) {
-        // Pokusíme se načíst profil uživatele (jeho roli) z kolekce 'uzivatele'
         const userDocRef = doc(db, 'uzivatele', firebaseUser.uid);
         const userDoc = await getDoc(userDocRef);
         
         if (userDoc.exists()) {
           setUserProfile(userDoc.data() as UserProfile);
         } else {
-          // Pokud profil neexistuje, uživateli přiřadíme bezpečnou roli "client" bez klientId
-          // Tím zabráníme, aby se omylem stal adminem, ale zároveň ho to pustí do portálu.
-          // Aby něco viděl, musíte mu klientId ve Firebase doplnit ručně.
           const defaultClientProfile: UserProfile = { role: 'client' };
           await setDoc(userDocRef, defaultClientProfile);
           setUserProfile(defaultClientProfile);
@@ -77,17 +72,22 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribeAuth();
   }, []);
 
-  // 2. Načítání a synchronizace klientů (Pouze pro Admina)
+  // 2. Načítání klientů (Admin vidí vše, klient vidí JEN svou firmu)
   useEffect(() => {
-    if (!user || userProfile?.role !== 'admin') {
+    if (!user || !userProfile) {
       setKlientiState([]);
       return;
     }
 
     const unsubscribe = onSnapshot(collection(db, 'klienti'), (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      let docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
-      if (docs.length === 0) {
+      // Bezpečnostní filtr pro klienta
+      if (userProfile.role === 'client') {
+        docs = docs.filter(k => k.id === userProfile.klientId);
+      }
+      
+      if (docs.length === 0 && userProfile.role === 'admin') {
         const defaultClients = [
           {
             id: "kovarna-novak",
@@ -113,7 +113,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, [user, userProfile]);
 
-  // 3. Načítání a synchronizace auditních záznamů s BEZPEČNOSTNÍM FILTREM ROLÍ
   useEffect(() => {
     if (!user || !userProfile) {
       setZaznamyState([]);
@@ -124,11 +123,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
       if (userProfile.role === 'admin') {
-        // Admin vidí kompletně všechny záznamy
         setZaznamyState(docs);
       } else {
-        // KLIENT VIDÍ POUZE ZÁZNAMY SVÉ VLASTNÍ FIRMY
-        // A pokud nemá přiřazené klientId, neuvidí vůbec nic (bezpečnostní pojistka)
         if (!userProfile.klientId) {
             setZaznamyState([]);
         } else {
@@ -165,16 +161,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <DataContext.Provider value={{ 
-      klienti, 
-      zaznamy, 
-      user, 
-      userProfile, 
-      authLoading, 
-      logout, 
-      setZaznamy, 
-      setKlienti: setKlientiState 
-    }}>
+    <DataContext.Provider value={{ klienti, zaznamy, user, userProfile, authLoading, logout, setZaznamy, setKlienti: setKlientiState }}>
       {children}
     </DataContext.Provider>
   );
@@ -182,8 +169,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
 export function useData() {
   const context = useContext(DataContext);
-  if (!context) {
-    throw new Error('useData musí být použit uvnitř DataProvideru');
-  }
+  if (!context) { throw new Error('useData musí být použit uvnitř DataProvideru'); }
   return context;
 }
