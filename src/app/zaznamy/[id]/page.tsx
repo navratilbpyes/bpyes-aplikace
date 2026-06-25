@@ -120,18 +120,11 @@ export default function RecordDetailPage() {
 
   const toggleGroup = (sec: string) => setCollapsedGroups(prev => ({ ...prev, [sec]: !prev[sec] }));
 
-  // OPRAVENÁ FUNKCE PRO PDF
   const handlePrint = () => {
     setIsPreparingPdf(true);
-    
-    // 1. Otevře úplně všechny sekce (false znamená, že není sbalená)
     const allOpen: Record<string, boolean> = {};
-    groupedKontrolniBody.forEach(group => {
-      allOpen[group.sekce] = false;
-    });
+    groupedKontrolniBody.forEach(group => { allOpen[group.sekce] = false; });
     setCollapsedGroups(allOpen);
-
-    // 2. Dáme prohlížeči 1 sekundu na překreslení DOMu a načtení obrázků
     setTimeout(() => {
       window.print();
       setIsPreparingPdf(false);
@@ -140,10 +133,7 @@ export default function RecordDetailPage() {
 
   const handleConfirmResolve = async (bodId: string | number) => {
     if (!record) return;
-    if (!resolveData.jmeno.trim()) {
-      toast({ title: "Chybí jméno", description: "Zadejte prosím své jméno a příjmení.", variant: "destructive" });
-      return;
-    }
+    if (!resolveData.jmeno.trim()) { toast({ title: "Chybí jméno", description: "Zadejte prosím své jméno a příjmení.", variant: "destructive" }); return; }
     const updatedBody = record.kontrolniBody.map((kb: any) => {
       if ((kb.id || kb.bod) === bodId) {
         return { ...kb, vyresenoKlientem: true, datumVyreseniKlientem: resolveData.datum, jmenoVyresitele: resolveData.jmeno, poznamkaKlienta: resolveData.poznamka, fotoVyreseni: resolveData.foto };
@@ -154,17 +144,13 @@ export default function RecordDetailPage() {
       setZaznamy((prev: any[]) => prev.map(z => z.id === record.id ? { ...z, kontrolniBody: updatedBody } : z));
       setResolvingBod(null);
       toast({ title: "Závada odstraněna", description: "Úspěšně jste nahlásili odstranění závady auditorovi." });
-    } catch (e) {
-      toast({ title: "Chyba", description: "Nepodařilo se uložit data.", variant: "destructive" });
-    }
+    } catch (e) { toast({ title: "Chyba", description: "Nepodařilo se uložit data.", variant: "destructive" }); }
   };
 
   const handleCancelResolve = async (bodId: string | number) => {
     if (!record) return;
     const updatedBody = record.kontrolniBody.map((kb: any) => {
-      if ((kb.id || kb.bod) === bodId) {
-        return { ...kb, vyresenoKlientem: false, datumVyreseniKlientem: null, jmenoVyresitele: null, poznamkaKlienta: null, fotoVyreseni: [] };
-      }
+      if ((kb.id || kb.bod) === bodId) { return { ...kb, vyresenoKlientem: false, datumVyreseniKlientem: null, jmenoVyresitele: null, poznamkaKlienta: null, fotoVyreseni: [] }; }
       return kb;
     });
     setZaznamy((prev: any[]) => prev.map(z => z.id === record.id ? { ...z, kontrolniBody: updatedBody } : z));
@@ -221,19 +207,57 @@ export default function RecordDetailPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative overflow-hidden">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative overflow-hidden print:p-0 print:space-y-6 print:pb-0">
       
-      {/* HLAVIČKA A TLAČÍTKA */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6">
+      {/* MAGICKÉ CSS PRO TISK (odstraní patičky prohlížeče, nastaví okraje papíru) */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @media print {
+          @page { size: A4 portrait; margin: 15mm; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white; }
+          ::-webkit-scrollbar { display: none; }
+        }
+      `}} />
+
+      {/* TISK: PROFESIONÁLNÍ HLAVIČKA PROTOKOLU (Na webu se schová, v PDF zazáří) */}
+      <div className="hidden print:block border-b-2 border-slate-800 pb-6 mb-8">
+        <div className="flex justify-between items-end mb-6">
+          <div>
+            <h1 className="text-3xl font-black uppercase text-slate-900 tracking-tight">BPyes <span className="text-slate-400">|</span> Auditní protokol</h1>
+            <p className="text-sm font-bold text-slate-600 uppercase tracking-widest mt-1">Typ kontroly: {record.typKontroly}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-bold text-slate-900">{record.cislo} <span className="text-base text-slate-500 font-normal">R{record.revize || 0}</span></p>
+            <p className="text-sm font-medium text-slate-600">Ze dne: {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : '-'}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-8 text-sm">
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg">
+            <span className="font-bold text-slate-500 uppercase text-[10px] tracking-wider mb-1 block">Kontrolovaný subjekt (Klient)</span>
+            <p className="font-black text-slate-900 text-base">{klient?.nazev || 'Neznámý'}</p>
+            {klient?.ico && <p className="text-slate-600 mt-1">IČO: {klient.ico}</p>}
+            <p className="text-slate-600 mt-1 font-medium">Pracoviště: {pracovisteList.map(p => p.nazev).join(', ')}</p>
+          </div>
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg">
+            <span className="font-bold text-slate-500 uppercase text-[10px] tracking-wider mb-1 block">Zpracoval / Auditor</span>
+            <p className="font-black text-slate-900 text-base">BPyes, s.r.o.</p>
+            <p className="text-slate-600 mt-1">Odborně způsobilá osoba v prevenci rizik</p>
+            <p className="text-slate-600 mt-1 font-medium">Stav dokumentu: <span className="uppercase">{record.stav === 'uzavreny' ? 'Uzavřený' : 'Koncept (V řešení)'}</span></p>
+          </div>
+        </div>
+      </div>
+
+      {/* HLAVIČKA A TLAČÍTKA PRO WEB (print:hidden je v PDF vymaže) */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6 print:hidden">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="p-0 h-auto text-muted-foreground hover:bg-transparent print:hidden" onClick={() => router.push("/")}>
+            <Button variant="ghost" size="sm" className="p-0 h-auto text-muted-foreground hover:bg-transparent" onClick={() => router.push("/")}>
               <ChevronLeft className="h-4 w-4" /> Zpět na přehled
             </Button>
             <span className={cn("text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded border", record.stav === 'uzavreny' ? "text-green-700 bg-green-50 border-green-200" : "text-amber-700 bg-amber-50 border-amber-200")}>
               {record.stav === 'uzavreny' ? 'Uzavřený report' : 'Koncept (V řešení)'}
             </span>
-            <span className="print:hidden text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 px-2 py-0.5 rounded border border-slate-200">
+            <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 px-2 py-0.5 rounded border border-slate-200">
               Role: {isAdmin ? 'Admin' : 'Client'}
             </span>
           </div>
@@ -241,8 +265,7 @@ export default function RecordDetailPage() {
           <p className="text-sm text-muted-foreground">Provedeno dne {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : 'Neuvedeno'}</p>
         </div>
         
-        {/* Tlačítka schováme pro tisk pomocí print:hidden */}
-        <div className="flex flex-wrap gap-2 w-full md:w-auto print:hidden">
+        <div className="flex flex-wrap gap-2 w-full md:w-auto">
           <Button variant="default" className="h-11 shadow-sm font-bold bg-blue-600 hover:bg-blue-700 text-white" onClick={handlePrint} disabled={isPreparingPdf}>
             {isPreparingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Printer className="h-4 w-4 mr-2" />}
             {isPreparingPdf ? "Příprava k tisku..." : "Stáhnout PDF report"}
@@ -288,50 +311,60 @@ export default function RecordDetailPage() {
         </CardHeader>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-2 space-y-6">
-          <Card className="border-none shadow-sm print:shadow-none">
-            <CardHeader className="print:px-0"><CardTitle className="text-lg">{onlyDefects ? t.nadpis_zavady : t.nadpis_komplet} ({filteredKontrolniBody.length})</CardTitle></CardHeader>
-            <CardContent className="space-y-6 print:px-0">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 print:block">
+        <div className="md:col-span-2 space-y-6 print:w-full print:space-y-4">
+          
+          <Card className="border-none shadow-sm print:shadow-none print:bg-transparent">
+            <CardHeader className="print:px-0 print:py-2">
+              <CardTitle className="text-lg print:text-xl print:font-black print:text-slate-800 print:uppercase print:border-b-2 print:border-slate-800 print:pb-2">
+                {onlyDefects ? t.nadpis_zavady : t.nadpis_komplet}
+              </CardTitle>
+            </CardHeader>
+            
+            <CardContent className="space-y-6 print:px-0 print:space-y-4">
               {groupedKontrolniBody.map((group) => {
                 const { sekce, items } = group;
                 const isCollapsed = collapsedGroups[sekce];
                 const groupStats = { N: items.filter(i => i.hodnoceni === 'N').length };
 
                 return (
-                  <div key={sekce} className="space-y-3 print:break-inside-avoid">
-                    <div onClick={() => toggleGroup(sekce)} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors print:bg-white print:border-b-2 print:border-b-black print:rounded-none">
+                  <div key={sekce} className="space-y-3 print:break-inside-avoid print:space-y-2">
+                    {/* Hlavička oddílu - v tisku čistá, bez stínů a podkresů */}
+                    <div onClick={() => toggleGroup(sekce)} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors print:bg-transparent print:border-none print:border-b print:border-slate-300 print:rounded-none print:p-2 print:px-0">
                       <h3 className="font-bold text-slate-800 text-sm uppercase">{sekce}</h3>
                       <div className="flex items-center gap-4">
                         <div className="flex gap-2 text-[10px] font-bold uppercase tracking-wider">
-                          {groupStats.N > 0 && <span className="text-red-700 bg-red-100 px-2 py-0.5 rounded print:border print:border-red-500">{t.stat_neshody}: {groupStats.N}</span>}
+                          {groupStats.N > 0 && <span className="text-red-700 bg-red-100 px-2 py-0.5 rounded print:bg-white print:border print:border-slate-800 print:text-slate-800">{t.stat_neshody}: {groupStats.N}</span>}
                         </div>
                         <ChevronDown className={cn("h-5 w-5 text-slate-500 transition-transform print:hidden", isCollapsed && "-rotate-90")} />
                       </div>
                     </div>
 
                     {!isCollapsed && (
-                      <div className="space-y-4 pl-2 ml-2 border-l-2 border-blue-100 print:border-none print:pl-0 print:ml-0">
+                      <div className="space-y-4 pl-2 ml-2 border-l-2 border-blue-100 print:border-none print:pl-0 print:ml-0 print:space-y-3">
                         {items.map((kb: any) => {
                           const isDefect = kb.hodnoceni === 'N';
                           const bodId = kb.id || kb.bod;
                           const isResolvedByClient = !!kb.vyresenoKlientem;
 
                           return (
-                            <div key={bodId} className={cn("p-4 border rounded-xl space-y-4 transition-all bg-white print:break-inside-avoid", isDefect ? "border-slate-200 shadow-sm" : "bg-slate-50/40 border-slate-100 text-slate-600 print:border-b")}>
+                            <div key={bodId} className={cn("p-4 border rounded-xl space-y-4 transition-all bg-white print:break-inside-avoid print:rounded-none print:border print:border-slate-300 print:shadow-none", isDefect ? "border-slate-200 shadow-sm" : "bg-slate-50/40 border-slate-100 text-slate-600 print:bg-white")}>
                               <div className="flex justify-between items-start gap-2">
                                 <div className="flex items-center gap-2">
-                                  <span className={cn("font-mono text-xs font-bold h-6 w-6 rounded-md flex items-center justify-center shrink-0", isDefect ? "bg-red-100 text-red-800 print:border print:border-red-400" : "bg-green-100 text-green-800 print:border print:border-green-400")}>{kb.bod}</span>
+                                  {/* Piktogram pro číslo bodu */}
+                                  <span className={cn("font-mono text-xs font-bold h-6 w-6 rounded-md flex items-center justify-center shrink-0", isDefect ? "bg-red-100 text-red-800 print:bg-white print:border print:border-slate-800 print:text-slate-900" : "bg-green-100 text-green-800 print:bg-white print:border print:border-slate-300 print:text-slate-600")}>
+                                    {kb.bod}
+                                  </span>
                                   <div>
-                                    <h4 className="font-bold text-[14px] leading-tight text-slate-900">{kb.otazka || kb.popis}</h4>
-                                    <span className="text-[10px] text-muted-foreground font-bold uppercase">{kb.sekce || 'Ostatní'}</span>
+                                    <h4 className={cn("font-bold text-[14px] leading-tight", isDefect ? "text-slate-900" : "text-slate-700")}>{kb.otazka || kb.popis}</h4>
+                                    <span className="text-[10px] text-muted-foreground font-bold uppercase print:hidden">{kb.sekce || 'Ostatní'}</span>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-1.5 shrink-0">
                                   {isDefect && isResolvedByClient && (
-                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1"><Clock className="h-3 w-3" /> Vyřešeno</span>
+                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1 print:bg-white print:border-slate-400 print:text-slate-600"><Clock className="h-3 w-3 print:hidden" /> Vyřešeno</span>
                                   )}
-                                  <span className={cn("text-[10px] font-bold uppercase px-2 py-0.5 rounded border", isDefect ? (isResolvedByClient ? "bg-slate-50 text-slate-500" : "bg-red-50 text-red-700 border-red-200") : "bg-green-50 text-green-700 border-green-200")}>
+                                  <span className={cn("text-[10px] font-bold uppercase px-2 py-0.5 rounded border", isDefect ? (isResolvedByClient ? "bg-slate-50 text-slate-500 print:bg-white" : "bg-red-50 text-red-700 border-red-200 print:bg-white print:border-slate-800 print:text-slate-900") : "bg-green-50 text-green-700 border-green-200 print:bg-white print:border-slate-300 print:text-slate-500")}>
                                     {isDefect ? 'Neshoda' : 'Vyhovuje'}
                                   </span>
                                 </div>
@@ -339,11 +372,12 @@ export default function RecordDetailPage() {
 
                               {isDefect && (
                                 <div className="space-y-4">
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-3 rounded-lg border print:bg-white print:border-slate-300">
-                                    <div><span className="text-muted-foreground block mb-0.5">{t.karta_opatreni}</span><p className="font-medium text-slate-900">{kb.navrhOpatreni || 'Není definováno'}</p></div>
-                                    <div><span className="text-muted-foreground block mb-0.5">{t.nadpis_misto}</span><p className="font-bold text-blue-900">{kb.lokalizace || 'Celé pracoviště'}</p></div>
-                                    <div><span className="text-muted-foreground block mb-0.5">{t.karta_termin}</span><p className="font-medium">{kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</p></div>
-                                    <div><span className="text-muted-foreground block mb-0.5">{t.karta_odpovednost}</span><p className="font-bold text-black">{kb.odpovednaOsoba || 'Neuvedena'}</p></div>
+                                  {/* Mřížka informací o neshodě - čistá pro tisk */}
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-3 rounded-lg border print:bg-white print:border-slate-300 print:rounded-none">
+                                    <div><span className="text-muted-foreground block mb-0.5 font-bold uppercase text-[10px]">{t.karta_opatreni}</span><p className="font-medium text-slate-900">{kb.navrhOpatreni || 'Není definováno'}</p></div>
+                                    <div><span className="text-muted-foreground block mb-0.5 font-bold uppercase text-[10px]">{t.nadpis_misto}</span><p className="font-bold text-slate-900">{kb.lokalizace || 'Celé pracoviště'}</p></div>
+                                    <div><span className="text-muted-foreground block mb-0.5 font-bold uppercase text-[10px]">{t.karta_termin}</span><p className="font-medium text-slate-900">{kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</p></div>
+                                    <div><span className="text-muted-foreground block mb-0.5 font-bold uppercase text-[10px]">{t.karta_odpovednost}</span><p className="font-black text-slate-900">{kb.odpovednaOsoba || 'Neuvedena'}</p></div>
                                   </div>
 
                                   {!isAdmin && (
@@ -423,28 +457,28 @@ export default function RecordDetailPage() {
                                   )}
 
                                   {isResolvedByClient && (
-                                    <div className="flex flex-col gap-3 text-sm p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 mt-4 shadow-inner print:bg-white print:border-emerald-300">
-                                      <div className="flex items-center gap-2 font-bold text-emerald-800">
-                                        <CheckCircle2 className="h-5 w-5 shrink-0" />
-                                        <span>Závada nahlášena jako vyřešená</span>
+                                    <div className="flex flex-col gap-3 text-sm p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 mt-4 shadow-inner print:bg-white print:border print:border-slate-300 print:shadow-none print:rounded-none">
+                                      <div className="flex items-center gap-2 font-bold text-emerald-800 print:text-slate-900">
+                                        <CheckCircle2 className="h-5 w-5 shrink-0 print:hidden" />
+                                        <span>Zpráva klienta: Závada nahlášena jako vyřešená</span>
                                       </div>
-                                      <div className="bg-white/80 p-3 rounded-md flex flex-col gap-1.5 border border-emerald-100 shadow-sm print:shadow-none">
-                                        <div className="flex justify-between items-center border-b border-emerald-100 pb-2 mb-1">
-                                          <div><span className="text-[10px] uppercase font-bold text-emerald-600/70 block">Osoba hlásící nápravu</span><p className="font-bold">{kb.jmenoVyresitele || 'Neuvedeno'}</p></div>
-                                          <div className="text-right"><span className="text-[10px] uppercase font-bold text-emerald-600/70 block">Datum řešení</span><p className="font-bold">{kb.datumVyreseniKlientem ? new Date(kb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</p></div>
+                                      <div className="bg-white/80 p-3 rounded-md flex flex-col gap-1.5 border border-emerald-100 shadow-sm print:shadow-none print:border-none print:p-0 print:bg-transparent">
+                                        <div className="flex justify-between items-center border-b border-emerald-100 pb-2 mb-1 print:border-slate-200">
+                                          <div><span className="text-[10px] uppercase font-bold text-emerald-600/70 block print:text-slate-500">Osoba hlásící nápravu</span><p className="font-bold print:text-slate-900">{kb.jmenoVyresitele || 'Neuvedeno'}</p></div>
+                                          <div className="text-right"><span className="text-[10px] uppercase font-bold text-emerald-600/70 block print:text-slate-500">Datum řešení</span><p className="font-bold print:text-slate-900">{kb.datumVyreseniKlientem ? new Date(kb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</p></div>
                                         </div>
                                         {kb.poznamkaKlienta && (
                                           <div>
-                                            <span className="text-[10px] uppercase font-bold text-emerald-600/70 block mb-0.5">Komentář klienta k odstranění</span>
-                                            <p className="font-medium text-slate-800 whitespace-pre-wrap">{kb.poznamkaKlienta}</p>
+                                            <span className="text-[10px] uppercase font-bold text-emerald-600/70 block mb-0.5 print:text-slate-500">Komentář klienta</span>
+                                            <p className="font-medium text-slate-800 whitespace-pre-wrap print:text-slate-900">{kb.poznamkaKlienta}</p>
                                           </div>
                                         )}
                                         {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
-                                           <div className="print:hidden">
-                                             <span className="text-[10px] uppercase font-bold text-emerald-600/70 block mb-1">Přiložené fotodůkazy</span>
+                                           <div className="mt-2">
+                                             <span className="text-[10px] uppercase font-bold text-emerald-600/70 block mb-1 print:text-slate-500">Přiložené fotodůkazy</span>
                                              <div className="flex flex-wrap gap-2">
                                                {kb.fotoVyreseni.map((f: string, i: number) => (
-                                                 <a href={f} target="_blank" rel="noreferrer" key={i}><img src={f} alt="Důkaz" className="h-16 w-16 object-cover rounded border border-emerald-200 hover:scale-105 transition-transform cursor-zoom-in" /></a>
+                                                 <a href={f} target="_blank" rel="noreferrer" key={i}><img src={f} alt="Důkaz" className="h-20 w-20 object-cover rounded border border-emerald-200 print:border-slate-300 print:rounded-none" /></a>
                                                ))}
                                              </div>
                                            </div>
@@ -464,8 +498,22 @@ export default function RecordDetailPage() {
               })}
             </CardContent>
           </Card>
+          
+          {/* TISK: PODPISOVÝ BLOK (Na webu se schová) */}
+          <div className="hidden print:flex justify-between mt-24 pt-8 border-t border-slate-300 break-inside-avoid">
+             <div className="w-64 text-center">
+                <div className="border-b border-black mb-2 pb-12"></div>
+                <p className="text-xs font-bold uppercase text-slate-600">Podpis auditora BPyes</p>
+             </div>
+             <div className="w-64 text-center">
+                <div className="border-b border-black mb-2 pb-12"></div>
+                <p className="text-xs font-bold uppercase text-slate-600">Podpis zástupce klienta</p>
+             </div>
+          </div>
+          
         </div>
 
+        {/* POSTRANNÍ PANEL (Klient / Pracoviště) se při tisku schová, protože jsme ho dali do nové hlavičky nahoře */}
         <div className="space-y-6 print:hidden">
           <Card className="border-none shadow-sm bg-white">
             <CardHeader><CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-bold">Detaily kontroly</CardTitle></CardHeader>
