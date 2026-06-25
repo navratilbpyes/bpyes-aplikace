@@ -129,14 +129,14 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Zjištění role pro dynamické vykreslení navigačního menu
   const isAdmin = userProfile.role === 'admin';
 
-  // 3. Hlavní rozhraní přihlášené aplikace (S dynamickým menu pro Klienta / Admina)
+  // 3. Hlavní rozhraní přihlášené aplikace (S úpravami pro PDF tisk)
   return (
-    <div className="min-h-screen bg-slate-50 flex">
-      {/* Levý navigační panel */}
-      <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between shrink-0 border-r border-slate-800">
+    <div className="min-h-screen bg-slate-50 flex print:bg-white print:block">
+      
+      {/* Levý navigační panel - ZMIZÍ PŘI TISKU (print:hidden) */}
+      <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between shrink-0 border-r border-slate-800 print:hidden">
         <div className="p-6 space-y-8">
           <div>
             <h2 className="text-white text-xl font-black tracking-tight">BPyes</h2>
@@ -153,7 +153,6 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
               <LayoutDashboard className="h-4 w-4" /> Přehled reportů
             </Link>
 
-            {/* TYTO POLOŽKY VIDÍ POUZE ADMIN */}
             {isAdmin && (
               <>
                 <Link 
@@ -164,7 +163,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
                 </Link>
                 <Link 
                   href="/zaznamy" 
-                  className={`flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors ${pathname.startsWith('/zaznamy') && pathname !== '/zaznamy/new' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 hover:text-white'}`}
+                  className={`flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors ${pathname.startsWith('/zaznamy') && pathname !== '/nova-kontrola' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 hover:text-white'}`}
                 >
                   <ClipboardList className="h-4 w-4" /> Všechny audity
                 </Link>
@@ -185,7 +184,6 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
 
-        {/* Spodní uživatelský profil a odhlášení */}
         <div className="p-4 border-t border-slate-800 bg-slate-950/40 space-y-3">
           <div className="flex items-center gap-2.5 px-2 py-1">
             <div className="h-8 w-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-300">
@@ -206,15 +204,14 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* Hlavní pracovní plocha */}
-      <main className="flex-1 overflow-y-auto">
+      {/* Hlavní pracovní plocha - MĚNÍ SE CHOVÁNÍ SCROLLOVÁNÍ PRO TISK */}
+      <main className="flex-1 overflow-y-auto print:overflow-visible print:w-full print:block">
         {children}
       </main>
     </div>
   );
 }
 
-// Základní obalovač (Root) layoutu pro Next.js
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="cs">
