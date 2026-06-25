@@ -287,6 +287,10 @@ export default function EditInspectionPage() {
         }
       });
 
+      // ZDE JE BEZPEČNOSTNÍ POJISTKA - NIKDY NEZAVŘE REPORT S NESHODOU
+      const hasUnresolvedDefects = finalKontrolniBody.some(kb => kb.hodnoceni === 'N');
+      const finalStav = (isDraft || hasUnresolvedDefects) ? 'otevreny' : 'uzavreny';
+
       const updatedRecord = {
         id: recordToEdit.id,
         cislo: recordToEdit.cislo,
@@ -294,7 +298,7 @@ export default function EditInspectionPage() {
         ...formData,
         kontrolniBody: finalKontrolniBody,
         zavady: aggregatedZavady,
-        stav: isDraft ? 'otevreny' : 'uzavreny' as any,
+        stav: finalStav,
         createdAt: recordToEdit.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -414,8 +418,6 @@ export default function EditInspectionPage() {
   const renderPoint = (point: ChecklistPoint, isCustom: boolean = false) => {
     const state = checklist[point.id]; 
     const defects = pointDefects[point.id] || [];
-    
-    // Načtení informací o tom, zda to klient už řešil
     const existingKb = recordToEdit?.kontrolniBody?.find((kb: any) => kb.bod === point.id);
     const isResolvedByClient = existingKb?.vyresenoKlientem;
 
@@ -436,8 +438,6 @@ export default function EditInspectionPage() {
         
         {state?.hodnoceni && state.hodnoceni !== 'NA' && (
           <div className="space-y-4 ml-8">
-            
-            {/* VELKÉ ZELENÉ UPOZORNĚNÍ PRO AUDITORA */}
             {isResolvedByClient && state.hodnoceni === 'N' && (
                <div className="p-4 rounded-xl bg-emerald-50 border-2 border-emerald-400 shadow-sm mt-4">
                  <div className="flex items-center gap-2 font-bold text-emerald-800 mb-2">
@@ -446,17 +446,13 @@ export default function EditInspectionPage() {
                  </div>
                  <div className="text-sm text-emerald-800 space-y-1 bg-white/60 p-3 rounded-lg border border-emerald-200">
                    <p><span className="font-semibold">Nahlásil(a):</span> {existingKb.jmenoVyresitele} ({existingKb.datumVyreseniKlientem ? new Date(existingKb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'})</p>
-                   {existingKb.poznamkaKlienta && <p className="italic">"{existingKb.poznamkaKlienta}"</p>}
-                   
-                   {/* Náhled fotek přímo v editaci */}
+                   {existingKb.poznamkaKlienta && <p className="italic mt-1">"{existingKb.poznamkaKlienta}"</p>}
                    {existingKb.fotoVyreseni && existingKb.fotoVyreseni.length > 0 && (
                      <div className="pt-2 mt-2 border-t border-emerald-200/50">
                        <span className="text-[10px] uppercase font-bold text-emerald-600 block mb-1">Přiložené fotodůkazy od klienta:</span>
                        <div className="flex flex-wrap gap-2">
                          {existingKb.fotoVyreseni.map((f: string, i: number) => (
-                           <a href={f} target="_blank" rel="noreferrer" key={i}>
-                             <img src={f} alt="Důkaz" className="h-12 w-12 object-cover rounded border border-emerald-300 hover:scale-110 transition-transform" />
-                           </a>
+                           <a href={f} target="_blank" rel="noreferrer" key={i}><img src={f} alt="Důkaz" className="h-12 w-12 object-cover rounded border border-emerald-300 hover:scale-110 transition-transform" /></a>
                          ))}
                        </div>
                      </div>
@@ -499,7 +495,7 @@ export default function EditInspectionPage() {
       {showSaveModal && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in">
           <Card className="w-full max-w-md shadow-2xl">
-            <CardHeader><CardTitle>Potvrzení úprav</CardTitle><CardDescription>Zkontrolujte číslo revize. Aktuální záznam bude přepsán.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Potvrzení úprav</CardTitle><CardDescription>{stats.N > 0 ? "Záznam obsahuje neshody. Bude zapsán ve stavu 'V řešení'." : "Zkontrolujte číslo revize. Aktuální záznam bude přepsán."}</CardDescription></CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2"><Label>Číslo revize (R)</Label><div className="flex items-center gap-2"><span className="text-lg font-bold text-muted-foreground">R</span><Input type="number" min="0" value={revisionNumber} onChange={(e) => setRevisionNumber(e.target.value)} className="text-lg font-bold" /></div></div>
             </CardContent>
@@ -532,6 +528,18 @@ export default function EditInspectionPage() {
       {step === 3 && (
         <div className="space-y-8">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4"><Card className="p-4 flex flex-col items-center gap-1 border-green-200 bg-green-50"><span className="text-2xl font-bold text-green-700">{stats.V}</span><span className="text-[10px] uppercase font-bold text-green-600">Vyhovuje</span></Card><Card className="p-4 flex flex-col items-center gap-1 border-red-200 bg-red-50"><span className="text-2xl font-bold text-red-700">{stats.N}</span><span className="text-[10px] uppercase font-bold text-red-600">Nevyhovuje</span></Card><Card className="p-4 flex flex-col items-center gap-1 border-gray-200 bg-gray-50"><span className="text-2xl font-bold text-gray-700">{stats.NA}</span><span className="text-[10px] uppercase font-bold text-gray-600">Neaplikováno</span></Card><Card className="p-4 flex flex-col items-center gap-1 border-gray-200 bg-gray-50"><span className="text-2xl font-bold text-gray-700">{stats.NK}</span><span className="text-[10px] uppercase font-bold text-gray-600">Nekontrolováno</span></Card><Card className="p-4 flex flex-col items-center gap-1 border-amber-200 bg-amber-50"><span className="text-2xl font-bold text-amber-700">{stats.unfilled}</span><span className="text-[10px] uppercase font-bold text-amber-600">Nevyplněno</span></Card></div>
+          
+          {/* NOVÁ POJISTKA - INFORMAČNÍ PANEL */}
+          {stats.N > 0 && (
+            <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-start gap-3 shadow-inner">
+              <AlertTriangle className="h-6 w-6 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-bold text-amber-900 text-lg">Tento report nelze uzavřít</h4>
+                <p className="text-sm text-amber-800 mt-1">Dokud nebudou všechny zjištěné neshody ({stats.N}) opraveny klientem a vámi překlasifikovány na <strong>[V] Vyhovuje</strong>, záznam bude automaticky ukládán do stavu <strong>V řešení</strong>.</p>
+              </div>
+            </div>
+          )}
+
           <Card className="border-none shadow-sm"><CardHeader><CardTitle>Závěrečné hodnocení a doporučení</CardTitle></CardHeader><CardContent><Textarea placeholder="Napište celkové zhodnocení..." className="min-h-[120px] bg-white" value={formData.poznamka} onChange={(e) => setFormData(prev => ({ ...prev, poznamka: e.target.value }))} /></CardContent></Card>
           <Card className="border-none shadow-sm">
             <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/20 border-b pb-4">
@@ -550,9 +558,11 @@ export default function EditInspectionPage() {
         <div className="max-w-5xl w-full flex justify-between items-center px-4 md:px-8">
           <Button variant="ghost" disabled={step === 1} onClick={() => { setStep(s => s - 1); window.scrollTo(0, 0); }} className="h-11 px-6"><ChevronLeft className="mr-2 h-4 w-4" /> Zpět</Button>
           <div className="flex gap-2">
-            {step === 3 && <Button variant="outline" className="h-11 px-6 text-amber-700 hover:text-amber-800 hover:bg-amber-50" onClick={() => executeSave(true)}>Uložit jako koncept (V řešení)</Button>}
-            <Button onClick={step === 3 ? () => setShowSaveModal(true) : handleNext} disabled={isSaving} className="h-11 px-8 shadow-sm bg-blue-600 hover:bg-blue-700 text-white font-bold">
-              {step === 3 ? (isSaving ? "Ukládám..." : "Přepsat záznam v cloudu") : "Pokračovat"}
+            {step === 3 && stats.N === 0 && (
+              <Button variant="outline" className="h-11 px-6 text-amber-700 hover:text-amber-800 hover:bg-amber-50" onClick={() => executeSave(true)}>Uložit jako koncept (V řešení)</Button>
+            )}
+            <Button onClick={step === 3 ? () => setShowSaveModal(true) : handleNext} disabled={isSaving} className={cn("h-11 px-8 shadow-sm font-bold text-white", step === 3 && stats.N > 0 ? "bg-amber-600 hover:bg-amber-700" : "bg-blue-600 hover:bg-blue-700")}>
+              {step === 3 ? (isSaving ? "Ukládám..." : (stats.N > 0 ? "Uložit (Zůstane v řešení)" : "Přepsat jako Uzavřeno")) : "Pokračovat"}
               {step !== 3 && <ChevronRight className="ml-2 h-4 w-4" />}
             </Button>
           </div>
