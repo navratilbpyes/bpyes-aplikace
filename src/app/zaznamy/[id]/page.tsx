@@ -209,17 +209,116 @@ export default function RecordDetailPage() {
       {/* MAGICKÉ CSS PRO TISK: Odstraní ošklivé okraje, povolí barvy na pozadí a nastaví fixní hlavičky/patičky */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
-          @page { size: A4 portrait; margin: 25mm 15mm 25mm 15mm; }
-          body { 
-            -webkit-print-color-adjust: exact !important; 
-            print-color-adjust: exact !important; 
-            background: white !important; 
+          /* === STRÁNKA === */
+          @page {
+            size: A4 portrait;
+            margin: 20mm 15mm 22mm 15mm;
+          }
+          /* Čísla stránek přes CSS counters – fungují v Chrome, Edge, Firefox */
+          @page { @bottom-right { content: "Strana " counter(page) " / " counter(pages); font-size: 9pt; color: #64748b; font-family: sans-serif; } }
+          @page { @top-right { content: element(runningHeader); } }
+
+          /* === BARVY A POZADÍ === */
+          *, *::before, *::after {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          body {
+            background: white !important;
+            font-size: 10pt;
           }
           ::-webkit-scrollbar { display: none; }
-          
-          /* Tyto třídy zajistí zobrazení na každé stránce PDF */
-          .print-header-fixed { position: fixed; top: -15mm; right: 0; width: 100%; z-index: 1000; }
-          .print-footer-fixed { position: fixed; bottom: -15mm; left: 0; width: 100%; z-index: 1000; border-top: 1px solid #e2e8f0; padding-top: 5mm; }
+
+          /* === BĚŽÍCÍ HLAVIČKA (logo) – pouze Chrome/Edge přes named string === */
+          /* Fallback: fixed position s výpočtem dle @page margin */
+          .print-header-fixed {
+            position: running(runningHeader);
+            display: flex;
+            justify-content: flex-end;
+          }
+          /* Fallback pro Firefox a starší Chrome */
+          @supports not (position: running(runningHeader)) {
+            .print-header-fixed {
+              position: fixed;
+              top: 4mm;
+              right: 15mm;
+              width: auto;
+              z-index: 9999;
+            }
+          }
+
+          /* === PATIČKA === */
+          .print-footer-fixed {
+            position: fixed;
+            bottom: 4mm;
+            left: 15mm;
+            right: 15mm;
+            width: auto;
+            z-index: 9999;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 3mm;
+            background: white;
+          }
+
+          /* === STRÁNKOVÁNÍ – ZABRÁNIT TRHÁNÍ === */
+
+          /* Sekce (skupina bodů) – celá sekce se snaží zůstat pohromadě */
+          .print-section {
+            break-inside: avoid-page;
+            page-break-inside: avoid;
+          }
+
+          /* Hlavička sekce nesmí zůstat osamocena na konci stránky */
+          .print-section-header {
+            break-after: avoid;
+            page-break-after: avoid;
+          }
+
+          /* Každá kontrolní položka – NEsmí být rozdělena */
+          .print-item {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          /* Kontejner s fotografiemi – NEsmí být rozdělen */
+          .print-photos {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          /* Obrázky samy o sobě */
+          img {
+            break-inside: avoid;
+            page-break-inside: avoid;
+            max-width: 100% !important;
+          }
+
+          /* Detailní grid neshody */
+          .print-defect-detail {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          /* Blok se zprávou o nápravě */
+          .print-resolution {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          /* Podpisový blok vždy pohromadě */
+          .print-signatures {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          /* Nová stránka PŘED každou sekcí (volitelné – odkomentujte pokud chcete každou sekci na nové stránce) */
+          /* .print-section { break-before: page; } */
+
+          /* Úvodní strana – oddělit od obsahu */
+          .print-cover {
+            break-after: page;
+            page-break-after: always;
+          }
         }
       `}} />
 
@@ -241,7 +340,7 @@ export default function RecordDetailPage() {
         </div>
 
         {/* ÚVODNÍ STRANA PROTOKOLU */}
-        <div className="mt-8 mb-16">
+        <div className="print-cover mt-8 mb-16">
           <h1 className="text-5xl font-black uppercase text-slate-900 tracking-tight">Auditní protokol</h1>
           <p className="text-lg font-bold text-blue-700 uppercase tracking-widest mt-2">Typ kontroly: {record.typKontroly}</p>
 
@@ -279,9 +378,9 @@ export default function RecordDetailPage() {
           </h2>
 
           {groupedKontrolniBody.map((group) => (
-             <div key={group.sekce} className="space-y-4">
+             <div key={group.sekce} className="print-section space-y-4">
                {/* Hlavička sekce */}
-               <div className="flex justify-between items-end border-b border-slate-300 pb-1 mt-6">
+               <div className="print-section-header flex justify-between items-end border-b border-slate-300 pb-1 mt-6">
                  <h3 className="font-bold text-blue-800 text-sm uppercase tracking-wide">{group.sekce}</h3>
                  <span className="text-[10px] font-bold uppercase text-slate-500">{group.items.length} bodů kontroly</span>
                </div>
@@ -291,7 +390,7 @@ export default function RecordDetailPage() {
                  const isResolved = !!kb.vyresenoKlientem;
 
                  return (
-                   <div key={kb.id || kb.bod} className="p-4 border border-slate-200 rounded-xl bg-slate-50/50 break-inside-avoid shadow-sm">
+                   <div key={kb.id || kb.bod} className="print-item p-4 border border-slate-200 rounded-xl bg-slate-50/50 break-inside-avoid shadow-sm">
                      {/* Bod a nadpis */}
                      <div className="flex justify-between items-start">
                        <div className="flex gap-3">
@@ -309,7 +408,7 @@ export default function RecordDetailPage() {
                      {/* Detaily v případě neshody */}
                      {isDefect && (
                        <div className="mt-4">
-                         <div className="grid grid-cols-2 gap-4 text-xs bg-white p-4 rounded-lg border border-slate-200">
+                         <div className="print-defect-detail grid grid-cols-2 gap-4 text-xs bg-white p-4 rounded-lg border border-slate-200">
                            <div><span className="text-slate-400 block mb-1 font-bold uppercase text-[9px] tracking-widest">{t.karta_opatreni}</span><p className="font-medium text-slate-900">{kb.navrhOpatreni || 'Není definováno'}</p></div>
                            <div><span className="text-slate-400 block mb-1 font-bold uppercase text-[9px] tracking-widest">{t.nadpis_misto}</span><p className="font-bold text-blue-800">{kb.lokalizace || 'Celé pracoviště'}</p></div>
                            <div><span className="text-slate-400 block mb-1 font-bold uppercase text-[9px] tracking-widest">{t.karta_termin}</span><p className="font-medium text-slate-900">{kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neurčeno'}</p></div>
@@ -318,7 +417,7 @@ export default function RecordDetailPage() {
 
                          {/* Důkazy z klientského portálu */}
                          {isResolved && (
-                           <div className="mt-3 p-4 bg-emerald-50 rounded-lg border border-emerald-100">
+                           <div className="print-resolution mt-3 p-4 bg-emerald-50 rounded-lg border border-emerald-100">
                              <div className="flex items-center gap-2 font-bold text-emerald-800 mb-2 text-xs uppercase tracking-wider">
                                <CheckCircle2 className="h-4 w-4" /> Zpráva o nápravě od klienta
                              </div>
@@ -330,7 +429,7 @@ export default function RecordDetailPage() {
                                <p className="text-xs font-medium text-slate-800 whitespace-pre-wrap italic">"{kb.poznamkaKlienta}"</p>
                              )}
                              {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
-                                <div className="mt-3">
+                                <div className="print-photos mt-3">
                                   <span className="text-[9px] uppercase font-bold text-emerald-600 block mb-1.5">Přiložené fotodůkazy</span>
                                   <div className="flex flex-wrap gap-2">
                                     {kb.fotoVyreseni.map((f: string, i: number) => (
@@ -351,7 +450,7 @@ export default function RecordDetailPage() {
         </div>
 
         {/* Podpisy na konci */}
-        <div className="flex justify-between mt-24 pt-8 break-inside-avoid">
+        <div className="print-signatures flex justify-between mt-24 pt-8 break-inside-avoid">
            <div className="w-64 text-center">
               <div className="border-b-2 border-slate-300 mb-2 pb-12"></div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Podpis auditora BPyes</p>
