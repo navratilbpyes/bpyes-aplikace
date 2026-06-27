@@ -12,7 +12,9 @@ import {
   LogOut, 
   Loader2,
   Lock,
-  User as UserIcon
+  User as UserIcon,
+  Menu,
+  X
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -21,18 +23,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/app/lib/utils";
 import "@/app/globals.css";
 
-// Vnitřní komponenta rozvržení, která má přístup k přihlášenému uživateli
 function AppLayoutContent({ children }: { children: React.ReactNode }) {
   const { user, userProfile, authLoading, logout } = useData();
   const pathname = usePathname();
   const { toast } = useToast();
 
-  // Formulářový stav pro klasické přihlášení e-mailem
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
+  
+  // Stav pro zobrazení mobilního menu
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,7 +65,6 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // 1. Obrazovka načítání systému
   if (authLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-4">
@@ -71,7 +74,6 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // 2. Obrazovka přihlášení (Pokud uživatel není přihlášen)
   if (!user || !userProfile) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
@@ -87,41 +89,21 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
             <form onSubmit={handleEmailLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">E-mailová adresa</Label>
-                <Input 
-                  id="email" 
-                  type="email" 
-                  placeholder="jmeno@firma.cz" 
-                  required 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
+                <Input id="email" type="email" placeholder="jmeno@firma.cz" required value={email} onChange={(e) => setEmail(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Přihlašovací heslo</Label>
-                <Input 
-                  id="password" 
-                  type="password" 
-                  placeholder="••••••••" 
-                  required 
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
+                <Input id="password" type="password" placeholder="••••••••" required value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
               <Button type="submit" className="w-full h-11 bg-slate-900 hover:bg-slate-800 font-bold" disabled={loginLoading}>
-                {loginLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Přihlásit se údaji
+                {loginLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Přihlásit se údaji
               </Button>
             </form>
-
             <div className="relative flex py-2 items-center text-xs text-muted-foreground uppercase">
-              <div className="flex-grow border-t"></div>
-              <span className="mx-3 shrink-0">Nebo firemní přístup</span>
-              <div className="flex-grow border-t"></div>
+              <div className="flex-grow border-t"></div><span className="mx-3 shrink-0">Nebo firemní přístup</span><div className="flex-grow border-t"></div>
             </div>
-
             <Button variant="outline" className="w-full h-11 font-bold border-slate-200" onClick={handleGoogleLogin}>
-              <img src="https://www.google.com/favicon.ico" alt="Google" className="h-4 w-4 mr-2" />
-              Ověřit přes Google Workspace
+              <img src="https://www.google.com/favicon.ico" alt="Google" className="h-4 w-4 mr-2" /> Ověřit přes Google Workspace
             </Button>
           </CardContent>
         </Card>
@@ -131,54 +113,71 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
 
   const isAdmin = userProfile.role === 'admin';
 
-  // 3. Hlavní rozhraní přihlášené aplikace (S úpravami pro PDF tisk)
   return (
-    <div className="min-h-screen bg-slate-50 flex print:bg-white print:block">
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row print:bg-white print:block">
       
-      {/* Levý navigační panel - ZMIZÍ PŘI TISKU (print:hidden) */}
-      <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between shrink-0 border-r border-slate-800 print:hidden">
-        <div className="p-6 space-y-8">
-          <div>
-            <h2 className="text-white text-xl font-black tracking-tight">BPyes</h2>
-            <p className="text-[10px] uppercase tracking-wider font-bold text-blue-500">
+      {/* HLAVIČKA POUZE PRO MOBILY */}
+      <div className="md:hidden flex items-center justify-between bg-slate-900 h-16 px-4 text-white print:hidden z-40 shrink-0 shadow-md">
+        <div className="flex items-center gap-2">
+          <span className="font-black text-xl tracking-tight">BPyes</span>
+          <span className="text-[10px] uppercase font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">{isAdmin ? "Admin" : "Klient"}</span>
+        </div>
+        <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="text-white hover:bg-slate-800">
+          {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+        </Button>
+      </div>
+
+      {/* LEVÝ NAVIGAČNÍ PANEL (Desktop i Mobilní vysouvací verze) */}
+      <aside className={cn(
+        "w-64 bg-slate-900 text-slate-300 flex flex-col justify-between border-r border-slate-800 print:hidden shrink-0",
+        "fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 shadow-2xl md:shadow-none",
+        mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+      )}>
+        <div className="p-6 space-y-6">
+          <div className="hidden md:block">
+            <h2 className="text-white text-2xl font-black tracking-tight">BPyes</h2>
+            <p className="text-[10px] uppercase tracking-wider font-bold text-blue-500 mt-0.5">
               {isAdmin ? "Administrátor systému" : "Klientský portál"}
             </p>
           </div>
+          
+          <div className="md:hidden flex justify-between items-center pb-2 border-b border-slate-800">
+            <span className="text-xs uppercase font-bold text-slate-400 tracking-wider">Navigace</span>
+            <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(false)} className="h-8 w-8 text-slate-400 hover:text-white"><X className="h-5 w-5" /></Button>
+          </div>
 
           <nav className="space-y-1">
-            <Link 
-              href="/" 
-              className={`flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors ${pathname === '/' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 hover:text-white'}`}
-            >
+            
+            {/* TLAČÍTKO NOVÁ KONTROLA NENÍ ZAMÍCHANÉ V MENU, JE VÝRAZNÉ A NAHOŘE */}
+            {isAdmin && (
+              <div className="mb-6 space-y-4">
+                <Button asChild className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold h-11 justify-start px-4 shadow-sm border border-blue-500/50">
+                  <Link href="/nova-kontrola" onClick={() => setMobileMenuOpen(false)}>
+                    <PlusCircle className="mr-3 h-5 w-5" /> Nová kontrola
+                  </Link>
+                </Button>
+                <div className="border-b border-slate-800/80"></div>
+              </div>
+            )}
+
+            <Link href="/" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname === '/' ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
               <LayoutDashboard className="h-4 w-4" /> Přehled reportů
             </Link>
 
             {isAdmin && (
               <>
-                <Link 
-                  href="/klienti" 
-                  className={`flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors ${pathname.startsWith('/klienti') ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 hover:text-white'}`}
-                >
+                <Link href="/klienti" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/klienti') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
                   <Building2 className="h-4 w-4" /> Správa klientů
                 </Link>
-                <Link 
-                  href="/zaznamy" 
-                  className={`flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors ${pathname.startsWith('/zaznamy') && pathname !== '/nova-kontrola' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 hover:text-white'}`}
-                >
+                <Link href="/zaznamy" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/zaznamy') && pathname !== '/nova-kontrola' ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
                   <ClipboardList className="h-4 w-4" /> Všechny audity
                 </Link>
-                <Link 
-                  href="/nova-kontrola" 
-                  className={`flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors ${pathname === '/nova-kontrola' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 hover:text-white'}`}
-                >
-                  <PlusCircle className="h-4 w-4" /> Nová kontrola
-                </Link>
-                <Link 
-                  href="/nastaveni" 
-                  className={`flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors ${pathname === '/nastaveni' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 hover:text-white'}`}
-                >
-                  <Settings className="h-4 w-4" /> Nastavení auditora
-                </Link>
+                
+                <div className="pt-4 mt-4 border-t border-slate-800/80">
+                  <Link href="/nastaveni" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors text-slate-400 hover:text-slate-300", pathname === '/nastaveni' ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50')}>
+                    <Settings className="h-4 w-4" /> Nastavení auditora
+                  </Link>
+                </div>
               </>
             )}
           </nav>
@@ -194,17 +193,18 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
               <p className="text-[10px] text-slate-500 truncate">ID: {userProfile.klientId || "Interní"}</p>
             </div>
           </div>
-          <Button 
-            variant="ghost" 
-            className="w-full justify-start text-slate-400 hover:text-red-400 hover:bg-red-500/10 h-10 text-xs font-bold"
-            onClick={logout}
-          >
+          <Button variant="ghost" className="w-full justify-start text-slate-400 hover:text-red-400 hover:bg-red-500/10 h-10 text-xs font-bold" onClick={logout}>
             <LogOut className="mr-2 h-4 w-4" /> Odhlásit se z cloudu
           </Button>
         </div>
       </aside>
 
-      {/* Hlavní pracovní plocha - MĚNÍ SE CHOVÁNÍ SCROLLOVÁNÍ PRO TISK */}
+      {/* Překryvné černé pozadí pro mobil při otevřeném menu */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 bg-black/60 z-40 md:hidden animate-in fade-in" onClick={() => setMobileMenuOpen(false)}></div>
+      )}
+
+      {/* HLAVNÍ PRACOVNÍ PLOCHA */}
       <main className="flex-1 overflow-y-auto print:overflow-visible print:w-full print:block">
         {children}
       </main>
