@@ -99,9 +99,20 @@ export default function NewInspectionPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   const selectedKlient = klienti.find(k => k.id === formData.klientId);
+  
+  // Nyní bereme pozice z nového pole pozice klienta!
   const uniquePositions = useMemo(() => {
     if (!selectedKlient) return [];
-    return Array.from(new Set((selectedKlient.odpovedneOsoby || []).map(o => o.pozice).filter(Boolean)));
+    
+    // Zkusíme najít nové pole `pozice`, případně fallback na staré
+    let positions: string[] = [];
+    if (selectedKlient.pozice && selectedKlient.pozice.length > 0) {
+      positions = selectedKlient.pozice.map((p:any) => p.nazev);
+    } else if (selectedKlient.odpovedneOsoby && selectedKlient.odpovedneOsoby.length > 0) {
+      positions = selectedKlient.odpovedneOsoby.map((o:any) => o.pozice || o.funkce);
+    }
+    
+    return Array.from(new Set(positions.filter(Boolean)));
   }, [selectedKlient]);
 
   useEffect(() => {
@@ -315,7 +326,7 @@ export default function NewInspectionPage() {
             <Select value={def.odpovednaOsoba} onValueChange={(v) => updateFn('odpovednaOsoba', v)}>
               <SelectTrigger className="bg-white h-10"><SelectValue placeholder="Vyberte pozici" /></SelectTrigger>
               <SelectContent>
-                {uniquePositions.map(pozice => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}
+                {uniquePositions.map((pozice: string) => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}
                 <SelectItem value="manual">-- Zadat manuálně --</SelectItem>
               </SelectContent>
             </Select>
@@ -359,7 +370,7 @@ export default function NewInspectionPage() {
                 <Label className="text-xs">Záznam o odstranění provedl</Label>
                 <Select value={def.zaznamProvedl} onValueChange={(v) => updateFn('zaznamProvedl', v)}>
                   <SelectTrigger className="bg-white h-10"><SelectValue placeholder="Vyberte pozici" /></SelectTrigger>
-                  <SelectContent><SelectItem value="Provedl BPyes">Provedl (My / BPyes)</SelectItem>{uniquePositions.map(pozice => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}<SelectItem value="manual">-- Zadat manuálně --</SelectItem></SelectContent>
+                  <SelectContent><SelectItem value="Provedl BPyes">Provedl (My / BPyes)</SelectItem>{uniquePositions.map((pozice: string) => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}<SelectItem value="manual">-- Zadat manuálně --</SelectItem></SelectContent>
                 </Select>
                 {def.zaznamProvedl === 'manual' && <Input placeholder="Vepište pozici..." value={def.zaznamProvedlManualni} onChange={(e) => updateFn('zaznamProvedlManualni', e.target.value)} className="mt-2 h-10 bg-white border-dashed" />}
               </div>
@@ -388,7 +399,7 @@ export default function NewInspectionPage() {
         {state?.hodnoceni && state.hodnoceni !== 'NA' && (
           <div className="space-y-4 ml-8">
             {state.hodnoceni === 'N' && (
-              <div className="p-4 bg-amber-50/50 rounded-xl border border-amber-200 space-y-6"><div className="flex items-center gap-2 text-amber-800 font-bold text-sm uppercase"><AlertTriangle className="h-4 w-4" /> Evidence nedostatků</div><div className="space-y-6">{defects.map((def, idx) => renderDefectForm(def, idx, point.id))}</div><Button variant="outline" className="w-full border-dashed border-amber-300 text-amber-800 hover:bg-amber-100" onClick={() => setPointDefects(prev => ({ ...prev, [point.id]: [...(prev[point.id] || []), createEmptyDefect()] }))}><Plus className="h-4 w-4 mr-2" /> Přidat další závadu pod tento bod</Button></div>
+              <div className="p-4 bg-amber-50/50 rounded-xl border border-amber-200 space-y-6"><div className="flex items-center gap-2 text-amber-800 font-bold text-sm uppercase"><AlertTriangle className="h-4 w-4" /> Evidence nedostatků</div><div className="space-y-6">{defects.map((def: any, idx: number) => renderDefectForm(def, idx, point.id))}</div><Button variant="outline" className="w-full border-dashed border-amber-300 text-amber-800 hover:bg-amber-100" onClick={() => setPointDefects(prev => ({ ...prev, [point.id]: [...(prev[point.id] || []), createEmptyDefect()] }))}><Plus className="h-4 w-4 mr-2" /> Přidat další závadu pod tento bod</Button></div>
             )}
             <div className="flex items-center gap-2">
               {!state.poznamka && <Button variant="ghost" size="sm" onClick={() => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: " " }}))} className="text-muted-foreground"><Plus className="h-3 w-3 mr-1" /> Přidat interní poznámku</Button>}
@@ -432,7 +443,19 @@ export default function NewInspectionPage() {
       </div>
 
       {step === 1 && (
-        <Card className="border-none shadow-sm"><CardHeader><CardTitle>Základní parametry kontroly</CardTitle></CardHeader><CardContent className="space-y-6"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-2"><Label>Klient</Label><Select value={formData.klientId} onValueChange={(v) => setFormData({...formData, klientId: v, pracovisteIds: []})}><SelectTrigger className="h-11"><SelectValue placeholder="Vyberte klienta" /></SelectTrigger><SelectContent>{klienti.map(k => <SelectItem key={k.id} value={k.id}>{k.nazev}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label>Pracoviště / Provozovny</Label>{!formData.klientId ? <div className="h-11 bg-muted rounded-md flex items-center px-3 text-sm italic">Nejprve zvolte klienta</div> : <div className="grid grid-cols-1 gap-2 p-3 border rounded-md bg-white max-h-[150px] overflow-y-auto">{(selectedKlient?.pracoviste || []).map(p => (<label key={p.id} className="flex items-center gap-3 cursor-pointer"><Checkbox checked={formData.pracovisteIds.includes(p.id)} onCheckedChange={(c) => { setFormData(prev => ({...prev, pracovisteIds: c ? [...prev.pracovisteIds, p.id] : prev.pracovisteIds.filter(id => id !== p.id)})) }} /><span className="text-sm font-medium leading-none">{p.nazev}</span></label>))}</div>}</div><div className="space-y-2 md:col-span-2"><Label>Typ kontroly</Label><Select value={formData.typKontroly} onValueChange={(v: any) => setFormData({...formData, typKontroly: v})}><SelectTrigger className="h-11"><SelectValue placeholder="Zvolte typ kontroly" /></SelectTrigger><SelectContent><SelectItem value="BOZPaPO">BOZPaPO</SelectItem><SelectItem value="PPP">PPP</SelectItem><SelectItem value="PBOZP">PBOZP</SelectItem></SelectContent></Select></div><div className="space-y-2"><Label>Datum kontroly</Label><Input type="date" className="h-11" value={formData.datum} onChange={(e) => setFormData({...formData, datum: e.target.value})} /></div></div><div className="space-y-4 pt-6 border-t mt-6"><div className="flex justify-between items-center"><Label>Účastníci kontroly</Label><Button variant="ghost" size="sm" onClick={() => setFormData({...formData, ucastnici: [...formData.ucastnici, {jmeno: '', pozice: ''}]})}><Plus className="mr-2 h-4 w-4" /> Přidat osobu</Button></div>{formData.ucastnici.map((u, i) => (<div key={i} className="flex gap-2 items-center"><Input placeholder="Jméno a příjmení" value={u.jmeno} onChange={(e) => { const next = [...formData.ucastnici]; next[i].jmeno = e.target.value; setFormData({...formData, ucastnici: next}); }} className="flex-1" /><Input placeholder="Pracovní pozice" value={u.pozice} onChange={(e) => { const next = [...formData.ucastnici]; next[i].pozice = e.target.value; setFormData({...formData, ucastnici: next}); }} className="flex-1" />{formData.ucastnici.length > 1 && <Button variant="ghost" size="icon" onClick={() => setFormData({...formData, ucastnici: formData.ucastnici.filter((_, idx) => idx !== i)})} className="shrink-0 text-muted-foreground hover:text-red-500"><X className="h-4 w-4" /></Button>}</div>))}</div></CardContent></Card>
+        <Card className="border-none shadow-sm"><CardHeader><CardTitle>Základní parametry kontroly</CardTitle></CardHeader><CardContent className="space-y-6"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-2"><Label>Klient</Label><Select value={formData.klientId} onValueChange={(v) => setFormData({...formData, klientId: v, pracovisteIds: []})}><SelectTrigger className="h-11"><SelectValue placeholder="Vyberte klienta" /></SelectTrigger><SelectContent>{klienti.map(k => <SelectItem key={k.id} value={k.id}>{k.nazev}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label>Pracoviště / Provozovny</Label>{!formData.klientId ? <div className="h-11 bg-muted rounded-md flex items-center px-3 text-sm italic">Nejprve zvolte klienta</div> : <div className="grid grid-cols-1 gap-2 p-3 border rounded-md bg-white max-h-[150px] overflow-y-auto">{(selectedKlient?.pracoviste || []).map((p: any) => (<label key={p.id} className="flex items-center gap-3 cursor-pointer"><Checkbox checked={formData.pracovisteIds.includes(p.id)} onCheckedChange={(c) => { setFormData(prev => ({...prev, pracovisteIds: c ? [...prev.pracovisteIds, p.id] : prev.pracovisteIds.filter(id => id !== p.id)})) }} /><span className="text-sm font-medium leading-none">{p.nazev}</span></label>))}</div>}</div><div className="space-y-2 md:col-span-2"><Label>Typ kontroly</Label><Select value={formData.typKontroly} onValueChange={(v: any) => setFormData({...formData, typKontroly: v})}><SelectTrigger className="h-11"><SelectValue placeholder="Zvolte typ kontroly" /></SelectTrigger><SelectContent><SelectItem value="BOZPaPO">BOZPaPO</SelectItem><SelectItem value="PPP">PPP</SelectItem><SelectItem value="PBOZP">PBOZP</SelectItem></SelectContent></Select></div><div className="space-y-2"><Label>Datum kontroly</Label><Input type="date" className="h-11" value={formData.datum} onChange={(e) => setFormData({...formData, datum: e.target.value})} /></div></div><div className="space-y-4 pt-6 border-t mt-6"><div className="flex justify-between items-center"><Label>Účastníci kontroly</Label><Button variant="ghost" size="sm" onClick={() => setFormData({...formData, ucastnici: [...formData.ucastnici, {jmeno: '', pozice: ''}]})}><Plus className="mr-2 h-4 w-4" /> Přidat osobu</Button></div>{formData.ucastnici.map((u, i) => (<div key={i} className="flex gap-2 items-center"><Input placeholder="Jméno a příjmení" value={u.jmeno} onChange={(e) => { const next = [...formData.ucastnici]; next[i].jmeno = e.target.value; setFormData({...formData, ucastnici: next}); }} className="flex-1" />
+        
+        {/* NOVINKA: ROLETKA PRO POZICI ÚČASTNÍKA MÍSTO TEXTOVÉHO POLE */}
+        <Select value={u.pozice} onValueChange={(val) => { const next = [...formData.ucastnici]; next[i].pozice = val; setFormData({...formData, ucastnici: next}); }}>
+          <SelectTrigger className="flex-1"><SelectValue placeholder="Vyberte pozici" /></SelectTrigger>
+          <SelectContent>
+            {uniquePositions.map((pozice: string) => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}
+            {/* Pokud není vybrán klient, nebo nemá pozice, umožní to zadat cokoliv */}
+            {uniquePositions.length === 0 && <SelectItem value="Neuvedeno">Žádné pozice u klienta</SelectItem>}
+          </SelectContent>
+        </Select>
+        
+        {formData.ucastnici.length > 1 && <Button variant="ghost" size="icon" onClick={() => setFormData({...formData, ucastnici: formData.ucastnici.filter((_, idx) => idx !== i)})} className="shrink-0 text-muted-foreground hover:text-red-500"><X className="h-4 w-4" /></Button>}</div>))}</div></CardContent></Card>
       )}
 
       {step === 2 && (
@@ -464,7 +487,7 @@ export default function NewInspectionPage() {
           <Card className="border-none shadow-sm">
             <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/20 border-b pb-4">
               <div><CardTitle>Náhled zjištěných závad</CardTitle></div>
-              <div className="flex items-center gap-2 bg-white p-2 rounded-md border shadow-sm"><Filter className="h-4 w-4 text-muted-foreground ml-2" /><Select value={filterPosition} onValueChange={setFilterPosition}><SelectTrigger className="h-9 w-[220px] border-none shadow-none focus:ring-0"><SelectValue placeholder="Filtrovat pozici" /></SelectTrigger><SelectContent><SelectItem value="all">Zobrazit vše</SelectItem>{uniquePositions.map(pozice => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}<SelectItem value="manual">Vlastní zadání</SelectItem></SelectContent></Select></div>
+              <div className="flex items-center gap-2 bg-white p-2 rounded-md border shadow-sm"><Filter className="h-4 w-4 text-muted-foreground ml-2" /><Select value={filterPosition} onValueChange={setFilterPosition}><SelectTrigger className="h-9 w-[220px] border-none shadow-none focus:ring-0"><SelectValue placeholder="Filtrovat pozici" /></SelectTrigger><SelectContent><SelectItem value="all">Zobrazit vše</SelectItem>{uniquePositions.map((pozice: string) => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}<SelectItem value="manual">Vlastní zadání</SelectItem></SelectContent></Select></div>
             </CardHeader>
             <CardContent className="space-y-4 pt-6">
               {filteredPointDefects.map(group => group.defects.map(defect => (<div key={defect.uid} className="p-4 border rounded-lg flex items-start gap-4 hover:bg-muted/20"><div className="bg-red-600 text-white font-mono text-xs h-6 w-6 rounded-full flex items-center justify-center shrink-0 mt-1">{Number(group.id) > 90000 ? '*' : group.id}</div><div className="flex-1 space-y-2"><p className="font-bold">{defect.popis}</p><div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground"><div className="flex items-center gap-2"><CalendarIcon className="h-3 w-3" />{defect.terminOdstraneni ? new Date(defect.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neuvedeno'}</div><div className="flex items-center gap-2"><UserIcon className="h-3 w-3" /><span className="font-medium text-black">{defect.odpovednaOsoba === 'manual' ? defect.odpovednaOsobaManualni : (defect.odpovednaOsoba || 'Neuvedena')}</span></div></div></div></div>)))}
