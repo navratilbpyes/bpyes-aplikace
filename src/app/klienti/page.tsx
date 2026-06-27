@@ -17,7 +17,7 @@ import { doc, collection, setDoc, deleteDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 
 export default function ClientsPage() {
-  const { klienti, setKlienti, zaznamy, isLoading } = useData();
+  const { klienti, setKlienti, zaznamy } = useData();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
 
