@@ -146,7 +146,7 @@ export default function EditInspectionPage() {
   const selectedKlient = klienti.find(k => k.id === formData.klientId);
   const uniquePositions = useMemo(() => {
     if (!selectedKlient) return [];
-    return Array.from(new Set((selectedKlient.odpovedneOsoby || []).map((o: any).filter(Boolean)));
+    return Array.from(new Set((selectedKlient.odpovedneOsoby || []).map((o: any) => o.pozice || o.funkce).filter(Boolean)));
   }, [selectedKlient]);
 
   useEffect(() => {
