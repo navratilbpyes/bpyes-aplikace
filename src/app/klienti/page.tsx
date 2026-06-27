@@ -3,51 +3,84 @@
 import { useData, db } from "@/components/data-provider";
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Card, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardTitle, CardContent, CardHeader } from "@/components/ui/card";
 import { 
-  Plus, Search, Building2, MoreHorizontal, Eye, Edit2, 
-  ClipboardCheck, X, Loader2, CheckCircle2, DownloadCloud, Contact, Briefcase, MapPin
+  Plus, Search, Building2, Eye, Edit2, 
+  ClipboardCheck, X, Loader2, CheckCircle2, DownloadCloud, Contact, Briefcase, MapPin, Trash2, ArrowUpDown, AlertTriangle
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useState, useMemo } from "react";
 import { formatCzechDate } from "@/app/lib/utils";
-import { doc, collection, setDoc } from "firebase/firestore";
+import { doc, collection, setDoc, deleteDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
 
 export default function ClientsPage() {
   const { klienti, setKlienti, zaznamy, isLoading } = useData();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
 
+  // Stavy pro řazení
+  const [sort, setSort] = useState({ key: 'nazev', dir: 'asc' });
+
   // Stavy pro modální okno "Přidat klienta"
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingAres, setIsLoadingAres] = useState(false);
   
-  // Komplexní stav pro nového klienta (vč. nových sekcí)
+  // Stavy pro smazání klienta
+  const [clientToDelete, setClientToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Komplexní stav pro nového klienta
   const [newClient, setNewClient] = useState({
-    nazev: "",
-    ico: "",
-    mesto: "",
+    nazev: "", ico: "", mesto: "",
     pracoviste: [{ id: "p1", nazev: "", adresa: "" }],
     pozice: [{ id: "fix1", nazev: "Zaměstnavatel / provozovatel", isFixed: true }],
     kontakty: [{ id: "k1", jmeno: "", funkce: "", email: "", telefon: "" }]
   });
 
-  const filteredKlienti = useMemo(() => {
-    return klienti.filter(k => 
+  // Filtrování a Řazení dat
+  const processedKlienti = useMemo(() => {
+    // 1. Filtrace podle vyhledávacího pole (Název, IČO, Město)
+    let arr = klienti.filter(k => 
       k.nazev?.toLowerCase().includes(search.toLowerCase()) || 
-      k.ico?.includes(search)
+      k.ico?.includes(search) ||
+      k.mesto?.toLowerCase().includes(search.toLowerCase())
     );
-  }, [klienti, search]);
+
+    // 2. Řazení
+    arr.sort((a, b) => {
+      let valA: any = '', valB: any = '';
+
+      if (sort.key === 'nazev') { valA = a.nazev || ''; valB = b.nazev || ''; }
+      else if (sort.key === 'ico') { valA = a.ico || ''; valB = b.ico || ''; }
+      else if (sort.key === 'mesto') { valA = a.mesto || ''; valB = b.mesto || ''; }
+      else if (sort.key === 'pracoviste') { valA = a.pracoviste?.length || 0; valB = b.pracoviste?.length || 0; }
+      else if (sort.key === 'datum') {
+        const aRecords = zaznamy.filter(z => z.klientId === a.id).sort((x,y) => new Date(y.datum).getTime() - new Date(x.datum).getTime());
+        const bRecords = zaznamy.filter(z => z.klientId === b.id).sort((x,y) => new Date(y.datum).getTime() - new Date(x.datum).getTime());
+        valA = aRecords[0] ? new Date(aRecords[0].datum).getTime() : 0;
+        valB = bRecords[0] ? new Date(bRecords[0].datum).getTime() : 0;
+      }
+
+      // Porovnání čísel (např. počet pracovišť, časová stopa data)
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return sort.dir === 'asc' ? valA - valB : valB - valA;
+      }
+      
+      // Porovnání textů
+      const res = String(valA).localeCompare(String(valB), 'cs', { numeric: true });
+      return sort.dir === 'asc' ? res : -res;
+    });
+
+    return arr;
+  }, [klienti, search, sort, zaznamy]);
+
+  const handleSort = (key: string) => {
+    setSort(prev => ({ key, dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc' }));
+  };
 
   // --- LOGIKA ARES API ---
   const fetchAresData = async () => {
@@ -59,7 +92,6 @@ export default function ClientsPage() {
     
     setIsLoadingAres(true);
     try {
-      // Volání oficiálního ARES REST API
       const response = await fetch(`https://ares.gov.cz/ekonomicke-subjekty-v-be/rest/ekonomicke-subjekty/${cleanIco}`);
       if (!response.ok) throw new Error("Subjekt nenalezen nebo chyba spojení");
       
@@ -68,7 +100,6 @@ export default function ClientsPage() {
       setNewClient(prev => ({
         ...prev,
         nazev: data.obchodniJmeno || prev.nazev,
-        // Sídlo může být ve formátu textové adresy, nebo jen obec
         mesto: data.sidlo?.textovaAdresa || data.sidlo?.nazevObce || prev.mesto
       }));
       
@@ -100,7 +131,7 @@ export default function ClientsPage() {
     setNewClient(p => { const arr = [...p.kontakty]; arr[idx][field] = val; return { ...p, kontakty: arr }; });
   };
 
-  // --- ULOŽENÍ DO DATABÁZE ---
+  // --- ULOŽENÍ NOVÉHO KLIENTA ---
   const saveNewClient = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -111,7 +142,6 @@ export default function ClientsPage() {
         nazev: newClient.nazev,
         ico: newClient.ico,
         mesto: newClient.mesto,
-        // Uložení s odfiltrováním prázdných řádků
         pracoviste: newClient.pracoviste.filter(p => p.nazev.trim() !== ''),
         pozice: newClient.pozice.filter(p => p.nazev.trim() !== ''),
         kontakty: newClient.kontakty.filter(k => k.jmeno.trim() !== ''),
@@ -120,9 +150,7 @@ export default function ClientsPage() {
 
       await setDoc(newRef, clientData);
       
-      if (setKlienti) {
-        setKlienti((prev: any[]) => [...prev, clientData]);
-      }
+      if (setKlienti) setKlienti((prev: any[]) => [...prev, clientData]);
       
       setIsAddModalOpen(false);
       setNewClient({
@@ -140,11 +168,56 @@ export default function ClientsPage() {
     }
   };
 
+  // --- SMAZÁNÍ KLIENTA ---
+  const handleDeleteClient = async () => {
+    if (!clientToDelete) return;
+    setIsDeleting(true);
+    try {
+      await deleteDoc(doc(db, 'klienti', clientToDelete));
+      if (setKlienti) {
+        setKlienti((prev: any[]) => prev.filter(k => k.id !== clientToDelete));
+      }
+      toast({ title: "Klient smazán", description: "Profil klienta byl nevratně odstraněn." });
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Chyba při mazání", description: "Nepodařilo se odstranit klienta.", variant: "destructive" });
+    } finally {
+      setIsDeleting(false);
+      setClientToDelete(null);
+    }
+  };
+
   if (isLoading) return <div className="p-8 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-600" /></div>;
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 relative">
       
+      {/* MODÁLNÍ OKNO PRO BEZPEČNÉ SMAZÁNÍ KLIENTA */}
+      {clientToDelete && (
+        <div className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4 animate-in fade-in backdrop-blur-sm">
+          <Card className="w-full max-w-md shadow-2xl animate-in zoom-in-95 border-red-200">
+            <CardHeader className="bg-red-50 border-b border-red-100 rounded-t-xl pb-4">
+              <CardTitle className="text-xl font-bold flex items-center gap-2 text-red-700">
+                <AlertTriangle className="h-6 w-6" /> Varování: Trvalé smazání
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-6">
+              <p className="text-slate-700 font-medium">
+                Opravdu chcete <strong>smazat</strong> tohoto klienta? Tato akce odstraní profil klienta ze systému a nepůjde ji vzít zpět.
+              </p>
+              <div className="flex justify-end gap-3 pt-2">
+                <Button variant="outline" onClick={() => setClientToDelete(null)} disabled={isDeleting}>
+                  Zrušit
+                </Button>
+                <Button variant="destructive" onClick={handleDeleteClient} disabled={isDeleting} className="font-bold">
+                  {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />} Ano, nenávratně smazat
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* MODÁLNÍ OKNO PRO PŘIDÁNÍ KLIENTA */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 animate-in fade-in backdrop-blur-sm">
@@ -161,7 +234,6 @@ export default function ClientsPage() {
             
             <form onSubmit={saveNewClient} className="flex flex-col overflow-hidden">
               <CardContent className="p-6 space-y-8 overflow-y-auto">
-                
                 {/* ZÁKLADNÍ ÚDAJE + ARES */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 border-b pb-2">
@@ -175,17 +247,14 @@ export default function ClientsPage() {
                       <div className="flex gap-2">
                         <Input required value={newClient.ico} onChange={e => setNewClient(p => ({...p, ico: e.target.value}))} placeholder="Např. 04399421" className="font-mono" />
                         <Button type="button" variant="secondary" onClick={fetchAresData} disabled={isLoadingAres} className="shrink-0 font-bold border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100">
-                          {isLoadingAres ? <Loader2 className="h-4 w-4 animate-spin" /> : <DownloadCloud className="h-4 w-4 mr-2" />}
-                          Načíst z ARES
+                          {isLoadingAres ? <Loader2 className="h-4 w-4 animate-spin" /> : <DownloadCloud className="h-4 w-4 mr-2" />} Načíst z ARES
                         </Button>
                       </div>
                     </div>
-                    
                     <div className="space-y-2">
                       <Label className="font-bold">Sídlo společnosti (oficiální)</Label>
                       <Input value={newClient.mesto} onChange={e => setNewClient(p => ({...p, mesto: e.target.value}))} placeholder="Bude načteno z ARES..." />
                     </div>
-
                     <div className="space-y-2 md:col-span-2">
                       <Label className="font-bold">Název společnosti *</Label>
                       <Input required value={newClient.nazev} onChange={e => setNewClient(p => ({...p, nazev: e.target.value}))} placeholder="Bude načteno z ARES..." className="text-lg font-bold" />
@@ -196,32 +265,17 @@ export default function ClientsPage() {
                 {/* PROVOZOVNY */}
                 <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-5 w-5 text-amber-600" />
-                      <h3 className="font-bold text-slate-800 uppercase tracking-wider text-sm">Provozovny a pracoviště</h3>
-                    </div>
-                    <Button type="button" variant="outline" size="sm" onClick={handleAddWorkplace} className="h-8 text-xs font-bold border-amber-200 text-amber-700 hover:bg-amber-50">
-                      <Plus className="h-3 w-3 mr-1" /> Přidat
-                    </Button>
+                    <div className="flex items-center gap-2"><MapPin className="h-5 w-5 text-amber-600" /><h3 className="font-bold text-slate-800 uppercase tracking-wider text-sm">Provozovny a pracoviště</h3></div>
+                    <Button type="button" variant="outline" size="sm" onClick={handleAddWorkplace} className="h-8 text-xs font-bold border-amber-200 text-amber-700 hover:bg-amber-50"><Plus className="h-3 w-3 mr-1" /> Přidat</Button>
                   </div>
                   <div className="space-y-3">
                     {newClient.pracoviste.map((prac, idx) => (
                       <div key={prac.id} className="flex gap-2 items-start bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 flex-1">
-                          <div>
-                            <Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Název pracoviště</Label>
-                            <Input placeholder={`Např. Hlavní výrobní hala...`} value={prac.nazev} onChange={(e) => handleWorkplaceChange(idx, 'nazev', e.target.value)} />
-                          </div>
-                          <div>
-                            <Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Adresa (volitelné)</Label>
-                            <Input placeholder={`Např. Průmyslová 12...`} value={prac.adresa} onChange={(e) => handleWorkplaceChange(idx, 'adresa', e.target.value)} />
-                          </div>
+                          <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Název pracoviště</Label><Input value={prac.nazev} onChange={(e) => handleWorkplaceChange(idx, 'nazev', e.target.value)} /></div>
+                          <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Adresa (volitelné)</Label><Input value={prac.adresa} onChange={(e) => handleWorkplaceChange(idx, 'adresa', e.target.value)} /></div>
                         </div>
-                        {newClient.pracoviste.length > 1 && (
-                          <Button type="button" variant="ghost" size="icon" className="text-red-500 shrink-0 mt-5" onClick={() => handleRemoveWorkplace(idx)}>
-                            <X className="h-4 w-4" />
-                          </Button>
-                        )}
+                        {newClient.pracoviste.length > 1 && (<Button type="button" variant="ghost" size="icon" className="text-red-500 shrink-0 mt-5" onClick={() => handleRemoveWorkplace(idx)}><X className="h-4 w-4" /></Button>)}
                       </div>
                     ))}
                   </div>
@@ -230,28 +284,19 @@ export default function ClientsPage() {
                 {/* KONTAKTNÍ OSOBY */}
                 <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                    <div className="flex items-center gap-2">
-                      <Contact className="h-5 w-5 text-emerald-600" />
-                      <h3 className="font-bold text-slate-800 uppercase tracking-wider text-sm">Kontaktní osoby</h3>
-                    </div>
-                    <Button type="button" variant="outline" size="sm" onClick={handleAddKontakt} className="h-8 text-xs font-bold border-emerald-200 text-emerald-700 hover:bg-emerald-50">
-                      <Plus className="h-3 w-3 mr-1" /> Přidat
-                    </Button>
+                    <div className="flex items-center gap-2"><Contact className="h-5 w-5 text-emerald-600" /><h3 className="font-bold text-slate-800 uppercase tracking-wider text-sm">Kontaktní osoby</h3></div>
+                    <Button type="button" variant="outline" size="sm" onClick={handleAddKontakt} className="h-8 text-xs font-bold border-emerald-200 text-emerald-700 hover:bg-emerald-50"><Plus className="h-3 w-3 mr-1" /> Přidat</Button>
                   </div>
                   <div className="space-y-3">
                     {newClient.kontakty.map((kont, idx) => (
                       <div key={kont.id} className="flex gap-2 items-start bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 flex-1">
-                          <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Jméno a příjmení</Label><Input placeholder="Jan Novák" value={kont.jmeno} onChange={(e) => handleKontaktChange(idx, 'jmeno', e.target.value)} /></div>
-                          <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Funkce</Label><Input placeholder="Vedoucí pobočky" value={kont.funkce} onChange={(e) => handleKontaktChange(idx, 'funkce', e.target.value)} /></div>
-                          <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">E-mail</Label><Input type="email" placeholder="jan@firma.cz" value={kont.email} onChange={(e) => handleKontaktChange(idx, 'email', e.target.value)} /></div>
-                          <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Telefon</Label><Input placeholder="+420..." value={kont.telefon} onChange={(e) => handleKontaktChange(idx, 'telefon', e.target.value)} /></div>
+                          <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Jméno a příjmení</Label><Input value={kont.jmeno} onChange={(e) => handleKontaktChange(idx, 'jmeno', e.target.value)} /></div>
+                          <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Funkce</Label><Input value={kont.funkce} onChange={(e) => handleKontaktChange(idx, 'funkce', e.target.value)} /></div>
+                          <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">E-mail</Label><Input type="email" value={kont.email} onChange={(e) => handleKontaktChange(idx, 'email', e.target.value)} /></div>
+                          <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Telefon</Label><Input value={kont.telefon} onChange={(e) => handleKontaktChange(idx, 'telefon', e.target.value)} /></div>
                         </div>
-                        {newClient.kontakty.length > 1 && (
-                          <Button type="button" variant="ghost" size="icon" className="text-red-500 shrink-0 mt-5" onClick={() => handleRemoveKontakt(idx)}>
-                            <X className="h-4 w-4" />
-                          </Button>
-                        )}
+                        {newClient.kontakty.length > 1 && (<Button type="button" variant="ghost" size="icon" className="text-red-500 shrink-0 mt-5" onClick={() => handleRemoveKontakt(idx)}><X className="h-4 w-4" /></Button>)}
                       </div>
                     ))}
                   </div>
@@ -260,31 +305,14 @@ export default function ClientsPage() {
                 {/* PRACOVNÍ POZICE */}
                 <div className="space-y-4">
                   <div className="flex justify-between items-center border-b pb-2">
-                    <div className="flex items-center gap-2">
-                      <Briefcase className="h-5 w-5 text-purple-600" />
-                      <h3 className="font-bold text-slate-800 uppercase tracking-wider text-sm">Přednastavené pracovní pozice</h3>
-                    </div>
-                    <Button type="button" variant="outline" size="sm" onClick={handleAddPozice} className="h-8 text-xs font-bold border-purple-200 text-purple-700 hover:bg-purple-50">
-                      <Plus className="h-3 w-3 mr-1" /> Přidat pozici
-                    </Button>
+                    <div className="flex items-center gap-2"><Briefcase className="h-5 w-5 text-purple-600" /><h3 className="font-bold text-slate-800 uppercase tracking-wider text-sm">Přednastavené pracovní pozice</h3></div>
+                    <Button type="button" variant="outline" size="sm" onClick={handleAddPozice} className="h-8 text-xs font-bold border-purple-200 text-purple-700 hover:bg-purple-50"><Plus className="h-3 w-3 mr-1" /> Přidat pozici</Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">Tyto pozice se vám budou primárně nabízet v roletkách při odstraňování závad u tohoto klienta.</p>
-                  
                   <div className="flex flex-wrap gap-3">
                     {newClient.pozice.map((poz, idx) => (
                       <div key={poz.id} className={cn("flex items-center p-1 rounded-md border", poz.isFixed ? "bg-slate-100 border-slate-300" : "bg-white border-blue-200")}>
-                        <Input 
-                          value={poz.nazev} 
-                          onChange={(e) => handlePoziceChange(idx, e.target.value)} 
-                          disabled={poz.isFixed}
-                          className={cn("h-8 border-none focus-visible:ring-0 shadow-none w-48 text-xs font-medium", poz.isFixed && "text-slate-500")}
-                          placeholder="Zadejte název pozice..."
-                        />
-                        {!poz.isFixed && (
-                          <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-red-400 hover:text-red-600 hover:bg-red-50 ml-1 shrink-0" onClick={() => handleRemovePozice(idx)}>
-                            <X className="h-3 w-3" />
-                          </Button>
-                        )}
+                        <Input value={poz.nazev} onChange={(e) => handlePoziceChange(idx, e.target.value)} disabled={poz.isFixed} className={cn("h-8 border-none focus-visible:ring-0 shadow-none w-48 text-xs font-medium", poz.isFixed && "text-slate-500")} placeholder="Zadejte název pozice..." />
+                        {!poz.isFixed && (<Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-red-400 hover:text-red-600 hover:bg-red-50 ml-1 shrink-0" onClick={() => handleRemovePozice(idx)}><X className="h-3 w-3" /></Button>)}
                       </div>
                     ))}
                   </div>
@@ -317,7 +345,8 @@ export default function ClientsPage() {
       <div className="flex gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Hledat klienta podle názvu nebo IČO..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10 h-11 bg-white shadow-sm border-slate-200" />
+          {/* Upozornění v textu, že lze hledat i podle města */}
+          <Input placeholder="Hledat podle názvu, IČO nebo města..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10 h-11 bg-white shadow-sm border-slate-200" />
         </div>
       </div>
 
@@ -327,18 +356,29 @@ export default function ClientsPage() {
           <table className="w-full text-sm text-left">
             <thead className="text-[10px] uppercase tracking-wider bg-slate-50 text-slate-500 border-b border-slate-200">
               <tr>
-                <th className="px-6 py-4 font-bold">Název společnosti</th>
-                <th className="px-6 py-4 font-bold">IČO</th>
-                <th className="px-6 py-4 font-bold">Město</th>
-                <th className="px-6 py-4 font-bold text-center">Pracovišť</th>
+                {/* KLIKACÍ HLAVIČKY PRO ŘAZENÍ */}
+                <th className="px-6 py-4 font-bold cursor-pointer hover:bg-slate-100 group transition-colors" onClick={() => handleSort('nazev')}>
+                  <div className="flex items-center gap-1">Název společnosti <ArrowUpDown className={cn("h-3 w-3", sort.key === 'nazev' ? "text-blue-600" : "text-slate-300 group-hover:text-slate-500")}/></div>
+                </th>
+                <th className="px-6 py-4 font-bold cursor-pointer hover:bg-slate-100 group transition-colors" onClick={() => handleSort('ico')}>
+                  <div className="flex items-center gap-1">IČO <ArrowUpDown className={cn("h-3 w-3", sort.key === 'ico' ? "text-blue-600" : "text-slate-300 group-hover:text-slate-500")}/></div>
+                </th>
+                <th className="px-6 py-4 font-bold cursor-pointer hover:bg-slate-100 group transition-colors" onClick={() => handleSort('mesto')}>
+                  <div className="flex items-center gap-1">Město / Sídlo <ArrowUpDown className={cn("h-3 w-3", sort.key === 'mesto' ? "text-blue-600" : "text-slate-300 group-hover:text-slate-500")}/></div>
+                </th>
+                <th className="px-6 py-4 font-bold text-center cursor-pointer hover:bg-slate-100 group transition-colors" onClick={() => handleSort('pracoviste')}>
+                  <div className="flex items-center justify-center gap-1">Pracovišť <ArrowUpDown className={cn("h-3 w-3", sort.key === 'pracoviste' ? "text-blue-600" : "text-slate-300 group-hover:text-slate-500")}/></div>
+                </th>
                 <th className="px-6 py-4 font-bold text-center">Kontaktů</th>
-                <th className="px-6 py-4 font-bold">Poslední kontrola</th>
+                <th className="px-6 py-4 font-bold cursor-pointer hover:bg-slate-100 group transition-colors" onClick={() => handleSort('datum')}>
+                  <div className="flex items-center gap-1">Poslední kontrola <ArrowUpDown className={cn("h-3 w-3", sort.key === 'datum' ? "text-blue-600" : "text-slate-300 group-hover:text-slate-500")}/></div>
+                </th>
                 <th className="px-6 py-4 font-bold text-right">Akce</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
-              {filteredKlienti.length > 0 ? (
-                filteredKlienti.map((k) => {
+              {processedKlienti.length > 0 ? (
+                processedKlienti.map((k) => {
                   const clientRecords = zaznamy.filter(z => z.klientId === k.id);
                   const lastRecord = clientRecords.sort((a,b) => new Date(b.datum).getTime() - new Date(a.datum).getTime())[0];
 
@@ -347,49 +387,39 @@ export default function ClientsPage() {
                       <td className="px-6 py-4 font-bold text-blue-700">{k.nazev}</td>
                       <td className="px-6 py-4 font-mono">{k.ico}</td>
                       <td className="px-6 py-4">{k.mesto || '-'}</td>
-                      
-                      {/* BEZPEČNÉ NAČÍTÁNÍ PŘES OTAZNÍK (?.) */}
                       <td className="px-6 py-4 text-center">
                         <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold text-xs border border-slate-200">{k.pracoviste?.length || 0}</span>
                       </td>
                       <td className="px-6 py-4 text-center">
                         <span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded font-bold text-xs border border-emerald-100">{k.kontakty?.length || 0}</span>
                       </td>
-                      
                       <td className="px-6 py-4">
                         {lastRecord ? formatCzechDate(lastRecord.datum) : <span className="text-muted-foreground italic text-xs">Žádná provedena</span>}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        
+                        {/* NOVÝ BLOK RYCHLÝCH IKONEK (Nahrazuje staré rozbalovací menu se třemi tečkami) */}
+                        <div className="flex justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                           <Button variant="ghost" size="icon" asChild title="Detail klienta" className="hover:bg-blue-50 hover:text-blue-600">
-                            <Link href={`/klienti/${k.id}`}>
-                              <Eye className="h-4 w-4" />
-                            </Link>
+                            <Link href={`/klienti/${k.id}`}><Eye className="h-4 w-4" /></Link>
                           </Button>
-                          
-                          {/* DOPLNĚNÉ TLAČÍTKO PRO EDITACI KLIENTA */}
+                          <Button variant="ghost" size="icon" asChild title="Zahájit nový audit" className="hover:bg-emerald-50 hover:text-emerald-600">
+                            <Link href={`/nova-kontrola?klient=${k.id}`}><ClipboardCheck className="h-4 w-4" /></Link>
+                          </Button>
                           <Button variant="ghost" size="icon" asChild title="Upravit klienta" className="hover:bg-amber-50 hover:text-amber-600">
-                            <Link href={`/klienti/${k.id}/edit`}>
-                              <Edit2 className="h-4 w-4" />
-                            </Link>
+                            <Link href={`/klienti/${k.id}/edit`}><Edit2 className="h-4 w-4" /></Link>
                           </Button>
-
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="hover:bg-slate-100">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48 font-medium">
-                              <DropdownMenuItem asChild>
-                                <Link href={`/nova-kontrola?klient=${k.id}`} className="flex items-center gap-2 text-blue-700">
-                                  <ClipboardCheck className="h-4 w-4" />
-                                  Provést nový audit
-                                </Link>
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            title="Smazat klienta" 
+                            className="hover:bg-red-50 text-red-400 hover:text-red-600"
+                            onClick={() => setClientToDelete(k.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
+
                       </td>
                     </tr>
                   );
