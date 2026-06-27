@@ -7,7 +7,7 @@ import { useState, useEffect, useMemo } from "react";
 import { 
   CheckCircle2, ChevronRight, ChevronLeft, Plus, X, AlertTriangle,
   Calendar as CalendarIcon, User as UserIcon, StickyNote, Camera,
-  CheckSquare, Square, Filter, Loader2, Trash2
+  CheckSquare, Square, Filter, Loader2, Trash2, Send
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -94,8 +94,17 @@ export default function NewInspectionPage() {
   const [customPoints, setCustomPoints] = useState<ChecklistPoint[]>([]);
   const [disabledSections, setDisabledSections] = useState<string[]>([]);
   const [filterPosition, setFilterPosition] = useState<string>("all");
+  
+  // Stavy pro modální okna
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  
+  // Speciální stavy pro odesílání e-mailu
+  const [showEmailPrompt, setShowEmailPrompt] = useState(false);
+  const [justSavedRecordId, setJustSavedRecordId] = useState<string | null>(null);
+  const [justSavedRecordCislo, setJustSavedRecordCislo] = useState<string | null>(null);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+
   const [revisionNumber, setRevisionNumber] = useState("0");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -195,16 +204,57 @@ export default function NewInspectionPage() {
     setStep(s => s + 1); window.scrollTo(0, 0);
   };
 
+  // --------------------------------------------------------------------------
+  // NOVÁ FUNKCE PRO ODESLÁNÍ E-MAILU
+  // --------------------------------------------------------------------------
+  const sendEmailToClient = async () => {
+    if (!selectedKlient?.email) {
+      toast({ title: "Chyba", description: "Klient nemá vyplněný e-mail ve své vizitce.", variant: "destructive" });
+      router.push(`/zaznamy/${justSavedRecordId}`);
+      return;
+    }
+
+    setIsSendingEmail(true);
+    try {
+      const odkaz = `${window.location.origin}/zaznamy/${justSavedRecordId}`;
+      
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: selectedKlient.email,
+          jmenoKlienta: selectedKlient.nazev,
+          cisloZpravy: justSavedRecordCislo,
+          odkaz: odkaz
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        toast({ title: "E-mail úspěšně odeslán", description: `Potvrzení bylo zasláno na: ${selectedKlient.email}` });
+      } else {
+        toast({ title: "Chyba při odesílání e-mailu", description: "E-mail se nepodařilo odeslat. Report je ale v pořádku uložen.", variant: "destructive" });
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Kritická chyba sítě", description: "Nepodařilo se připojit k poštovnímu serveru.", variant: "destructive" });
+    } finally {
+      setIsSendingEmail(false);
+      router.push(`/zaznamy/${justSavedRecordId}`);
+    }
+  };
+
   const executeSave = async (isDraft: boolean = false) => {
     setIsSaving(true);
     try {
       const year = new Date(formData.datum).getFullYear();
       
-      // 1. GLOBÁLNÍ ČÍSLOVÁNÍ (Pro Vás)
+      // 1. GLOBÁLNÍ ČÍSLOVÁNÍ
       const countInYear = zaznamy.filter(z => z.datum && new Date(z.datum).getFullYear() === year).length + 1;
       const globalCislo = `${year}/${countInYear.toString().padStart(3, '0')}/${formData.typKontroly}`;
       
-      // 2. KLIENTSKÉ ČÍSLOVÁNÍ (Pro Klienta - Varianta A)
+      // 2. KLIENTSKÉ ČÍSLOVÁNÍ
       const countClientInYear = zaznamy.filter(z => z.klientId === formData.klientId && z.datum && new Date(z.datum).getFullYear() === year).length + 1;
       const klientskeCislo = `${year}-K${countClientInYear.toString().padStart(3, '0')}/${formData.typKontroly}`;
       
@@ -258,8 +308,8 @@ export default function NewInspectionPage() {
       const newRecordRef = doc(collection(db, 'zaznamy'));
       const newRecord = {
         id: newRecordRef.id,
-        cislo: globalCislo,             // Uložení globálního čísla
-        cisloKlientske: klientskeCislo, // Uložení klientského čísla
+        cislo: globalCislo,             
+        cisloKlientske: klientskeCislo, 
         revize: parseInt(revisionNumber) || 0,
         ...formData,
         kontrolniBody: finalKontrolniBody,
@@ -277,10 +327,15 @@ export default function NewInspectionPage() {
         return [...prev, sanitizedRecord as any];
       });
       
-      setShowSaveModal(false);
-      toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola úspěšně odeslána do cloudu.` });
+      toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola úspěšně uložena do cloudu.` });
       
-      setTimeout(() => { router.push(`/zaznamy/${sanitizedRecord.id}`); }, 500);
+      // ZDE JE ZMĚNA: Uložíme ID reportu do stavu a ukážeme modal pro odeslání e-mailu
+      setJustSavedRecordId(sanitizedRecord.id);
+      setJustSavedRecordCislo(klientskeCislo);
+      setShowEmailPrompt(true);
+      setShowSaveModal(false);
+      setIsSaving(false);
+      
     } catch (e: any) {
        console.error("Chyba při ukládání záznamu do Firebase:", e);
        toast({ title: "Chyba uložení", description: e.message?.includes('size') ? "Záznam je příliš velký. Smažte některé fotografie." : "Nepodařilo se uložit záznam.", variant: "destructive" });
@@ -426,7 +481,7 @@ export default function NewInspectionPage() {
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative">
       
-      {/* MODÁLNÍ OKNO PRO ZRUŠENÍ KONTROLY V PRŮBĚHU */}
+      {/* MODÁLNÍ OKNO: ZRUŠENÍ KONTROLY */}
       {showCancelModal && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in">
           <Card className="w-full max-w-md shadow-2xl border-red-200">
@@ -446,6 +501,7 @@ export default function NewInspectionPage() {
         </div>
       )}
 
+      {/* MODÁLNÍ OKNO: ULOŽENÍ */}
       {showSaveModal && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in">
           <Card className="w-full max-w-md shadow-2xl">
@@ -454,7 +510,40 @@ export default function NewInspectionPage() {
               <div className="space-y-2"><Label>Číslo revize (R)</Label><div className="flex items-center gap-2"><span className="text-lg font-bold text-muted-foreground">R</span><Input type="number" min="0" value={revisionNumber} onChange={(e) => setRevisionNumber(e.target.value)} className="text-lg font-bold" /></div></div>
             </CardContent>
             <div className="p-4 border-t flex justify-end gap-2 bg-muted/20 rounded-b-xl">
-              <Button variant="outline" onClick={() => setShowSaveModal(false)}>Zrušit</Button><Button onClick={() => executeSave(false)} disabled={isSaving}>{isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Potvrdit a uložit</Button>
+              <Button variant="outline" onClick={() => setShowSaveModal(false)}>Zrušit</Button>
+              <Button onClick={() => executeSave(false)} disabled={isSaving}>{isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Potvrdit a uložit do cloudu</Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* MODÁLNÍ OKNO: VÝZVA K ODESLÁNÍ E-MAILU */}
+      {showEmailPrompt && justSavedRecordId && (
+        <div className="fixed inset-0 bg-black/60 z-[150] flex items-center justify-center p-4 animate-in fade-in">
+          <Card className="w-full max-w-md shadow-2xl border-blue-200">
+            <CardHeader className="bg-blue-50 border-b border-blue-100 rounded-t-xl pb-4">
+              <CardTitle className="text-xl font-bold flex items-center gap-2 text-blue-900">
+                <CheckCircle2 className="h-6 w-6 text-green-600" /> Kontrola byla uložena
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4 text-slate-700">
+              <p>Záznam byl úspěšně zaevidován pod číslem <strong>{justSavedRecordCislo}</strong>.</p>
+              <p>Přejete si nyní <strong>odeslat kontaktní osobě e-mail</strong> s upozorněním a unikátním odkazem na klientský dispečink reportu?</p>
+              {selectedKlient?.email ? (
+                <div className="bg-slate-100 p-3 rounded text-sm flex items-center gap-2">
+                  <UserIcon className="h-4 w-4 text-slate-500" /> Bude odesláno na: <strong>{selectedKlient.email}</strong>
+                </div>
+              ) : (
+                <div className="bg-red-50 p-3 rounded text-sm text-red-700 font-medium">
+                  Upozornění: U tohoto klienta nemáte vyplněný žádný e-mail. Můžete přidat v sekci Klienti.
+                </div>
+              )}
+            </CardContent>
+            <div className="p-4 border-t flex justify-end gap-2 bg-muted/20 rounded-b-xl">
+              <Button variant="outline" onClick={() => router.push(`/zaznamy/${justSavedRecordId}`)}>Neodesílat, přejít na detail</Button>
+              <Button onClick={sendEmailToClient} disabled={isSendingEmail || !selectedKlient?.email} className="bg-blue-600 hover:bg-blue-700 text-white font-bold">
+                {isSendingEmail ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />} Odeslat klientovi e-mail
+              </Button>
             </div>
           </Card>
         </div>
