@@ -1,6 +1,7 @@
 'use client';
 
 import { useData, db } from "@/components/data-provider";
+import { cn } from "@/app/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, CardContent } from "@/components/ui/card";
 import { 
