@@ -14,7 +14,7 @@ import {
 import { useEffect, useState } from "react";
 import { cn } from "@/app/lib/utils";
 
-// PŘEPRACOVANÁ KOMPRESE: Ukládá jako PNG, čímž zachová originální průhlednost obrázků!
+// NEPRŮSTŘELNÁ KOMPRESE S BÍLÝM POZADÍM
 const compressImage = (file: File): Promise<string> => {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -36,11 +36,17 @@ const compressImage = (file: File): Promise<string> => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         
-        ctx?.clearRect(0, 0, width, height);
-        ctx?.drawImage(img, 0, 0, width, height);
+        if (ctx) {
+          // 1. KROK: Natvrdo vyplníme plátno čistě bílou barvou
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          
+          // 2. KROK: Až na bílou barvu vykreslíme váš obrázek
+          ctx.drawImage(img, 0, 0, width, height);
+        }
         
-        // Zde je klíčová změna na image/png
-        resolve(canvas.toDataURL('image/png'));
+        // 3. KROK: Uložíme jako JPEG (bez průhlednosti, ale garantovaně bílé)
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
       };
       img.src = e.target?.result as string;
     };
@@ -207,7 +213,7 @@ export default function NastaveniAuditoraPage() {
           <Card className="border-slate-200 shadow-sm flex flex-col">
             <CardHeader className="bg-slate-50/50 border-b">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Camera className="h-4 w-4 text-amber-600" /> Kulaté razítko (Ideálně PNG)
+                <Camera className="h-4 w-4 text-amber-600" /> Kulaté razítko
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-6 flex-1 flex flex-col">
@@ -236,7 +242,7 @@ export default function NastaveniAuditoraPage() {
           <Card className="border-slate-200 shadow-sm flex flex-col">
             <CardHeader className="bg-slate-50/50 border-b">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Signature className="h-4 w-4 text-blue-600" /> Vlastnoruční podpis (Ideálně PNG)
+                <Signature className="h-4 w-4 text-blue-600" /> Vlastnoruční podpis
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-6 flex-1 flex flex-col">
