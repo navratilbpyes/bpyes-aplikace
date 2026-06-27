@@ -186,8 +186,6 @@ export default function ClientsPage() {
     }
   };
 
-  if (isLoading) return <div className="p-8 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-600" /></div>;
-
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 relative pb-24">
       
