@@ -21,6 +21,7 @@ function ZaznamyList() {
 
   // Stavy pro řazení a fitry sloupců
   const [search, setSearch] = useState("");
+  const [dateSearch, setDateSearch] = useState("");
   const [monthFilter, setMonthFilter] = useState(false);
   const [sort, setSort] = useState({ key: 'cislo', dir: 'desc' });
   const [colFilter, setColFilter] = useState({ klient: 'all', typ: 'all', stav: 'all' });
@@ -39,16 +40,31 @@ function ZaznamyList() {
   // Filtrování a řazení dat
   const processed = useMemo(() => {
     let arr = zaznamy.filter(z => {
+      // 1. Textové hledání čísla
       if(search && !z.cislo.toLowerCase().includes(search.toLowerCase())) return false;
+      
+      // 2. Roletkové filtry
       if(colFilter.klient !== 'all' && z.klientId !== colFilter.klient) return false;
       if(colFilter.typ !== 'all' && z.typKontroly !== colFilter.typ) return false;
       if(colFilter.stav !== 'all' && z.stav !== colFilter.stav) return false;
+      
+      // 3. Tlačítko "Tento měsíc"
       if(monthFilter) {
         if(!z.datum) return false;
         const d = new Date(z.datum);
         const now = new Date();
         if (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear()) return false;
       }
+
+      // 4. Chytré textové vyhledávání v datu (podporuje "25. 6.", "2026", "2026-06" atd.)
+      if(dateSearch) {
+        if(!z.datum) return false;
+        const dCz = new Date(z.datum).toLocaleDateString('cs-CZ').replace(/\s/g, '');
+        const searchClean = dateSearch.replace(/\s/g, '');
+        // Prohledáme jak český formát "25.6.2026", tak ISO formát "2026-06-25"
+        if(!dCz.includes(searchClean) && !z.datum.includes(searchClean)) return false;
+      }
+
       return true;
     });
 
@@ -68,7 +84,7 @@ function ZaznamyList() {
     });
 
     return arr;
-  }, [zaznamy, klienti, search, colFilter, monthFilter, sort]);
+  }, [zaznamy, klienti, search, dateSearch, colFilter, monthFilter, sort]);
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
@@ -89,7 +105,7 @@ function ZaznamyList() {
            <div className="flex flex-col md:flex-row justify-between gap-4">
              <div className="flex bg-slate-100 p-1 rounded-lg shrink-0 w-fit">
                 <button 
-                  onClick={() => { setColFilter({ klient: 'all', typ: 'all', stav: 'all' }); setMonthFilter(false); setSearch(""); }} 
+                  onClick={() => { setColFilter({ klient: 'all', typ: 'all', stav: 'all' }); setMonthFilter(false); setSearch(""); setDateSearch(""); }} 
                   className={cn("px-4 py-1.5 text-xs font-bold rounded-md transition-all", (!monthFilter && colFilter.stav === 'all') ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700")}
                 >Zobrazit všechny</button>
                 <button 
@@ -161,7 +177,12 @@ function ZaznamyList() {
                       </SelectContent>
                     </Select>
                   </th>
-                  <th className="px-2 py-2 font-normal"></th>
+                  <th className="px-2 py-2 font-normal">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                      <Input placeholder="Rok, měsíc nebo den..." value={dateSearch} onChange={(e) => setDateSearch(e.target.value)} className="pl-6 h-8 text-xs bg-white border-slate-200 shadow-sm" />
+                    </div>
+                  </th>
                   <th className="px-2 py-2 font-normal">
                     <Select value={colFilter.stav} onValueChange={v => setColFilter(p => ({...p, stav: v}))}>
                       <SelectTrigger className="h-8 text-xs bg-white border-slate-200 shadow-sm font-medium"><SelectValue placeholder="Stav" /></SelectTrigger>
@@ -199,7 +220,7 @@ function ZaznamyList() {
                       <div className="flex flex-col items-center gap-2">
                         <Filter className="h-8 w-8 text-slate-300" />
                         <p className="font-medium">Nenalezeny žádné záznamy odpovídající filtru.</p>
-                        <Button variant="link" size="sm" onClick={() => {setColFilter({ klient: 'all', typ: 'all', stav: 'all' }); setSearch(""); setMonthFilter(false);}}>
+                        <Button variant="link" size="sm" onClick={() => {setColFilter({ klient: 'all', typ: 'all', stav: 'all' }); setSearch(""); setDateSearch(""); setMonthFilter(false);}}>
                           Zrušit všechny filtry
                         </Button>
                       </div>
