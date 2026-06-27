@@ -90,7 +90,7 @@ export default function RecordDetailPage() {
 
   const isAdmin = userProfile?.role === 'admin';
 
-  // Načtení dat a konfigurace
+  // Oddělené načítání konfigurace auditora
   useEffect(() => {
     const fetchAuditorConfig = async () => {
       try {
@@ -103,9 +103,11 @@ export default function RecordDetailPage() {
         console.error("Nepodařilo se načíst konfiguraci auditora", err);
       }
     };
-
     fetchAuditorConfig();
+  }, []);
 
+  // Načítání záznamů
+  useEffect(() => {
     if (zaznamy && zaznamy.length > 0) setIsLoading(false);
     const timer = setTimeout(() => setIsLoading(false), 2000);
     return () => clearTimeout(timer);
@@ -327,11 +329,10 @@ export default function RecordDetailPage() {
           </div>
 
           <div className="space-y-6 mb-12">
-            {/* Využití nastavení auditora */}
             <div>
               <p className="font-bold uppercase mb-1">ZPRACOVATEL/POSKYTOVATEL:</p>
               <p className="font-bold">{auditorConfig?.firmaNazev || 'BPyes s.r.o.'}</p>
-              <p>{auditorConfig?.firmaAdresa || 'Adresa poskytovatele'} | IČO: {auditorConfig?.firmaIco || '04399421'}</p>
+              <p>{auditorConfig?.firmaAdresa || 'Specializovaný poskytovatel služeb'} | IČO: {auditorConfig?.firmaIco || '04399421'}</p>
               <p>E-mail: {auditorConfig?.email || 'navratil@bpyes.cz'} {auditorConfig?.telefon ? `| Tel: ${auditorConfig.telefon}` : ''}</p>
             </div>
             
@@ -353,12 +354,12 @@ export default function RecordDetailPage() {
           <div className="grid grid-cols-2 gap-16 mt-32">
             <div className="relative pt-12">
                {/* RAZÍTKO A PODPIS PŘES SEBE V TISKU */}
-               <div className="absolute -top-16 left-0 flex items-center justify-start pointer-events-none z-0">
+               <div className="absolute -top-12 left-0 flex items-center justify-start pointer-events-none z-0">
                  {auditorConfig?.razitkoBase64 && (
-                   <img src={auditorConfig.razitkoBase64} alt="Razítko" className="h-28 w-auto object-contain mix-blend-multiply opacity-95 -ml-4" />
+                   <img src={auditorConfig.razitkoBase64} alt="Razítko" className="h-32 w-auto object-contain mix-blend-multiply opacity-95 -ml-4" />
                  )}
                  {auditorConfig?.podpisBase64 && (
-                   <img src={auditorConfig.podpisBase64} alt="Podpis" className="h-16 w-auto object-contain mix-blend-multiply absolute left-14 top-4" />
+                   <img src={auditorConfig.podpisBase64} alt="Podpis" className="h-20 w-auto object-contain mix-blend-multiply absolute left-14 top-4" />
                  )}
                </div>
 
@@ -367,7 +368,7 @@ export default function RecordDetailPage() {
                </p>
                <div className="border-b border-black mb-2 relative z-10"></div>
                
-               <p className="font-bold text-sm text-slate-800">{auditorConfig?.titul} {auditorConfig?.jmeno || 'Specialista BOZP a PO'}</p>
+               <p className="font-bold text-sm text-slate-800">{auditorConfig?.titul ? auditorConfig.titul + ' ' : ''}{auditorConfig?.jmeno || 'Specialista BOZP a PO'}</p>
                {auditorConfig?.certifikace && auditorConfig.certifikace.length > 0 && (
                  <div className="mt-1">
                    {auditorConfig.certifikace.map((cert: any) => (
