@@ -14,8 +14,8 @@ import {
 import { useEffect, useState } from "react";
 import { cn } from "@/app/lib/utils";
 
-// Funkce pro kompresi obrázků (Razítko i Podpis)
-const compressImage = (file: File, quality: number = 0.6): Promise<string> => {
+// PŘEPRACOVANÁ KOMPRESE: Ukládá jako PNG, čímž zachová originální průhlednost obrázků!
+const compressImage = (file: File): Promise<string> => {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -28,28 +28,19 @@ const compressImage = (file: File, quality: number = 0.6): Promise<string> => {
         let height = img.height;
 
         if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
+          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
         } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
-          }
+          if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
         }
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         
-        // ZÁCHRANA PŘED ČERNOU KOSTKOU: Vykreslíme pod obrázek čistě bílé pozadí
-        if (ctx) {
-          ctx.fillStyle = "#FFFFFF";
-          ctx.fillRect(0, 0, width, height);
-          ctx.drawImage(img, 0, 0, width, height);
-        }
+        ctx?.clearRect(0, 0, width, height);
+        ctx?.drawImage(img, 0, 0, width, height);
         
-        resolve(canvas.toDataURL('image/jpeg', quality));
+        // Zde je klíčová změna na image/png
+        resolve(canvas.toDataURL('image/png'));
       };
       img.src = e.target?.result as string;
     };
@@ -70,7 +61,6 @@ export default function NastaveniAuditoraPage() {
     firmaNazev: "",
     firmaIco: "",
     firmaAdresa: "",
-    // Změna na pole certifikací
     certifikace: [{ id: "c1", nazev: "", cislo: "" }],
     razitkoBase64: "",
     podpisBase64: ""
@@ -87,14 +77,12 @@ export default function NastaveniAuditoraPage() {
           setAuditorData(prev => ({
             ...prev,
             ...data,
-            // Pojistka pro staré záznamy, které ještě neměly pole certifikace
             certifikace: data.certifikace && data.certifikace.length > 0 
               ? data.certifikace 
               : [{ id: "c1", nazev: data.zpusobilostNazev || "", cislo: data.cisloOsvědceni || "" }]
           }));
         }
       } catch (error) {
-        console.error(error);
         toast({ title: "Chyba načítání", variant: "destructive" });
       } finally {
         setIsLoading(false);
@@ -103,7 +91,6 @@ export default function NastaveniAuditoraPage() {
     loadSettings();
   }, [toast]);
 
-  // Handlery pro dynamický seznam certifikací
   const addCertifikace = () => {
     setAuditorData(p => ({
       ...p,
@@ -134,7 +121,6 @@ export default function NastaveniAuditoraPage() {
       await setDoc(docRef, cleanData);
       toast({ title: "Nastavení uloženo", description: "Všechny údaje, certifikace i podpisy byly uloženy." });
     } catch (error) {
-      console.error(error);
       toast({ title: "Chyba uložení", variant: "destructive" });
     } finally {
       setIsSaving(false);
@@ -157,7 +143,6 @@ export default function NastaveniAuditoraPage() {
 
       <form onSubmit={handleSave} className="space-y-8">
         
-        {/* DYNAMICKÝ SEZNAM CERTIFIKACÍ */}
         <Card className="border-slate-200 shadow-sm overflow-hidden">
           <CardHeader className="bg-slate-50/50 border-b">
             <div className="flex justify-between items-center">
@@ -165,7 +150,7 @@ export default function NastaveniAuditoraPage() {
                 <CardTitle className="text-base flex items-center gap-2 text-slate-800">
                   <Award className="h-5 w-5 text-blue-600" /> Profesní způsobilosti a osvědčení
                 </CardTitle>
-                <CardDescription>Zadejte všechna svá oprávnění (OZO BOZP, Technik PO, atd.).</CardDescription>
+                <CardDescription>Zadejte všechna svá oprávnění.</CardDescription>
               </div>
               <Button type="button" variant="outline" size="sm" onClick={addCertifikace} className="font-bold border-blue-200 text-blue-700 hover:bg-blue-50">
                 <Plus className="h-4 w-4 mr-1" /> Přidat způsobilost
@@ -174,31 +159,17 @@ export default function NastaveniAuditoraPage() {
           </CardHeader>
           <CardContent className="p-6 space-y-4">
             {auditorData.certifikace.map((cert, idx) => (
-              <div key={cert.id} className="flex gap-4 items-end bg-white p-4 rounded-lg border border-slate-100 shadow-sm animate-in slide-in-from-left-2">
+              <div key={cert.id} className="flex gap-4 items-end bg-white p-4 rounded-lg border border-slate-100 shadow-sm">
                 <div className="flex-1 space-y-2">
                   <Label className="text-[10px] uppercase font-bold text-slate-500">Název způsobilosti</Label>
-                  <Input 
-                    placeholder="Např. Odborně způsobilá osoba v prevenci rizik" 
-                    value={cert.nazev}
-                    onChange={e => updateCertifikace(idx, 'nazev', e.target.value)}
-                  />
+                  <Input placeholder="Např. Odborně způsobilá osoba..." value={cert.nazev} onChange={e => updateCertifikace(idx, 'nazev', e.target.value)} />
                 </div>
                 <div className="flex-1 space-y-2">
                   <Label className="text-[10px] uppercase font-bold text-slate-500">Číslo osvědčení / certifikátu</Label>
-                  <Input 
-                    placeholder="Např. RO/000/OZO/2026" 
-                    value={cert.cislo}
-                    onChange={e => updateCertifikace(idx, 'cislo', e.target.value)}
-                  />
+                  <Input placeholder="Např. RO/000/OZO/2026" value={cert.cislo} onChange={e => updateCertifikace(idx, 'cislo', e.target.value)} />
                 </div>
                 {auditorData.certifikace.length > 1 && (
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    size="icon" 
-                    className="text-red-400 hover:text-red-600 hover:bg-red-50 mb-0.5" 
-                    onClick={() => removeCertifikace(idx)}
-                  >
+                  <Button type="button" variant="ghost" size="icon" className="text-red-400 hover:text-red-600 hover:bg-red-50 mb-0.5" onClick={() => removeCertifikace(idx)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 )}
@@ -207,7 +178,6 @@ export default function NastaveniAuditoraPage() {
           </CardContent>
         </Card>
 
-        {/* OSOBNÍ A KONTAKTNÍ ÚDAJE */}
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="bg-slate-50/50 border-b">
             <CardTitle className="text-base flex items-center gap-2 text-slate-800">
@@ -216,28 +186,16 @@ export default function NastaveniAuditoraPage() {
           </CardHeader>
           <CardContent className="p-6 space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label className="font-bold">Jméno a příjmení</Label>
-                <Input value={auditorData.jmeno} onChange={e => setAuditorData(p => ({ ...p, jmeno: e.target.value }))} placeholder="Jan Novák" className="h-11" />
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold">Tituly</Label>
-                <Input value={auditorData.titul} onChange={e => setAuditorData(p => ({ ...p, titul: e.target.value }))} placeholder="Ing." className="h-11" />
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold">E-mail</Label>
-                <Input value={auditorData.email} onChange={e => setAuditorData(p => ({ ...p, email: e.target.value }))} type="email" placeholder="novak@bpyes.cz" className="h-11" />
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold">Telefon</Label>
-                <Input value={auditorData.telefon} onChange={e => setAuditorData(p => ({ ...p, telefon: e.target.value }))} placeholder="+420 123 456 789" className="h-11" />
-              </div>
+              <div className="space-y-2"><Label className="font-bold">Jméno a příjmení</Label><Input value={auditorData.jmeno} onChange={e => setAuditorData(p => ({ ...p, jmeno: e.target.value }))} placeholder="Jan Novák" className="h-11" /></div>
+              <div className="space-y-2"><Label className="font-bold">Tituly</Label><Input value={auditorData.titul} onChange={e => setAuditorData(p => ({ ...p, titul: e.target.value }))} placeholder="Ing." className="h-11" /></div>
+              <div className="space-y-2"><Label className="font-bold">E-mail</Label><Input value={auditorData.email} onChange={e => setAuditorData(p => ({ ...p, email: e.target.value }))} type="email" placeholder="novak@bpyes.cz" className="h-11" /></div>
+              <div className="space-y-2"><Label className="font-bold">Telefon</Label><Input value={auditorData.telefon} onChange={e => setAuditorData(p => ({ ...p, telefon: e.target.value }))} placeholder="+420 123 456 789" className="h-11" /></div>
             </div>
 
             <div className="pt-6 border-t border-slate-100 space-y-4">
               <h4 className="font-bold text-xs text-slate-400 uppercase tracking-widest">Fakturační hlavička auditora</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2"><Label className="font-bold">Společnost</Label><Input value={auditorData.firmaNazev} onChange={e => setAuditorData(p => ({ ...p, firmaNazev: e.target.value }))} placeholder="BPyes s.r.o." /></div>
+                <div className="space-y-2"><Label className="font-bold">Společnost</Label><Input value={auditorData.firmaNazev} onChange={e => setAuditorData(p => ({ ...p, firmaNazev: e.target.value }))} /></div>
                 <div className="space-y-2"><Label className="font-bold">IČO</Label><Input value={auditorData.firmaIco} onChange={e => setAuditorData(p => ({ ...p, firmaIco: e.target.value }))} className="font-mono" /></div>
                 <div className="space-y-2 md:col-span-2"><Label className="font-bold">Adresa sídla</Label><Input value={auditorData.firmaAdresa} onChange={e => setAuditorData(p => ({ ...p, firmaAdresa: e.target.value }))} /></div>
               </div>
@@ -245,29 +203,24 @@ export default function NastaveniAuditoraPage() {
           </CardContent>
         </Card>
 
-        {/* PODPISOVÉ VZORY (RAZÍTKO A PODPIS) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          
-          {/* SEKCE RAZÍTKO */}
           <Card className="border-slate-200 shadow-sm flex flex-col">
             <CardHeader className="bg-slate-50/50 border-b">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Camera className="h-4 w-4 text-amber-600" /> Kulaté razítko
+                <Camera className="h-4 w-4 text-amber-600" /> Kulaté razítko (Ideálně PNG)
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-6 flex-1 flex flex-col">
-              <div className="relative group flex-1 min-h-[160px] border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/30 flex flex-col items-center justify-center p-4 transition-colors hover:bg-slate-50">
+              <div className="relative group flex-1 min-h-[160px] border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/30 flex flex-col items-center justify-center p-4">
                 {auditorData.razitkoBase64 ? (
                   <>
-                    <img src={auditorData.razitkoBase64} alt="Razítko" className="max-h-32 object-contain mix-blend-multiply" />
-                    <Button type="button" variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow-lg" onClick={() => setAuditorData(p => ({ ...p, razitkoBase64: "" }))}>
-                      <X className="h-3 w-3" />
-                    </Button>
+                    <img src={auditorData.razitkoBase64} alt="Razítko" className="max-h-32 object-contain" />
+                    <Button type="button" variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow-lg" onClick={() => setAuditorData(p => ({ ...p, razitkoBase64: "" }))}><X className="h-3 w-3" /></Button>
                   </>
                 ) : (
                   <div className="text-center space-y-2">
                     <Upload className="h-6 w-6 mx-auto text-slate-400" />
-                    <p className="text-[10px] font-bold text-slate-600">Klikněte pro nahrání razítka</p>
+                    <p className="text-[10px] font-bold text-slate-600">Klikněte pro nahrání</p>
                     <Input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" 
                       onChange={async (e) => {
                         const file = e.target.files?.[0]; if (!file) return;
@@ -280,26 +233,23 @@ export default function NastaveniAuditoraPage() {
             </CardContent>
           </Card>
 
-          {/* SEKCE PODPIS */}
           <Card className="border-slate-200 shadow-sm flex flex-col">
             <CardHeader className="bg-slate-50/50 border-b">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Signature className="h-4 w-4 text-blue-600" /> Vlastnoruční podpis
+                <Signature className="h-4 w-4 text-blue-600" /> Vlastnoruční podpis (Ideálně PNG)
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-6 flex-1 flex flex-col">
-              <div className="relative group flex-1 min-h-[160px] border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/30 flex flex-col items-center justify-center p-4 transition-colors hover:bg-slate-50">
+              <div className="relative group flex-1 min-h-[160px] border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/30 flex flex-col items-center justify-center p-4">
                 {auditorData.podpisBase64 ? (
                   <>
-                    <img src={auditorData.podpisBase64} alt="Podpis" className="max-h-32 object-contain mix-blend-multiply" />
-                    <Button type="button" variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow-lg" onClick={() => setAuditorData(p => ({ ...p, podpisBase64: "" }))}>
-                      <X className="h-3 w-3" />
-                    </Button>
+                    <img src={auditorData.podpisBase64} alt="Podpis" className="max-h-32 object-contain" />
+                    <Button type="button" variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow-lg" onClick={() => setAuditorData(p => ({ ...p, podpisBase64: "" }))}><X className="h-3 w-3" /></Button>
                   </>
                 ) : (
                   <div className="text-center space-y-2">
                     <Upload className="h-6 w-6 mx-auto text-slate-400" />
-                    <p className="text-[10px] font-bold text-slate-600">Klikněte pro nahrání podpisu</p>
+                    <p className="text-[10px] font-bold text-slate-600">Klikněte pro nahrání</p>
                     <Input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" 
                       onChange={async (e) => {
                         const file = e.target.files?.[0]; if (!file) return;
@@ -313,7 +263,6 @@ export default function NastaveniAuditoraPage() {
           </Card>
         </div>
 
-        {/* SPODNÍ FIXNÍ LIŠTA */}
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 z-50 flex justify-center shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
           <div className="max-w-5xl w-full flex justify-end px-4 md:px-8">
             <Button type="submit" disabled={isSaving} className="h-11 px-10 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md transition-all">
@@ -321,7 +270,6 @@ export default function NastaveniAuditoraPage() {
             </Button>
           </div>
         </div>
-
       </form>
     </div>
   );
