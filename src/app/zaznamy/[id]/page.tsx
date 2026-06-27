@@ -646,7 +646,7 @@ export default function RecordDetailPage() {
                                                 <Label className="text-xs font-bold text-slate-700 flex items-center gap-2"><Camera className="h-4 w-4 text-blue-600" /> Nahrát fotodůkaz (volitelně)</Label>
                                                 <Input type="file" accept="image/*" multiple onChange={async (e) => {
                                                     const files = Array.from(e.target.files || []); if (files.length === 0) return;
-                                                    const newPhotos = []; for (const f of files) newPhotos.push(await compressImage(f));
+                                                    const newPhotos: string[] = []; for (const f of files) newPhotos.push(await compressImage(f));
                                                     setResolveData(p => ({...p, foto: [...p.foto, ...newPhotos]}));
                                                 }} className="h-9 cursor-pointer text-xs" />
                                                 {resolveData.foto.length > 0 && (
