@@ -128,7 +128,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (!userProfile.klientId) {
             setZaznamyState([]);
         } else {
-            const klientskeZaznamy = docs.filter(z => z.klientId === userProfile.klientId);
+            const klientskeZaznamy = docs.filter((z: any) => z.klientId === userProfile.klientId);
             setZaznamyState(klientskeZaznamy);
         }
       }
