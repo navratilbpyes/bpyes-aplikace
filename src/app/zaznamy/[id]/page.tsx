@@ -8,7 +8,7 @@ import { useParams, useRouter } from "next/navigation";
 import { 
   ChevronLeft, Printer, Building, MapPin, FileText,
   Loader2, Edit, ChevronDown, CheckCircle2, Clock, X, Camera,
-  CheckSquare, Square, AlertTriangle, Trash2
+  CheckSquare, Square, AlertTriangle, Trash2, Send
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -76,35 +76,7 @@ export default function RecordDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
-  const [isSendingEmail, setIsSendingEmail] = useState(false);
-
-  const handleSendEmailFromDetail = async () => {
-    // Zkusíme najít e-mail klienta, případně se zeptáme
-    const cilovyEmail = klient?.email || prompt("Zadejte e-mailovou adresu, na kterou chcete report odeslat:", "");
-    if (!cilovyEmail) return;
-
-    setIsSendingEmail(true);
-    try {
-      const odkaz = `${window.location.origin}/zaznamy/${zaznam.id}`;
-      const response = await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: cilovyEmail,
-          jmenoKlienta: klient?.nazev || "Klient",
-          cisloZpravy: zaznam.cisloKlientske || zaznam.cislo,
-          odkaz: odkaz
-        })
-      });
-      const result = await response.json();
-      if (result.success) toast({ title: "E-mail úspěšně odeslán", description: `Potvrzení bylo zasláno na: ${cilovyEmail}` });
-      else toast({ title: "Chyba při odesílání", description: "E-mail se nepodařilo odeslat.", variant: "destructive" });
-    } catch (err) {
-      toast({ title: "Kritická chyba", description: "Nepodařilo se připojit k serveru.", variant: "destructive" });
-    } finally {
-      setIsSendingEmail(false);
-    }
-  };
+  
   const { zaznamy, klienti, userProfile, setZaznamy } = useData();
 
   const [t, setT] = useState<Record<string, string>>({
@@ -127,6 +99,7 @@ export default function RecordDetailPage() {
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const isAdmin = userProfile?.role === 'admin';
 
@@ -174,6 +147,36 @@ export default function RecordDetailPage() {
       fullDisplay: `${p.nazev}${p.adresa ? ', ' + p.adresa : ''}${p.mesto ? ', ' + p.mesto : ''}`
     }));
   }, [klient, record]);
+
+  // Přesunuto sem dolů, aby to mělo přístup k "record" a "klient"
+  const handleSendEmailFromDetail = async () => {
+    if (!record) return;
+    
+    const cilovyEmail = klient?.email || prompt("Zadejte e-mailovou adresu, na kterou chcete report odeslat:", "");
+    if (!cilovyEmail) return;
+
+    setIsSendingEmail(true);
+    try {
+      const odkaz = `${window.location.origin}/zaznamy/${record.id}`;
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: cilovyEmail,
+          jmenoKlienta: klient?.nazev || "Klient",
+          cisloZpravy: record.cisloKlientske || record.cislo,
+          odkaz: odkaz
+        })
+      });
+      const result = await response.json();
+      if (result.success) toast({ title: "E-mail úspěšně odeslán", description: `Potvrzení bylo zasláno na: ${cilovyEmail}` });
+      else toast({ title: "Chyba při odesílání", description: "E-mail se nepodařilo odeslat.", variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Kritická chyba", description: "Nepodařilo se připojit k serveru.", variant: "destructive" });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
 
   const [filterPosition, setFilterPosition] = useState<string>("all");
   const [onlyDefects, setOnlyDefects] = useState<boolean>(false);
@@ -512,6 +515,15 @@ export default function RecordDetailPage() {
           </div>
           
           <div className="flex flex-wrap gap-2 w-full md:w-auto">
+            <Button 
+              onClick={handleSendEmailFromDetail} 
+              disabled={isSendingEmail}
+              variant="outline"
+              className="h-11 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 shadow-sm font-bold"
+            >
+              {isSendingEmail ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+              Odeslat e-mail
+            </Button>
             <Button className="h-11 px-6 shadow-sm font-bold bg-blue-600 hover:bg-blue-700 text-white" onClick={handlePrint} disabled={isPreparingPdf}>
               {isPreparingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Printer className="h-4 w-4 mr-2" />}
               {isPreparingPdf ? "Příprava PDF..." : "Tisk reportu"}
@@ -524,15 +536,6 @@ export default function RecordDetailPage() {
                 <Button variant="outline" className="h-11 text-red-600 hover:bg-red-50 hover:text-red-700 border-red-200 bg-white" onClick={() => setShowDeleteModal(true)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
-                <Button 
-  onClick={handleSendEmailFromDetail} 
-  disabled={isSendingEmail}
-  variant="outline"
-  className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800"
->
-  {isSendingEmail ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-  Odeslat e-mail
-</Button>
               </>
             )}
           </div>
