@@ -18,7 +18,7 @@ import { cn } from "@/app/lib/utils";
 export default function EditClientPage() {
   const params = useParams();
   const router = useRouter();
-  const { klienti, setKlienti, isLoading } = useData();
+  const { klienti, setKlienti } = useData();
   const { toast } = useToast();
 
   const [isSaving, setIsSaving] = useState(false);
