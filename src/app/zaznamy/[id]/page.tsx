@@ -389,13 +389,13 @@ export default function RecordDetailPage() {
                              </tbody>
                            </table>
                            
-                           {/* DOPLNĚNÉ FOTKY AUDITORA DO PDF */}
+                           {/* ZVĚTŠENÉ FOTKY AUDITORA DO PDF */}
                            {kb.foto && kb.foto.length > 0 && (
                              <div className="mt-3">
                                <span className="text-[10px] uppercase font-bold text-slate-600 block mb-1">Fotodokumentace k neshodě</span>
                                <div className="flex flex-wrap gap-2">
                                  {kb.foto.map((f: string, i: number) => (
-                                   <img src={f} alt="Fotodokumentace" key={`aud-pdf-${i}`} className="h-20 w-20 object-cover border border-slate-300" />
+                                   <img src={f} alt="Fotodokumentace" key={`aud-pdf-${i}`} className="h-40 w-40 object-cover border border-slate-300" />
                                  ))}
                                </div>
                              </div>
@@ -410,13 +410,13 @@ export default function RecordDetailPage() {
                                <div><span className="font-bold">Datum:</span> {kb.datumVyreseniKlientem ? new Date(kb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</div>
                                {kb.poznamkaKlienta && <div className="mt-1 italic">"{kb.poznamkaKlienta}"</div>}
                                
-                               {/* DŮKAZY KLIENTA V PDF */}
+                               {/* ZVĚTŠENÉ DŮKAZY KLIENTA V PDF */}
                                {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
                                 <div className="mt-2">
                                   <span className="text-[9px] uppercase font-bold text-emerald-600 block mb-1">Důkazy o odstranění</span>
                                   <div className="flex flex-wrap gap-2">
                                     {kb.fotoVyreseni.map((f: string, i: number) => (
-                                      <img src={f} alt="Důkaz" key={`kli-pdf-${i}`} className="h-16 w-16 object-cover border border-emerald-200" />
+                                      <img src={f} alt="Důkaz" key={`kli-pdf-${i}`} className="h-40 w-40 object-cover border border-emerald-200" />
                                     ))}
                                   </div>
                                 </div>
@@ -559,14 +559,14 @@ export default function RecordDetailPage() {
                                       <div><span className="text-muted-foreground block mb-0.5">{t.karta_odpovednost}</span><p className="font-bold text-black">{kb.odpovednaOsoba || 'Neuvedena'}</p></div>
                                     </div>
 
-                                    {/* DŮKAZNÍ FOTKY AUDITORA VE WEBOVÉM NÁHLEDU */}
+                                    {/* ZVĚTŠENÉ FOTKY AUDITORA VE WEBOVÉM NÁHLEDU */}
                                     {kb.foto && kb.foto.length > 0 && (
-                                      <div className="mt-2">
-                                        <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Fotodokumentace auditora</span>
-                                        <div className="flex flex-wrap gap-2">
+                                      <div className="mt-4">
+                                        <span className="text-[10px] uppercase font-bold text-slate-500 block mb-2">Fotodokumentace auditora</span>
+                                        <div className="flex flex-wrap gap-4">
                                           {kb.foto.map((f: string, i: number) => (
                                             <a href={f} target="_blank" rel="noreferrer" key={`aud-web-${i}`}>
-                                              <img src={f} alt="Fotodokumentace" className="h-16 w-16 object-cover rounded border border-slate-200 hover:scale-105 transition-transform" />
+                                              <img src={f} alt="Fotodokumentace" className="h-32 w-32 sm:h-40 sm:w-40 object-cover rounded-lg border border-slate-300 shadow-sm hover:scale-105 transition-transform cursor-zoom-in" />
                                             </a>
                                           ))}
                                         </div>
@@ -592,14 +592,18 @@ export default function RecordDetailPage() {
                                                  <p className="text-sm font-medium text-slate-800 whitespace-pre-wrap">{kb.poznamkaKlienta}</p>
                                                </div>
                                              )}
+                                             
+                                             {/* ZVĚTŠENÉ FOTKY KLIENTA - KDYŽ TO SÁM ODESLAL */}
                                              {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
-                                               <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-blue-50">
+                                               <div className="flex flex-wrap gap-4 mt-3 pt-3 border-t border-blue-50">
                                                  {kb.fotoVyreseni.map((f: string, i: number) => (
-                                                   <a href={f} target="_blank" rel="noreferrer" key={`kli-web-${i}`}><img src={f} alt="Důkaz" className="h-16 w-16 object-cover rounded border hover:opacity-80 transition-opacity" /></a>
+                                                   <a href={f} target="_blank" rel="noreferrer" key={`kli-web-${i}`}>
+                                                      <img src={f} alt="Důkaz" className="h-32 w-32 object-cover rounded-lg border border-emerald-200 shadow-sm hover:opacity-80 transition-opacity cursor-zoom-in" />
+                                                   </a>
                                                  ))}
                                                </div>
                                              )}
-                                             <Button variant="outline" size="sm" onClick={() => handleCancelResolve(bodId)} className="mt-3 w-full text-red-600 hover:bg-red-50 border-red-200">Zrušit a vrátit do řešení</Button>
+                                             <Button variant="outline" size="sm" onClick={() => handleCancelResolve(bodId)} className="mt-4 w-full text-red-600 hover:bg-red-50 border-red-200">Zrušit a vrátit do řešení</Button>
                                            </div>
                                         ) : (
                                           resolvingBod === bodId ? (
@@ -666,12 +670,16 @@ export default function RecordDetailPage() {
                                               <p className="font-medium text-slate-800 whitespace-pre-wrap">{kb.poznamkaKlienta}</p>
                                             </div>
                                           )}
+                                          
+                                          {/* ZVĚTŠENÉ FOTKY KLIENTA V NÁHLEDU ADMINA */}
                                           {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
-                                             <div className="mt-2">
-                                               <span className="text-[10px] uppercase font-bold text-emerald-600/70 block mb-1">Přiložené fotodůkazy</span>
-                                               <div className="flex flex-wrap gap-2">
+                                             <div className="mt-3">
+                                               <span className="text-[10px] uppercase font-bold text-emerald-600/70 block mb-2">Přiložené fotodůkazy</span>
+                                               <div className="flex flex-wrap gap-4">
                                                  {kb.fotoVyreseni.map((f: string, i: number) => (
-                                                   <a href={f} target="_blank" rel="noreferrer" key={`kli-web2-${i}`}><img src={f} alt="Důkaz" className="h-16 w-16 object-cover rounded border border-emerald-200 hover:scale-105 transition-transform cursor-zoom-in" /></a>
+                                                   <a href={f} target="_blank" rel="noreferrer" key={`kli-web2-${i}`}>
+                                                     <img src={f} alt="Důkaz" className="h-32 w-32 sm:h-40 sm:w-40 object-cover rounded-lg border border-emerald-300 shadow-sm hover:scale-105 transition-transform cursor-zoom-in" />
+                                                   </a>
                                                  ))}
                                                </div>
                                              </div>
