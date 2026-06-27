@@ -104,6 +104,7 @@ export default function NewInspectionPage() {
   const [justSavedRecordId, setJustSavedRecordId] = useState<string | null>(null);
   const [justSavedRecordCislo, setJustSavedRecordCislo] = useState<string | null>(null);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailRecipient, setEmailRecipient] = useState("");
 
   const [revisionNumber, setRevisionNumber] = useState("0");
   const [isSaving, setIsSaving] = useState(false);
@@ -333,6 +334,7 @@ export default function NewInspectionPage() {
       setJustSavedRecordId(sanitizedRecord.id);
       setJustSavedRecordCislo(klientskeCislo);
       setShowEmailPrompt(true);
+      setEmailRecipient(selectedKlient?.email || "");
       setShowSaveModal(false);
       setIsSaving(false);
       
@@ -528,21 +530,38 @@ export default function NewInspectionPage() {
             </CardHeader>
             <CardContent className="p-6 space-y-4 text-slate-700">
               <p>Záznam byl úspěšně zaevidován pod číslem <strong>{justSavedRecordCislo}</strong>.</p>
-              <p>Přejete si nyní <strong>odeslat kontaktní osobě e-mail</strong> s upozorněním a unikátním odkazem na klientský dispečink reportu?</p>
-              {selectedKlient?.email ? (
-                <div className="bg-slate-100 p-3 rounded text-sm flex items-center gap-2">
-                  <UserIcon className="h-4 w-4 text-slate-500" /> Bude odesláno na: <strong>{selectedKlient.email}</strong>
+              <p>Přejete si nyní odeslat e-mail s upozorněním a odkazem na klientský dispečink reportu?</p>
+              
+              <div className="space-y-2 pt-2">
+                <Label>E-mail příjemce (můžete upravit):</Label>
+                <div className="flex items-center gap-2">
+                  <Input 
+                    value={emailRecipient} 
+                    onChange={(e) => setEmailRecipient(e.target.value)}
+                    placeholder="Zadejte e-mail..."
+                    className="bg-white"
+                  />
                 </div>
-              ) : (
-                <div className="bg-red-50 p-3 rounded text-sm text-red-700 font-medium">
-                  Upozornění: U tohoto klienta nemáte vyplněný žádný e-mail. Můžete přidat v sekci Klienti.
-                </div>
-              )}
+              </div>
             </CardContent>
             <div className="p-4 border-t flex justify-end gap-2 bg-muted/20 rounded-b-xl">
               <Button variant="outline" onClick={() => router.push(`/zaznamy/${justSavedRecordId}`)}>Neodesílat, přejít na detail</Button>
-              <Button onClick={sendEmailToClient} disabled={isSendingEmail || !selectedKlient?.email} className="bg-blue-600 hover:bg-blue-700 text-white font-bold">
-                {isSendingEmail ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />} Odeslat klientovi e-mail
+              <Button 
+                onClick={async () => {
+                  setIsSendingEmail(true);
+                  try {
+                    const odkaz = `${window.location.origin}/zaznamy/${justSavedRecordId}`;
+                    const response = await fetch('/api/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: emailRecipient, jmenoKlienta: selectedKlient?.nazev || "Klient", cisloZpravy: justSavedRecordCislo, odkaz: odkaz }) });
+                    const result = await response.json();
+                    if (result.success) toast({ title: "Odesláno", description: `E-mail odeslán na: ${emailRecipient}` });
+                    else toast({ title: "Chyba", description: "Nepodařilo se odeslat.", variant: "destructive" });
+                  } catch (err) { toast({ title: "Kritická chyba", description: "Chyba sítě.", variant: "destructive" }); } 
+                  finally { setIsSendingEmail(false); router.push(`/zaznamy/${justSavedRecordId}`); }
+                }} 
+                disabled={isSendingEmail || emailRecipient.trim() === ""} 
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold"
+              >
+                {isSendingEmail ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />} Odeslat
               </Button>
             </div>
           </Card>
