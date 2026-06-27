@@ -3,7 +3,7 @@
 import { useData } from "@/components/data-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, FileText, AlertTriangle, Calendar, Plus, CheckCircle2, Eye } from "lucide-react";
+import { Users, FileText, AlertTriangle, Plus, CheckCircle2, Eye } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMemo } from "react";
@@ -20,13 +20,6 @@ export default function Dashboard() {
     }
     return acc;
   }, 0);
-
-  const zaznamyTentoMesic = zaznamy.filter(z => {
-    if (!z.datum) return false;
-    const d = new Date(z.datum);
-    const now = new Date();
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  }).length;
 
   const zavadyKRevizi = useMemo(() => {
     if (!isAdmin) return [];
@@ -53,7 +46,6 @@ export default function Dashboard() {
     return kRevizi.sort((a, b) => new Date(b.datum).getTime() - new Date(a.datum).getTime());
   }, [zaznamy, klienti, isAdmin]);
 
-  // NOVÉ: Inteligentní seřazení záznamů od nejvyššího čísla
   const serazeneZaznamy = useMemo(() => {
     return [...zaznamy].sort((a, b) => b.cislo.localeCompare(a.cislo));
   }, [zaznamy]);
@@ -67,17 +59,11 @@ export default function Dashboard() {
             {isAdmin ? "Vítejte v systému pro správu auditů BPyes." : "Vítejte v klientském portálu. Zde naleznete své reporty."}
           </p>
         </div>
-        
-        {isAdmin && (
-          <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white font-bold shrink-0 shadow-sm h-11 px-6">
-            <Link href="/nova-kontrola">
-              <Plus className="mr-2 h-4 w-4" /> Nová kontrola
-            </Link>
-          </Button>
-        )}
       </div>
 
-      <div className={`grid gap-4 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+      {/* Upravený Grid: Zobrazení na 3 sloupce pro admina, na 2 pro klienta */}
+      <div className={`grid gap-4 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
+        
         {isAdmin && (
           <Card className="border-none shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -105,16 +91,6 @@ export default function Dashboard() {
               <AlertTriangle className="h-4 w-4 text-red-600" />
             </CardHeader>
             <CardContent><div className="text-3xl font-black text-slate-900">{zavadyKReseni}</div></CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/zaznamy?filter=month" className="block focus:outline-none focus:ring-2 focus:ring-green-500 rounded-xl transition-transform hover:scale-[1.02]">
-          <Card className="border-none shadow-sm h-full hover:bg-green-50/30 transition-colors">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Záznamy tento měsíc</CardTitle>
-              <Calendar className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent><div className="text-3xl font-black text-slate-900">{zaznamyTentoMesic}</div></CardContent>
           </Card>
         </Link>
       </div>
