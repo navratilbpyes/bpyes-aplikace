@@ -96,8 +96,8 @@ export default function ClientDetailPage() {
                   <div className="flex items-start gap-2">
                     <MapPin className="h-4 w-4 mt-1 text-muted-foreground" />
                     <div>
-                      <p>{klient.sidlo}</p>
-                      <p>{klient.psc} {klient.mesto}</p>
+                      <p>{klient.sidlo || klient.mesto || 'Sídlo neuvedeno'}</p>
+                      {klient.psc && <p>{klient.psc} {klient.mesto}</p>}
                     </div>
                   </div>
                 </div>
@@ -106,16 +106,20 @@ export default function ClientDetailPage() {
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-2">
                       <User className="h-4 w-4 text-muted-foreground" />
-                      <span>{klient.kontaktOsoba}</span>
+                      <span>{klient.kontaktOsoba || 'Neuvedeno'}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <a href={`mailto:${klient.email}`} className="text-blue-600 hover:underline">{klient.email}</a>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <span>{klient.telefon}</span>
-                    </div>
+                    {klient.email && (
+                      <div className="flex items-center gap-2">
+                        <Mail className="h-4 w-4 text-muted-foreground" />
+                        <a href={`mailto:${klient.email}`} className="text-blue-600 hover:underline">{klient.email}</a>
+                      </div>
+                    )}
+                    {klient.telefon && (
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        <span>{klient.telefon}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -134,7 +138,7 @@ export default function ClientDetailPage() {
 
             <TabsContent value="pracoviste" className="space-y-4">
               <div className="flex justify-between items-center">
-                <h3 className="font-bold">Seznam pracovišť ({klient.pracoviste.length})</h3>
+                <h3 className="font-bold">Seznam pracovišť ({klient.pracoviste?.length || 0})</h3>
                 <Button size="sm" variant="outline">
                   <Plus className="mr-2 h-4 w-4" />
                   Přidat pracoviště
@@ -142,7 +146,8 @@ export default function ClientDetailPage() {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {klient.pracoviste.map(p => (
+                {/* Bezpečný přístup přes || [] k poli pracoviště */}
+                {(klient.pracoviste || []).map((p: any) => (
                   <Card key={p.id} className="border-none shadow-sm hover:shadow-md transition-shadow">
                     <CardHeader className="pb-3">
                       <div className="flex justify-between items-start">
@@ -151,11 +156,12 @@ export default function ClientDetailPage() {
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       </div>
-                      <CardDescription>{p.adresa}, {p.mesto}</CardDescription>
+                      <CardDescription>{p.adresa || p.mesto || 'Adresa nezadána'}</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="flex flex-wrap gap-2">
-                        {p.prostory.map(area => (
+                        {/* Bezpečný přístup k historickým "prostorům" */}
+                        {(p.prostory || []).map((area: string) => (
                           <Badge key={area} variant="secondary" className="font-normal">{area}</Badge>
                         ))}
                       </div>
@@ -167,7 +173,7 @@ export default function ClientDetailPage() {
 
             <TabsContent value="osoby" className="space-y-4">
               <div className="flex justify-between items-center">
-                <h3 className="font-bold">Odpovědné osoby ({klient.odpovedneOsoby.length})</h3>
+                <h3 className="font-bold">Odpovědné osoby ({klient.odpovedneOsoby?.length || 0})</h3>
                 <Button size="sm" variant="outline">
                   <Plus className="mr-2 h-4 w-4" />
                   Přidat osobu
@@ -175,8 +181,9 @@ export default function ClientDetailPage() {
               </div>
 
               <div className="grid grid-cols-1 gap-4">
-                {klient.odpovedneOsoby.map(o => (
-                  <Card key={o.id} className="border-none shadow-sm">
+                {/* Bezpečný přístup přes || [] k poli osob */}
+                {(klient.odpovedneOsoby || []).map((o: any) => (
+                  <Card key={o.id || Math.random()} className="border-none shadow-sm">
                     <CardContent className="flex items-center justify-between p-6">
                       <div className="flex items-center gap-4">
                         <div className="h-10 w-10 rounded-full bg-primary/5 flex items-center justify-center">
@@ -184,7 +191,7 @@ export default function ClientDetailPage() {
                         </div>
                         <div>
                           <p className="font-bold">{o.jmeno} {o.prijmeni}</p>
-                          <p className="text-sm text-muted-foreground">{o.pozice}</p>
+                          <p className="text-sm text-muted-foreground">{o.pozice || o.funkce}</p>
                         </div>
                       </div>
                       <div className="flex gap-8">
@@ -232,14 +239,15 @@ export default function ClientDetailPage() {
                           <td className="px-6 py-4">
                             <Badge variant="outline">{z.typKontroly}</Badge>
                           </td>
-                          <td className="px-6 py-4">{new Date(z.datum).toLocaleDateString('cs-CZ')}</td>
+                          <td className="px-6 py-4">{z.datum ? new Date(z.datum).toLocaleDateString('cs-CZ') : '-'}</td>
                           <td className="px-6 py-4">
-                            <span className={z.zavady.length > 0 ? "text-red-600 font-bold" : "text-green-600 font-bold"}>
-                              {z.zavady.length}
+                            {/* Bezpečný přístup k závadám */}
+                            <span className={(z.zavady?.length || 0) > 0 ? "text-red-600 font-bold" : "text-green-600 font-bold"}>
+                              {z.zavady?.length || 0}
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            <Badge variant={z.stav === 'otevreny' ? 'destructive' : 'secondary'}>{z.stav}</Badge>
+                            <Badge variant={z.stav === 'otevreny' ? 'destructive' : 'secondary'}>{z.stav === 'otevreny' ? 'V řešení' : 'Uzavřeno'}</Badge>
                           </td>
                           <td className="px-6 py-4 text-right">
                             <Button variant="ghost" size="icon" asChild>
