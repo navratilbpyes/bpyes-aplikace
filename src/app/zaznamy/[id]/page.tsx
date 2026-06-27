@@ -93,6 +93,7 @@ export default function RecordDetailPage() {
   const [isPreparingPdf, setIsPreparingPdf] = useState(false);
   const [resolvingBod, setResolvingBod] = useState<string | number | null>(null);
   const [resolveData, setResolveData] = useState({ datum: '', jmeno: '', poznamka: '', foto: [] as string[] });
+  
   const [auditorConfig, setAuditorConfig] = useState<AuditorConfig | null>(null);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -346,24 +347,28 @@ export default function RecordDetailPage() {
             </p>
           </div>
 
-          {/* NOVÝ, PEVNÝ PODPISOVÝ BLOK */}
+          {/* NEPRŮSTŘELNÝ PODPISOVÝ BLOK (Plán B - Blokové řazení) */}
           <div className="grid grid-cols-2 gap-12 mt-16 pt-8">
-            <div className="flex flex-col justify-end">
-               <p className="font-bold uppercase text-[11px] mb-1">PROVEDL (ZA {auditorConfig?.firmaNazev?.toUpperCase() || 'BPYES'}):</p>
+            
+            {/* LEVÁ STRANA: AUDITOR */}
+            <div className="flex flex-col">
+               <p className="font-bold uppercase text-[11px] mb-2">PROVEDL (ZA {auditorConfig?.firmaNazev?.toUpperCase() || 'BPYES'}):</p>
                
-               {/* Blok vyhrazený čistě pro obrázky razítka a podpisu */}
-               <div className="h-28 w-full relative flex items-end">
+               {/* Pevná zóna pro obrázky - vždy 96px (h-24) vysoká, relativní pro absolutní pozicování uvnitř */}
+               <div className="h-24 w-full relative mb-2">
                  {auditorConfig?.razitkoBase64 && (
-                   <img src={auditorConfig.razitkoBase64} alt="R" className="absolute left-0 bottom-0 h-28 w-28 object-contain" />
+                   <img src={auditorConfig.razitkoBase64} alt="Razítko" className="absolute left-0 bottom-0 h-24 w-24 object-contain mix-blend-multiply" />
                  )}
                  {auditorConfig?.podpisBase64 && (
-                   <img src={auditorConfig.podpisBase64} alt="P" className="absolute left-16 bottom-2 h-16 w-32 object-contain" />
+                   <img src={auditorConfig.podpisBase64} alt="Podpis" className="absolute left-16 bottom-2 h-16 w-32 object-contain mix-blend-multiply" />
                  )}
                </div>
                
-               <div className="border-b border-black w-full mb-2"></div>
+               {/* Čára - Už se nikdy neposune */}
+               <div className="border-b border-black w-full"></div>
                
-               <div>
+               {/* Texty pod čarou */}
+               <div className="pt-2">
                  <p className="font-bold text-base">{auditorConfig?.titul ? auditorConfig.titul + ' ' : ''}{auditorConfig?.jmeno || 'Auditor'}</p>
                  {auditorConfig?.certifikace?.map((cert: any) => (
                    <p key={cert.id} className="text-[10px] leading-tight text-slate-600 mt-0.5">{cert.nazev}{cert.cislo ? `, ${cert.cislo}` : ''}</p>
@@ -371,13 +376,19 @@ export default function RecordDetailPage() {
                </div>
             </div>
             
-            <div className="flex flex-col justify-end">
-               <p className="font-bold uppercase text-[11px] mb-1">ZÁSTUPCE KLIENTA / SUBJEKTU:</p>
-               {/* Prázdný blok stejné výšky, aby čáry lícovaly vedle sebe */}
-               <div className="h-28 w-full"></div>
+            {/* PRAVÁ STRANA: KLIENT */}
+            <div className="flex flex-col">
+               <p className="font-bold uppercase text-[11px] mb-2">ZÁSTUPCE SUBJEKTU / KLIENTA:</p>
                
-               <div className="border-b border-black w-full mb-2"></div>
-               <p className="text-xs text-slate-400 italic">Podpis a datum seznámení</p>
+               {/* Prázdná zóna stejné výšky (h-24), aby čáry lícovaly */}
+               <div className="h-24 w-full mb-2"></div>
+               
+               {/* Čára ve stejné výšce jako ta levá */}
+               <div className="border-b border-black w-full"></div>
+               
+               <div className="pt-2">
+                 <p className="text-xs text-slate-400 italic">Podpis a datum seznámení</p>
+               </div>
             </div>
           </div>
         </div>
