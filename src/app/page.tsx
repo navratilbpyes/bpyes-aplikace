@@ -1,9 +1,9 @@
 'use client';
 
 import { useData } from "@/components/data-provider";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, FileText, AlertTriangle, Calendar, Plus, CheckCircle2, ArrowRight, Eye, Info } from "lucide-react";
+import { Users, FileText, AlertTriangle, Calendar, Plus, CheckCircle2, Eye } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMemo } from "react";
@@ -52,6 +52,11 @@ export default function Dashboard() {
     });
     return kRevizi.sort((a, b) => new Date(b.datum).getTime() - new Date(a.datum).getTime());
   }, [zaznamy, klienti, isAdmin]);
+
+  // NOVÉ: Inteligentní seřazení záznamů od nejvyššího čísla
+  const serazeneZaznamy = useMemo(() => {
+    return [...zaznamy].sort((a, b) => b.cislo.localeCompare(a.cislo));
+  }, [zaznamy]);
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto pb-24">
@@ -134,8 +139,8 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {zaznamy.length > 0 ? (
-                    zaznamy.slice(0, 8).map(z => (
+                  {serazeneZaznamy.length > 0 ? (
+                    serazeneZaznamy.slice(0, 8).map(z => (
                       <tr key={z.id} className="hover:bg-blue-50/50 cursor-pointer transition-colors" onClick={() => router.push(`/zaznamy/${z.id}`)}>
                         <td className="px-6 py-4 font-bold text-blue-700">
                           {z.cislo} <span className="text-muted-foreground font-normal text-xs ml-1">R{z.revize || 0}</span>
