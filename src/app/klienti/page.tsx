@@ -480,14 +480,21 @@ export default function ClientsPage() {
                       </div>
                     </div>
 
+                    {/* AKTUALIZOVANÁ UTLAČÍTKA: ČISTÉ IKONY S JEDNOTNOU VELIKOSTÍ */}
                     <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 mt-auto">
-                      <Button variant="outline" size="sm" asChild className="h-8 px-3 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 font-medium">
-                        <Link href={`/klienti/${k.id}`}><Eye className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Detail</span></Link>
+                      <Button variant="outline" size="icon" asChild title="Detail klienta" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 shadow-sm">
+                        <Link href={`/klienti/${k.id}`}><Eye className="h-4 w-4" /></Link>
                       </Button>
-                      <Button variant="outline" size="sm" asChild className="h-8 px-3 text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200 font-medium">
-                        <Link href={`/klienti/${k.id}/edit`}><Edit2 className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Upravit</span></Link>
+                      <Button variant="outline" size="icon" asChild title="Upravit klienta" className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200 shadow-sm">
+                        <Link href={`/klienti/${k.id}/edit`}><Edit2 className="h-4 w-4" /></Link>
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => setClientToDelete(k.id)} className="h-8 px-3 text-red-500 hover:text-red-700 hover:bg-red-50 border-red-200">
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        title="Smazat klienta" 
+                        className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 border-red-200 shadow-sm" 
+                        onClick={() => setClientToDelete(k.id)}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
