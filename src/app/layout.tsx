@@ -170,7 +170,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
                   <Building2 className="h-4 w-4" /> Správa klientů
                 </Link>
                 <Link href="/zaznamy" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/zaznamy') && pathname !== '/nova-kontrola' ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
-                  <ClipboardList className="h-4 w-4" /> Všechny audity
+                  <ClipboardList className="h-4 w-4" /> Všechny reporty
                 </Link>
                 
                 <div className="pt-4 mt-4 border-t border-slate-800/80">
