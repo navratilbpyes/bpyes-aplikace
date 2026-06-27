@@ -79,6 +79,9 @@ export default function RecordDetailPage() {
   const [isPreparingPdf, setIsPreparingPdf] = useState(false);
   const [resolvingBod, setResolvingBod] = useState<string | number | null>(null);
   const [resolveData, setResolveData] = useState({ datum: '', jmeno: '', poznamka: '', foto: [] as string[] });
+  
+  // STAV PRO ZVĚTŠENOU FOTOGRAFII
+  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
 
   const isAdmin = userProfile?.role === 'admin';
 
@@ -220,6 +223,31 @@ export default function RecordDetailPage() {
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative overflow-hidden print:p-0 print:m-0 print:space-y-0">
       
+      {/* PŘEKRYVNÉ OKNO PRO ZVĚTŠENOU FOTOGRAFII */}
+      {fullscreenImage && (
+        <div 
+          className="fixed inset-0 z-[1000] bg-black/90 flex flex-col items-center justify-center p-4 print:hidden backdrop-blur-sm"
+          onClick={() => setFullscreenImage(null)}
+        >
+          <div className="relative max-w-[95vw] max-h-[95vh] animate-in zoom-in-95 duration-200">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="absolute -top-12 right-0 text-white hover:bg-white/20 hover:text-white" 
+              onClick={(e) => { e.stopPropagation(); setFullscreenImage(null); }}
+            >
+              <X className="h-8 w-8" />
+            </Button>
+            <img 
+              src={fullscreenImage} 
+              alt="Zvětšená fotografie" 
+              className="max-w-full max-h-[90vh] object-contain rounded-md shadow-2xl" 
+              onClick={(e) => e.stopPropagation()} // Zabraní zavření při kliku přímo na fotku
+            />
+          </div>
+        </div>
+      )}
+
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
           @page { size: A4 portrait; margin: 15mm 15mm 20mm 15mm; }
@@ -389,7 +417,6 @@ export default function RecordDetailPage() {
                              </tbody>
                            </table>
                            
-                           {/* ZVĚTŠENÉ FOTKY AUDITORA DO PDF */}
                            {kb.foto && kb.foto.length > 0 && (
                              <div className="mt-3">
                                <span className="text-[10px] uppercase font-bold text-slate-600 block mb-1">Fotodokumentace k neshodě</span>
@@ -410,7 +437,6 @@ export default function RecordDetailPage() {
                                <div><span className="font-bold">Datum:</span> {kb.datumVyreseniKlientem ? new Date(kb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</div>
                                {kb.poznamkaKlienta && <div className="mt-1 italic">"{kb.poznamkaKlienta}"</div>}
                                
-                               {/* ZVĚTŠENÉ DŮKAZY KLIENTA V PDF */}
                                {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
                                 <div className="mt-2">
                                   <span className="text-[9px] uppercase font-bold text-emerald-600 block mb-1">Důkazy o odstranění</span>
@@ -559,15 +585,22 @@ export default function RecordDetailPage() {
                                       <div><span className="text-muted-foreground block mb-0.5">{t.karta_odpovednost}</span><p className="font-bold text-black">{kb.odpovednaOsoba || 'Neuvedena'}</p></div>
                                     </div>
 
-                                    {/* ZVĚTŠENÉ FOTKY AUDITORA VE WEBOVÉM NÁHLEDU */}
+                                    {/* FOTKY AUDITORA VE WEBOVÉM NÁHLEDU (Nyní klikací pro zvětšení) */}
                                     {kb.foto && kb.foto.length > 0 && (
                                       <div className="mt-4">
                                         <span className="text-[10px] uppercase font-bold text-slate-500 block mb-2">Fotodokumentace auditora</span>
                                         <div className="flex flex-wrap gap-4">
                                           {kb.foto.map((f: string, i: number) => (
-                                            <a href={f} target="_blank" rel="noreferrer" key={`aud-web-${i}`}>
-                                              <img src={f} alt="Fotodokumentace" className="h-32 w-32 sm:h-40 sm:w-40 object-cover rounded-lg border border-slate-300 shadow-sm hover:scale-105 transition-transform cursor-zoom-in" />
-                                            </a>
+                                            <div 
+                                              key={`aud-web-${i}`} 
+                                              onClick={() => setFullscreenImage(f)} 
+                                              className="cursor-zoom-in inline-block relative group"
+                                            >
+                                              <img src={f} alt="Fotodokumentace" className="h-32 w-32 sm:h-40 sm:w-40 object-cover rounded-lg border border-slate-300 shadow-sm group-hover:scale-105 transition-transform" />
+                                              <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center pointer-events-none">
+                                                <Camera className="text-white h-6 w-6 drop-shadow-md" />
+                                              </div>
+                                            </div>
                                           ))}
                                         </div>
                                       </div>
@@ -593,13 +626,20 @@ export default function RecordDetailPage() {
                                                </div>
                                              )}
                                              
-                                             {/* ZVĚTŠENÉ FOTKY KLIENTA - KDYŽ TO SÁM ODESLAL */}
+                                             {/* FOTKY KLIENTA (Nyní klikací pro zvětšení) */}
                                              {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
                                                <div className="flex flex-wrap gap-4 mt-3 pt-3 border-t border-blue-50">
                                                  {kb.fotoVyreseni.map((f: string, i: number) => (
-                                                   <a href={f} target="_blank" rel="noreferrer" key={`kli-web-${i}`}>
-                                                      <img src={f} alt="Důkaz" className="h-32 w-32 object-cover rounded-lg border border-emerald-200 shadow-sm hover:opacity-80 transition-opacity cursor-zoom-in" />
-                                                   </a>
+                                                   <div 
+                                                     key={`kli-web-${i}`} 
+                                                     onClick={() => setFullscreenImage(f)} 
+                                                     className="cursor-zoom-in inline-block relative group"
+                                                   >
+                                                      <img src={f} alt="Důkaz" className="h-32 w-32 sm:h-40 sm:w-40 object-cover rounded-lg border border-emerald-200 shadow-sm group-hover:scale-105 transition-transform" />
+                                                      <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center pointer-events-none">
+                                                        <Camera className="text-white h-6 w-6 drop-shadow-md" />
+                                                      </div>
+                                                   </div>
                                                  ))}
                                                </div>
                                              )}
@@ -671,15 +711,22 @@ export default function RecordDetailPage() {
                                             </div>
                                           )}
                                           
-                                          {/* ZVĚTŠENÉ FOTKY KLIENTA V NÁHLEDU ADMINA */}
+                                          {/* ZVĚTŠENÉ FOTKY KLIENTA V NÁHLEDU ADMINA (Klikací) */}
                                           {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
                                              <div className="mt-3">
                                                <span className="text-[10px] uppercase font-bold text-emerald-600/70 block mb-2">Přiložené fotodůkazy</span>
                                                <div className="flex flex-wrap gap-4">
                                                  {kb.fotoVyreseni.map((f: string, i: number) => (
-                                                   <a href={f} target="_blank" rel="noreferrer" key={`kli-web2-${i}`}>
-                                                     <img src={f} alt="Důkaz" className="h-32 w-32 sm:h-40 sm:w-40 object-cover rounded-lg border border-emerald-300 shadow-sm hover:scale-105 transition-transform cursor-zoom-in" />
-                                                   </a>
+                                                   <div 
+                                                     key={`kli-web2-${i}`} 
+                                                     onClick={() => setFullscreenImage(f)} 
+                                                     className="cursor-zoom-in inline-block relative group"
+                                                   >
+                                                     <img src={f} alt="Důkaz" className="h-32 w-32 sm:h-40 sm:w-40 object-cover rounded-lg border border-emerald-300 shadow-sm group-hover:scale-105 transition-transform" />
+                                                     <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center pointer-events-none">
+                                                        <Camera className="text-white h-6 w-6 drop-shadow-md" />
+                                                     </div>
+                                                   </div>
                                                  ))}
                                                </div>
                                              </div>
