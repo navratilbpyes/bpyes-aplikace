@@ -8,7 +8,7 @@ import { useParams, useRouter } from "next/navigation";
 import { 
   ChevronLeft, Printer, Building, MapPin, FileText,
   Loader2, Edit, ChevronDown, CheckCircle2, Clock, X, Camera,
-  CheckSquare, Square, AlertTriangle, Trash2, ShieldAlert
+  CheckSquare, Square, AlertTriangle, Trash2
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -59,6 +59,19 @@ const compressImage = (file: File): Promise<string> => {
   });
 };
 
+interface AuditorConfig {
+  firmaNazev?: string;
+  firmaIco?: string;
+  firmaAdresa?: string;
+  email?: string;
+  telefon?: string;
+  titul?: string;
+  jmeno?: string;
+  certifikace?: { id: string; nazev: string; cislo: string }[];
+  razitkoBase64?: string;
+  podpisBase64?: string;
+}
+
 export default function RecordDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -81,9 +94,8 @@ export default function RecordDetailPage() {
   const [resolvingBod, setResolvingBod] = useState<string | number | null>(null);
   const [resolveData, setResolveData] = useState({ datum: '', jmeno: '', poznamka: '', foto: [] as string[] });
   
-  // STAV PRO NASTAVENÍ AUDITORA
-  const [auditorConfig, setAuditorConfig] = useState<any>(null);
-  const [debugLog, setDebugLog] = useState<string>("Hledám nastavení...");
+  // STAV PRO NASTAVENÍ AUDITORA S PŘESNÝM TYPEM
+  const [auditorConfig, setAuditorConfig] = useState<AuditorConfig | null>(null);
 
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -98,14 +110,10 @@ export default function RecordDetailPage() {
         const docRef = doc(db, "konfigurace", "auditor");
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          setAuditorConfig(docSnap.data());
-          setDebugLog("Načteno z Firebase ✅");
-        } else {
-          setDebugLog("V databázi chybí dokument konfigurace/auditor ❌");
+          setAuditorConfig(docSnap.data() as AuditorConfig);
         }
       } catch (err) {
         console.error("Nepodařilo se načíst konfiguraci auditora", err);
-        setDebugLog("Chyba přístupu do databáze ❌");
       }
     };
 
@@ -132,14 +140,14 @@ export default function RecordDetailPage() {
       }).catch(console.error);
   }, []);
 
-  const record = useMemo(() => zaznamy.find(z => z.id === params.id), [zaznamy, params.id]);
-  const klient = useMemo(() => klienti.find(k => k.id === record?.klientId), [klienti, record]);
+  const record = useMemo(() => zaznamy.find((z: any) => z.id === params.id), [zaznamy, params.id]);
+  const klient = useMemo(() => klienti.find((k: any) => k.id === record?.klientId), [klienti, record]);
   
   const pracovisteList = useMemo(() => {
     if (!klient || !record) return [];
     const prac = klient.pracoviste || [];
-    if (record.pracovisteIds && Array.isArray(record.pracovisteIds)) return prac.filter(p => record.pracovisteIds.includes(p.id));
-    if (record.pracovisteId) return prac.filter(p => p.id === record.pracovisteId);
+    if (record.pracovisteIds && Array.isArray(record.pracovisteIds)) return prac.filter((p: any) => record.pracovisteIds.includes(p.id));
+    if (record.pracovisteId) return prac.filter((p: any) => p.id === record.pracovisteId);
     return [];
   }, [klient, record]);
 
@@ -343,7 +351,7 @@ export default function RecordDetailPage() {
               <p className="font-bold uppercase mb-1">KONTROLOVANÝ SUBJEKT/KLIENT:</p>
               <p className="font-bold">{klient?.nazev}</p>
               <p>IČO: {klient?.ico}</p>
-              <p>Místo prověrky: {pracovisteList.map(p => p.nazev).join(', ')}</p>
+              <p>Místo prověrky: {pracovisteList.map((p: any) => p.nazev).join(', ')}</p>
             </div>
           </div>
 
@@ -543,21 +551,6 @@ export default function RecordDetailPage() {
       {/* 2. WEBOVÁ VERZE (Interaktivní dashboard, při tisku zmizí)       */}
       {/* ================================================================= */}
       <div className="print:hidden space-y-8">
-
-        {/* DIAGNOSTICKÝ PANEL (VÍDÍ JEN ADMIN) */}
-        {isAdmin && (
-          <div className="bg-slate-100/80 border border-slate-200 p-3 rounded-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs font-mono text-slate-700">
-            <div className="flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4 text-slate-400" />
-              <span>Diagnostika napojení auditora: <strong>{debugLog}</strong></span>
-            </div>
-            <div className="flex gap-4">
-              <span>Firma: <strong className="text-blue-600">{auditorConfig?.firmaNazev || 'PRÁZDNÉ'}</strong></span>
-              <span>Razítko: <strong className={auditorConfig?.razitkoBase64 ? 'text-green-600' : 'text-red-600'}>{auditorConfig?.razitkoBase64 ? 'ANO' : 'NE'}</strong></span>
-              <span>Podpis: <strong className={auditorConfig?.podpisBase64 ? 'text-green-600' : 'text-red-600'}>{auditorConfig?.podpisBase64 ? 'ANO' : 'NE'}</strong></span>
-            </div>
-          </div>
-        )}
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6">
           <div className="space-y-1">
@@ -857,7 +850,7 @@ export default function RecordDetailPage() {
                 <div className="flex gap-3"><MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
                   <div>
                     <span className="text-xs text-muted-foreground block">Pracoviště</span>
-                    <p className="font-bold">{pracovisteList.map(p => p.nazev).join(', ') || 'Neznámé'}</p>
+                    <p className="font-bold">{pracovisteList.map((p: any) => p.nazev).join(', ') || 'Neznámé'}</p>
                   </div>
                 </div>
               </CardContent>
