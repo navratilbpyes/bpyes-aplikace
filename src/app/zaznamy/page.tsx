@@ -8,7 +8,7 @@ import { useParams, useRouter } from "next/navigation";
 import { 
   ChevronLeft, Printer, Building, MapPin, FileText,
   Loader2, Edit, ChevronDown, CheckCircle2, Clock, X, Camera,
-  CheckSquare, Square, AlertTriangle, Trash2
+  CheckSquare, Square, AlertTriangle, Trash2, ShieldAlert
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -83,6 +83,7 @@ export default function RecordDetailPage() {
   
   // STAV PRO NASTAVENÍ AUDITORA
   const [auditorConfig, setAuditorConfig] = useState<any>(null);
+  const [debugLog, setDebugLog] = useState<string>("Hledám nastavení...");
 
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -90,7 +91,7 @@ export default function RecordDetailPage() {
 
   const isAdmin = userProfile?.role === 'admin';
 
-  // Oddělené načítání konfigurace auditora
+  // Načtení dat a konfigurace
   useEffect(() => {
     const fetchAuditorConfig = async () => {
       try {
@@ -98,16 +99,18 @@ export default function RecordDetailPage() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           setAuditorConfig(docSnap.data());
+          setDebugLog("Načteno z Firebase ✅");
+        } else {
+          setDebugLog("V databázi chybí dokument konfigurace/auditor ❌");
         }
       } catch (err) {
         console.error("Nepodařilo se načíst konfiguraci auditora", err);
+        setDebugLog("Chyba přístupu do databáze ❌");
       }
     };
-    fetchAuditorConfig();
-  }, []);
 
-  // Načítání záznamů
-  useEffect(() => {
+    fetchAuditorConfig();
+
     if (zaznamy && zaznamy.length > 0) setIsLoading(false);
     const timer = setTimeout(() => setIsLoading(false), 2000);
     return () => clearTimeout(timer);
@@ -540,6 +543,21 @@ export default function RecordDetailPage() {
       {/* 2. WEBOVÁ VERZE (Interaktivní dashboard, při tisku zmizí)       */}
       {/* ================================================================= */}
       <div className="print:hidden space-y-8">
+
+        {/* DIAGNOSTICKÝ PANEL (VÍDÍ JEN ADMIN) */}
+        {isAdmin && (
+          <div className="bg-slate-100/80 border border-slate-200 p-3 rounded-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs font-mono text-slate-700">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="h-4 w-4 text-slate-400" />
+              <span>Diagnostika napojení auditora: <strong>{debugLog}</strong></span>
+            </div>
+            <div className="flex gap-4">
+              <span>Firma: <strong className="text-blue-600">{auditorConfig?.firmaNazev || 'PRÁZDNÉ'}</strong></span>
+              <span>Razítko: <strong className={auditorConfig?.razitkoBase64 ? 'text-green-600' : 'text-red-600'}>{auditorConfig?.razitkoBase64 ? 'ANO' : 'NE'}</strong></span>
+              <span>Podpis: <strong className={auditorConfig?.podpisBase64 ? 'text-green-600' : 'text-red-600'}>{auditorConfig?.podpisBase64 ? 'ANO' : 'NE'}</strong></span>
+            </div>
+          </div>
+        )}
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6">
           <div className="space-y-1">
