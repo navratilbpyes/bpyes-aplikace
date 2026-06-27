@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardTitle, CardContent, CardHeader } from "@/components/ui/card";
 import { 
   Plus, Search, Building2, Eye, Edit2, 
-  ClipboardCheck, X, Loader2, CheckCircle2, DownloadCloud, Contact, Briefcase, MapPin, Trash2, ArrowUpDown, AlertTriangle
+  X, Loader2, CheckCircle2, DownloadCloud, Contact, Briefcase, MapPin, Trash2, ArrowUpDown, AlertTriangle, LayoutList, LayoutGrid
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +20,9 @@ export default function ClientsPage() {
   const { klienti, setKlienti, zaznamy, isLoading } = useData();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
+
+  // Stav pro přepínání zobrazení
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
 
   // Stavy pro řazení
   const [sort, setSort] = useState({ key: 'nazev', dir: 'asc' });
@@ -43,21 +46,19 @@ export default function ClientsPage() {
 
   // Filtrování a Řazení dat
   const processedKlienti = useMemo(() => {
-    // 1. Filtrace podle vyhledávacího pole (Název, IČO, Město)
     let arr = klienti.filter(k => 
       k.nazev?.toLowerCase().includes(search.toLowerCase()) || 
       k.ico?.includes(search) ||
       k.mesto?.toLowerCase().includes(search.toLowerCase())
     );
 
-    // 2. Řazení
     arr.sort((a, b) => {
       let valA: any = '', valB: any = '';
 
       if (sort.key === 'nazev') { valA = a.nazev || ''; valB = b.nazev || ''; }
       else if (sort.key === 'ico') { valA = a.ico || ''; valB = b.ico || ''; }
-      else if (sort.key === 'mesto') { valA = a.mesto || ''; valB = b.mesto || ''; }
       else if (sort.key === 'pracoviste') { valA = a.pracoviste?.length || 0; valB = b.pracoviste?.length || 0; }
+      else if (sort.key === 'kontakty') { valA = a.kontakty?.length || 0; valB = b.kontakty?.length || 0; }
       else if (sort.key === 'datum') {
         const aRecords = zaznamy.filter(z => z.klientId === a.id).sort((x,y) => new Date(y.datum).getTime() - new Date(x.datum).getTime());
         const bRecords = zaznamy.filter(z => z.klientId === b.id).sort((x,y) => new Date(y.datum).getTime() - new Date(x.datum).getTime());
@@ -65,12 +66,10 @@ export default function ClientsPage() {
         valB = bRecords[0] ? new Date(bRecords[0].datum).getTime() : 0;
       }
 
-      // Porovnání čísel (např. počet pracovišť, časová stopa data)
       if (typeof valA === 'number' && typeof valB === 'number') {
         return sort.dir === 'asc' ? valA - valB : valB - valA;
       }
       
-      // Porovnání textů
       const res = String(valA).localeCompare(String(valB), 'cs', { numeric: true });
       return sort.dir === 'asc' ? res : -res;
     });
@@ -190,7 +189,7 @@ export default function ClientsPage() {
   if (isLoading) return <div className="p-8 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-600" /></div>;
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 relative">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 relative pb-24">
       
       {/* MODÁLNÍ OKNO PRO BEZPEČNÉ SMAZÁNÍ KLIENTA */}
       {clientToDelete && (
@@ -203,7 +202,7 @@ export default function ClientsPage() {
             </CardHeader>
             <CardContent className="p-6 space-y-6">
               <p className="text-slate-700 font-medium">
-                Opravdu chcete <strong>smazat</strong> tohoto klienta? Tato akce odstraní profil klienta ze systému a nepůjde ji vzít zpět.
+                Opravdu chcete <strong>nenávratně smazat</strong> tohoto klienta? Tato akce odstraní profil klienta ze systému a nepůjde ji vzít zpět.
               </p>
               <div className="flex justify-end gap-3 pt-2">
                 <Button variant="outline" onClick={() => setClientToDelete(null)} disabled={isDeleting}>
@@ -330,7 +329,7 @@ export default function ClientsPage() {
         </div>
       )}
 
-      {/* HLAVIČKA STRÁNKY A VYHLEDÁVÁNÍ */}
+      {/* HLAVIČKA STRÁNKY */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Klienti</h1>
@@ -342,103 +341,173 @@ export default function ClientsPage() {
         </Button>
       </div>
 
-      <div className="flex gap-4">
-        <div className="relative flex-1 max-w-md">
+      {/* FILTRACE A PŘEPÍNAČ ZOBRAZENÍ */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+        <div className="relative flex-1 w-full max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          {/* Upozornění v textu, že lze hledat i podle města */}
           <Input placeholder="Hledat podle názvu, IČO nebo města..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10 h-11 bg-white shadow-sm border-slate-200" />
+        </div>
+        
+        {/* PŘEPÍNAČ: Tabulka vs. Karty */}
+        <div className="flex bg-slate-100 p-1 rounded-lg shrink-0 border border-slate-200 shadow-sm w-full sm:w-auto">
+          <button 
+            onClick={() => setViewMode('table')} 
+            className={cn("flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2 text-xs font-bold rounded-md transition-all", viewMode === 'table' ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700")}
+          >
+            <LayoutList className="h-4 w-4" /> <span className="hidden sm:inline">Tabulka</span>
+          </button>
+          <button 
+            onClick={() => setViewMode('cards')} 
+            className={cn("flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2 text-xs font-bold rounded-md transition-all", viewMode === 'cards' ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700")}
+          >
+            <LayoutGrid className="h-4 w-4" /> <span className="hidden sm:inline">Karty</span>
+          </button>
         </div>
       </div>
 
-      {/* TABULKA KLIENTŮ */}
-      <Card className="border-none shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="text-[10px] uppercase tracking-wider bg-slate-50 text-slate-500 border-b border-slate-200">
-              <tr>
-                {/* KLIKACÍ HLAVIČKY PRO ŘAZENÍ */}
-                <th className="px-6 py-4 font-bold cursor-pointer hover:bg-slate-100 group transition-colors" onClick={() => handleSort('nazev')}>
-                  <div className="flex items-center gap-1">Název společnosti <ArrowUpDown className={cn("h-3 w-3", sort.key === 'nazev' ? "text-blue-600" : "text-slate-300 group-hover:text-slate-500")}/></div>
-                </th>
-                <th className="px-6 py-4 font-bold cursor-pointer hover:bg-slate-100 group transition-colors" onClick={() => handleSort('ico')}>
-                  <div className="flex items-center gap-1">IČO <ArrowUpDown className={cn("h-3 w-3", sort.key === 'ico' ? "text-blue-600" : "text-slate-300 group-hover:text-slate-500")}/></div>
-                </th>
-                <th className="px-6 py-4 font-bold cursor-pointer hover:bg-slate-100 group transition-colors" onClick={() => handleSort('mesto')}>
-                  <div className="flex items-center gap-1">Město / Sídlo <ArrowUpDown className={cn("h-3 w-3", sort.key === 'mesto' ? "text-blue-600" : "text-slate-300 group-hover:text-slate-500")}/></div>
-                </th>
-                <th className="px-6 py-4 font-bold text-center cursor-pointer hover:bg-slate-100 group transition-colors" onClick={() => handleSort('pracoviste')}>
-                  <div className="flex items-center justify-center gap-1">Pracovišť <ArrowUpDown className={cn("h-3 w-3", sort.key === 'pracoviste' ? "text-blue-600" : "text-slate-300 group-hover:text-slate-500")}/></div>
-                </th>
-                <th className="px-6 py-4 font-bold text-center">Kontaktů</th>
-                <th className="px-6 py-4 font-bold cursor-pointer hover:bg-slate-100 group transition-colors" onClick={() => handleSort('datum')}>
-                  <div className="flex items-center gap-1">Poslední kontrola <ArrowUpDown className={cn("h-3 w-3", sort.key === 'datum' ? "text-blue-600" : "text-slate-300 group-hover:text-slate-500")}/></div>
-                </th>
-                <th className="px-6 py-4 font-bold text-right">Akce</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {processedKlienti.length > 0 ? (
-                processedKlienti.map((k) => {
-                  const clientRecords = zaznamy.filter(z => z.klientId === k.id);
-                  const lastRecord = clientRecords.sort((a,b) => new Date(b.datum).getTime() - new Date(a.datum).getTime())[0];
-
-                  return (
-                    <tr key={k.id} className="hover:bg-blue-50/50 transition-colors group">
-                      <td className="px-6 py-4 font-bold text-blue-700">{k.nazev}</td>
-                      <td className="px-6 py-4 font-mono">{k.ico}</td>
-                      <td className="px-6 py-4">{k.mesto || '-'}</td>
-                      <td className="px-6 py-4 text-center">
-                        <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold text-xs border border-slate-200">{k.pracoviste?.length || 0}</span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded font-bold text-xs border border-emerald-100">{k.kontakty?.length || 0}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        {lastRecord ? formatCzechDate(lastRecord.datum) : <span className="text-muted-foreground italic text-xs">Žádná provedena</span>}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        
-                        {/* NOVÝ BLOK RYCHLÝCH IKONEK (Nahrazuje staré rozbalovací menu se třemi tečkami) */}
-                        <div className="flex justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                          <Button variant="ghost" size="icon" asChild title="Detail klienta" className="hover:bg-blue-50 hover:text-blue-600">
-                            <Link href={`/klienti/${k.id}`}><Eye className="h-4 w-4" /></Link>
-                          </Button>
-                          <Button variant="ghost" size="icon" asChild title="Zahájit nový audit" className="hover:bg-emerald-50 hover:text-emerald-600">
-                            <Link href={`/nova-kontrola?klient=${k.id}`}><ClipboardCheck className="h-4 w-4" /></Link>
-                          </Button>
-                          <Button variant="ghost" size="icon" asChild title="Upravit klienta" className="hover:bg-amber-50 hover:text-amber-600">
-                            <Link href={`/klienti/${k.id}/edit`}><Edit2 className="h-4 w-4" /></Link>
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            title="Smazat klienta" 
-                            className="hover:bg-red-50 text-red-400 hover:text-red-600"
-                            onClick={() => setClientToDelete(k.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
+      {/* --- ZOBRAZENÍ: TABULKA --- */}
+      {viewMode === 'table' && (
+        <Card className="border-none shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-[10px] uppercase tracking-wider bg-slate-50 text-slate-500 border-b border-slate-200">
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
-                    <div className="flex flex-col items-center gap-2 text-slate-500">
-                      <Building2 className="h-12 w-12 text-slate-200 mb-2" />
-                      <p className="font-medium text-slate-600">Nenalezen žádný klient vyhovující filtru.</p>
-                      <Button variant="link" onClick={() => setIsAddModalOpen(true)} className="text-blue-600 font-bold">Vytvořit nového klienta</Button>
-                    </div>
-                  </td>
+                  <th className="px-6 py-4 font-bold cursor-pointer hover:bg-slate-100 group transition-colors" onClick={() => handleSort('nazev')}>
+                    <div className="flex items-center gap-1">Název společnosti <ArrowUpDown className={cn("h-3 w-3", sort.key === 'nazev' ? "text-blue-600" : "text-slate-300 group-hover:text-slate-500")}/></div>
+                  </th>
+                  <th className="px-6 py-4 font-bold cursor-pointer hover:bg-slate-100 group transition-colors" onClick={() => handleSort('ico')}>
+                    <div className="flex items-center gap-1">IČO <ArrowUpDown className={cn("h-3 w-3", sort.key === 'ico' ? "text-blue-600" : "text-slate-300 group-hover:text-slate-500")}/></div>
+                  </th>
+                  <th className="px-6 py-4 font-bold text-center cursor-pointer hover:bg-slate-100 group transition-colors" onClick={() => handleSort('pracoviste')}>
+                    <div className="flex items-center justify-center gap-1">Pracovišť <ArrowUpDown className={cn("h-3 w-3", sort.key === 'pracoviste' ? "text-blue-600" : "text-slate-300 group-hover:text-slate-500")}/></div>
+                  </th>
+                  <th className="px-6 py-4 font-bold text-center cursor-pointer hover:bg-slate-100 group transition-colors" onClick={() => handleSort('kontakty')}>
+                    <div className="flex items-center justify-center gap-1">Kontaktů <ArrowUpDown className={cn("h-3 w-3", sort.key === 'kontakty' ? "text-blue-600" : "text-slate-300 group-hover:text-slate-500")}/></div>
+                  </th>
+                  <th className="px-6 py-4 font-bold cursor-pointer hover:bg-slate-100 group transition-colors" onClick={() => handleSort('datum')}>
+                    <div className="flex items-center gap-1">Poslední kontrola <ArrowUpDown className={cn("h-3 w-3", sort.key === 'datum' ? "text-blue-600" : "text-slate-300 group-hover:text-slate-500")}/></div>
+                  </th>
+                  <th className="px-6 py-4 font-bold text-right">Akce</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {processedKlienti.length > 0 ? (
+                  processedKlienti.map((k) => {
+                    const clientRecords = zaznamy.filter(z => z.klientId === k.id);
+                    const lastRecord = clientRecords.sort((a,b) => new Date(b.datum).getTime() - new Date(a.datum).getTime())[0];
+
+                    return (
+                      <tr key={k.id} className="hover:bg-blue-50/50 transition-colors group">
+                        <td className="px-6 py-4 font-bold text-blue-700">{k.nazev}</td>
+                        <td className="px-6 py-4 font-mono">{k.ico}</td>
+                        <td className="px-6 py-4 text-center">
+                          <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold text-xs border border-slate-200">{k.pracoviste?.length || 0}</span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded font-bold text-xs border border-emerald-100">{k.kontakty?.length || 0}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {lastRecord ? formatCzechDate(lastRecord.datum) : <span className="text-muted-foreground italic text-xs">Žádná</span>}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="icon" asChild title="Detail klienta" className="hover:bg-blue-50 hover:text-blue-600">
+                              <Link href={`/klienti/${k.id}`}><Eye className="h-4 w-4" /></Link>
+                            </Button>
+                            <Button variant="ghost" size="icon" asChild title="Upravit klienta" className="hover:bg-amber-50 hover:text-amber-600">
+                              <Link href={`/klienti/${k.id}/edit`}><Edit2 className="h-4 w-4" /></Link>
+                            </Button>
+                            <Button variant="ghost" size="icon" title="Smazat klienta" className="hover:bg-red-50 text-red-400 hover:text-red-600" onClick={() => setClientToDelete(k.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-16 text-center">
+                      <div className="flex flex-col items-center gap-2 text-slate-500">
+                        <Building2 className="h-12 w-12 text-slate-200 mb-2" />
+                        <p className="font-medium text-slate-600">Nenalezen žádný klient vyhovující filtru.</p>
+                        <Button variant="link" onClick={() => setIsAddModalOpen(true)} className="text-blue-600 font-bold">Vytvořit nového klienta</Button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* --- ZOBRAZENÍ: KARTY (GRID) --- */}
+      {viewMode === 'cards' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          {processedKlienti.length > 0 ? (
+            processedKlienti.map((k) => {
+              const clientRecords = zaznamy.filter(z => z.klientId === k.id);
+              const lastRecord = clientRecords.sort((a,b) => new Date(b.datum).getTime() - new Date(a.datum).getTime())[0];
+
+              return (
+                <Card key={k.id} className="border-slate-200 shadow-sm hover:border-blue-300 transition-all hover:shadow-md group flex flex-col">
+                  <CardContent className="p-6 flex flex-col flex-1">
+                    
+                    <div className="mb-4 flex-1">
+                      <h3 className="font-bold text-lg leading-tight text-blue-900 line-clamp-2">{k.nazev}</h3>
+                      <div className="flex items-center gap-3 mt-1.5">
+                        <span className="text-xs font-mono text-slate-500">IČO: {k.ico}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3 mb-6 bg-slate-50/50 p-3 rounded-lg border border-slate-100">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500 text-xs">Město / Sídlo:</span>
+                        <span className="font-medium text-slate-700 truncate max-w-[150px]">{k.mesto || '-'}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500 text-xs">Pracovišť:</span>
+                        <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-bold text-xs border border-slate-200">{k.pracoviste?.length || 0}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500 text-xs">Kontaktů:</span>
+                        <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold text-xs border border-emerald-100">{k.kontakty?.length || 0}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm pt-2 border-t border-slate-200/60">
+                        <span className="text-slate-500 text-xs">Poslední kontrola:</span>
+                        <span className="font-medium text-slate-700 text-xs">{lastRecord ? formatCzechDate(lastRecord.datum) : <span className="text-slate-400 italic">Žádná</span>}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 mt-auto">
+                      <Button variant="outline" size="sm" asChild className="h-8 px-3 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 font-medium">
+                        <Link href={`/klienti/${k.id}`}><Eye className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Detail</span></Link>
+                      </Button>
+                      <Button variant="outline" size="sm" asChild className="h-8 px-3 text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200 font-medium">
+                        <Link href={`/klienti/${k.id}/edit`}><Edit2 className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Upravit</span></Link>
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setClientToDelete(k.id)} className="h-8 px-3 text-red-500 hover:text-red-700 hover:bg-red-50 border-red-200">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                  </CardContent>
+                </Card>
+              );
+            })
+          ) : (
+            <div className="col-span-full py-16 text-center bg-white rounded-xl border border-dashed border-slate-300">
+              <div className="flex flex-col items-center gap-2 text-slate-500">
+                <Building2 className="h-12 w-12 text-slate-200 mb-2" />
+                <p className="font-medium text-slate-600">Nenalezen žádný klient vyhovující filtru.</p>
+                <Button variant="link" onClick={() => setIsAddModalOpen(true)} className="text-blue-600 font-bold">Vytvořit nového klienta</Button>
+              </div>
+            </div>
+          )}
         </div>
-      </Card>
+      )}
+
     </div>
   );
 }
