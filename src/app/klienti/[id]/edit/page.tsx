@@ -119,7 +119,7 @@ export default function EditClientPage() {
     }
   };
 
-  if (isLoading || !editClient) return <div className="p-8 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-600" /></div>;
+  if (!editClient) return <div className="p-8 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-600" /></div>;
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6 pb-24">
