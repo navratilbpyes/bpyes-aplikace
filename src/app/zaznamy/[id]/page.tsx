@@ -524,6 +524,15 @@ export default function RecordDetailPage() {
                 <Button variant="outline" className="h-11 text-red-600 hover:bg-red-50 hover:text-red-700 border-red-200 bg-white" onClick={() => setShowDeleteModal(true)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
+                <Button 
+  onClick={handleSendEmailFromDetail} 
+  disabled={isSendingEmail}
+  variant="outline"
+  className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800"
+>
+  {isSendingEmail ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+  Odeslat e-mail
+</Button>
               </>
             )}
           </div>
