@@ -3,7 +3,7 @@
 import { useData, db } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, CardContent } from "@/components/ui/card";
-import { Plus, Search, Building2, MoreHorizontal, Eye, Edit2, ClipboardCheck, X, Loader2 } from "lucide-react";
+import { Plus, Search, Building2, MoreHorizontal, Eye, Edit2, ClipboardCheck, X, Loader2, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
@@ -79,7 +79,7 @@ export default function ClientsPage() {
 
       await setDoc(newRef, clientData);
       
-      // Aktualizujeme data v prohlížeči (pokud máme metodu setKlienti)
+      // Aktualizujeme data v prohlížeči
       if (setKlienti) {
         setKlienti((prev: any[]) => [...prev, clientData]);
       }
