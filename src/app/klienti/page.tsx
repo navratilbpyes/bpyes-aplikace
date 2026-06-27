@@ -82,21 +82,18 @@ export default function ClientsPage() {
   };
 
   // --- HANDLERY PRO DYNAMICKÉ SEZNAMY ---
-  // 1. Provozovny
   const handleAddWorkplace = () => setNewClient(p => ({...p, pracoviste: [...p.pracoviste, { id: Math.random().toString(36).substring(7), nazev: "", adresa: "" }]}));
   const handleRemoveWorkplace = (idx: number) => setNewClient(p => ({...p, pracoviste: p.pracoviste.filter((_, i) => i !== idx)}));
   const handleWorkplaceChange = (idx: number, field: 'nazev'|'adresa', val: string) => {
     setNewClient(p => { const arr = [...p.pracoviste]; arr[idx][field] = val; return { ...p, pracoviste: arr }; });
   };
 
-  // 2. Pozice
   const handleAddPozice = () => setNewClient(p => ({...p, pozice: [...p.pozice, { id: Math.random().toString(36).substring(7), nazev: "", isFixed: false }]}));
   const handleRemovePozice = (idx: number) => setNewClient(p => ({...p, pozice: p.pozice.filter((_, i) => i !== idx)}));
   const handlePoziceChange = (idx: number, val: string) => {
     setNewClient(p => { const arr = [...p.pozice]; arr[idx].nazev = val; return { ...p, pozice: arr }; });
   };
 
-  // 3. Kontakty
   const handleAddKontakt = () => setNewClient(p => ({...p, kontakty: [...p.kontakty, { id: Math.random().toString(36).substring(7), jmeno: "", funkce: "", email: "", telefon: "" }]}));
   const handleRemoveKontakt = (idx: number) => setNewClient(p => ({...p, kontakty: p.kontakty.filter((_, i) => i !== idx)}));
   const handleKontaktChange = (idx: number, field: 'jmeno'|'funkce'|'email'|'telefon', val: string) => {
@@ -118,7 +115,7 @@ export default function ClientsPage() {
         pracoviste: newClient.pracoviste.filter(p => p.nazev.trim() !== ''),
         pozice: newClient.pozice.filter(p => p.nazev.trim() !== ''),
         kontakty: newClient.kontakty.filter(k => k.jmeno.trim() !== ''),
-        odpovedneOsoby: [] // Pro zpětnou kompatibilitu, pokud by to jinde aplikace očekávala
+        odpovedneOsoby: [] 
       };
 
       await setDoc(newRef, clientData);
@@ -128,7 +125,6 @@ export default function ClientsPage() {
       }
       
       setIsAddModalOpen(false);
-      // Reset formuláře
       setNewClient({
         nazev: "", ico: "", mesto: "",
         pracoviste: [{ id: "p1", nazev: "", adresa: "" }],
@@ -149,7 +145,7 @@ export default function ClientsPage() {
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 relative">
       
-      {/* MODÁLNÍ OKNO PRO PŘIDÁNÍ KLIENTA (Nyní podstatně širší kvůli kontaktům) */}
+      {/* MODÁLNÍ OKNO PRO PŘIDÁNÍ KLIENTA */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 animate-in fade-in backdrop-blur-sm">
           <Card className="w-full max-w-4xl shadow-2xl animate-in zoom-in-95 flex flex-col max-h-[95vh]">
@@ -351,12 +347,15 @@ export default function ClientsPage() {
                       <td className="px-6 py-4 font-bold text-blue-700">{k.nazev}</td>
                       <td className="px-6 py-4 font-mono">{k.ico}</td>
                       <td className="px-6 py-4">{k.mesto || '-'}</td>
+                      
+                      {/* BEZPEČNÉ NAČÍTÁNÍ PŘES OTAZNÍK (?.) */}
                       <td className="px-6 py-4 text-center">
                         <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold text-xs border border-slate-200">{k.pracoviste?.length || 0}</span>
                       </td>
                       <td className="px-6 py-4 text-center">
                         <span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded font-bold text-xs border border-emerald-100">{k.kontakty?.length || 0}</span>
                       </td>
+                      
                       <td className="px-6 py-4">
                         {lastRecord ? formatCzechDate(lastRecord.datum) : <span className="text-muted-foreground italic text-xs">Žádná provedena</span>}
                       </td>
@@ -367,6 +366,14 @@ export default function ClientsPage() {
                               <Eye className="h-4 w-4" />
                             </Link>
                           </Button>
+                          
+                          {/* DOPLNĚNÉ TLAČÍTKO PRO EDITACI KLIENTA */}
+                          <Button variant="ghost" size="icon" asChild title="Upravit klienta" className="hover:bg-amber-50 hover:text-amber-600">
+                            <Link href={`/klienti/${k.id}/edit`}>
+                              <Edit2 className="h-4 w-4" />
+                            </Link>
+                          </Button>
+
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="hover:bg-slate-100">
