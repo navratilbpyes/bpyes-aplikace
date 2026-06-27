@@ -352,7 +352,7 @@ export default function RecordDetailPage() {
             
             {/* LEVÁ STRANA: AUDITOR */}
             <div className="flex flex-col">
-               <p className="font-bold uppercase text-[11px] mb-2">PROVEDL (ZA {auditorConfig?.firmaNazev?.toUpperCase() || 'BPYES'}):</p>
+               <p className="font-bold uppercase text-[11px] mb-2">PROVEDL:</p>
                
                {/* Pevná zóna pro obrázky - vždy 96px (h-24) vysoká, relativní pro absolutní pozicování uvnitř */}
                <div className="h-24 w-full relative mb-2">
