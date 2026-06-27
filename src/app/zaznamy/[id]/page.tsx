@@ -93,7 +93,6 @@ export default function RecordDetailPage() {
   const [isPreparingPdf, setIsPreparingPdf] = useState(false);
   const [resolvingBod, setResolvingBod] = useState<string | number | null>(null);
   const [resolveData, setResolveData] = useState({ datum: '', jmeno: '', poznamka: '', foto: [] as string[] });
-  
   const [auditorConfig, setAuditorConfig] = useState<AuditorConfig | null>(null);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -318,13 +317,13 @@ export default function RecordDetailPage() {
               <p>{auditorConfig?.firmaAdresa || 'Sídlo neuvedeno'}</p>
               <p>IČO: {auditorConfig?.firmaIco || '-'}</p>
               <p>E-mail: {auditorConfig?.email || '-'}</p>
+              <p>Telefon: {auditorConfig?.telefon || '-'}</p>
             </div>
             
             <div>
               <p className="font-bold uppercase text-[11px] text-slate-500 mb-1">KONTROLOVANÝ SUBJEKT / KLIENT:</p>
               <p className="font-bold text-sm">{klient?.nazev}</p>
               
-              {/* OPRAVENÁ ADRESA KLIENTA */}
               <p>Sídlo: {(() => {
                 const adresa = klient?.adresa || '';
                 const mestoPSC = klient?.mesto ? `${klient.psc || ''} ${klient.mesto}`.trim() : '';
@@ -347,7 +346,7 @@ export default function RecordDetailPage() {
             </p>
           </div>
 
-          {/* NOVÝ, PEVNÝ PODPISOVÝ BLOK (NEPŘEKRÝVÁ SE) */}
+          {/* NOVÝ, PEVNÝ PODPISOVÝ BLOK */}
           <div className="grid grid-cols-2 gap-12 mt-16 pt-8">
             <div className="flex flex-col justify-end">
                <p className="font-bold uppercase text-[11px] mb-1">PROVEDL (ZA {auditorConfig?.firmaNazev?.toUpperCase() || 'BPYES'}):</p>
@@ -355,10 +354,10 @@ export default function RecordDetailPage() {
                {/* Blok vyhrazený čistě pro obrázky razítka a podpisu */}
                <div className="h-28 w-full relative flex items-end">
                  {auditorConfig?.razitkoBase64 && (
-                   <img src={auditorConfig.razitkoBase64} alt="R" className="absolute left-0 bottom-0 h-28 w-28 object-contain mix-blend-multiply" />
+                   <img src={auditorConfig.razitkoBase64} alt="R" className="absolute left-0 bottom-0 h-28 w-28 object-contain" />
                  )}
                  {auditorConfig?.podpisBase64 && (
-                   <img src={auditorConfig.podpisBase64} alt="P" className="absolute left-16 bottom-2 h-16 w-32 object-contain mix-blend-multiply" />
+                   <img src={auditorConfig.podpisBase64} alt="P" className="absolute left-16 bottom-2 h-16 w-32 object-contain" />
                  )}
                </div>
                
