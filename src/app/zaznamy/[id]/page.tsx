@@ -117,7 +117,6 @@ export default function RecordDetailPage() {
     if (record.pracovisteIds && Array.isArray(record.pracovisteIds)) filtered = prac.filter((p: any) => record.pracovisteIds.includes(p.id));
     else if (record.pracovisteId) filtered = prac.filter((p: any) => p.id === record.pracovisteId);
     
-    // Formátování adresy pro výstup
     return filtered.map((p: any) => ({
       ...p,
       fullDisplay: `${p.nazev}${p.adresa ? ', ' + p.adresa : ''}${p.mesto ? ', ' + p.mesto : ''}`
@@ -149,38 +148,15 @@ export default function RecordDetailPage() {
     } catch (error) { setIsDeleting(false); }
   };
 
-  const allSectionsInRecord = useMemo(() => {
-    const sections = new Set<string>();
-    if (record?.kontrolniBody) record.kontrolniBody.forEach((kb: any) => { if (kb.sekce) sections.add(kb.sekce); });
-    return Array.from(sections) as string[];
-  }, [record]);
-
-  const [visibleSections, setVisibleSections] = useState<Record<string, boolean>>({});
-
-  useEffect(() => {
-    if (allSectionsInRecord.length > 0 && Object.keys(visibleSections).length === 0) {
-      const initial: Record<string, boolean> = {};
-      allSectionsInRecord.forEach(sec => { initial[sec] = true; });
-      setVisibleSections(initial);
-    }
-  }, [allSectionsInRecord]);
-
-  const uniquePositionsInRecord = useMemo(() => {
-    if (!record?.kontrolniBody) return [];
-    const positions = record.kontrolniBody.filter((kb: any) => kb.hodnoceni === 'N' && kb.odpovednaOsoba).map((kb: any) => kb.odpovednaOsoba);
-    return Array.from(new Set(positions)) as string[];
-  }, [record]);
-
   const filteredKontrolniBody = useMemo(() => {
     if (!record?.kontrolniBody) return [];
     return record.kontrolniBody.filter((kb: any) => {
       const sec = kb.sekce || "Ostatní";
-      if (visibleSections[sec] === false) return false;
       if (onlyDefects && kb.hodnoceni !== 'N') return false;
       if (filterPosition !== "all" && kb.hodnoceni === 'N' && kb.odpovednaOsoba !== filterPosition) return false;
       return true;
     });
-  }, [record, visibleSections, onlyDefects, filterPosition]);
+  }, [record, onlyDefects, filterPosition]);
 
   const groupedKontrolniBody = useMemo(() => {
     const groups: { sekce: string; items: any[] }[] = [];
@@ -208,7 +184,6 @@ export default function RecordDetailPage() {
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative overflow-hidden print:p-0 print:m-0 print:space-y-0">
       
-      {/* TISKOVÉ STYLY */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
           @page { size: A4 portrait; margin: 15mm 15mm 20mm 15mm; }
@@ -217,22 +192,6 @@ export default function RecordDetailPage() {
           .avoid-break { page-break-inside: avoid; break-inside: avoid; }
         }
       `}} />
-
-      {/* OKNO SMAZÁNÍ A FULLSCREEN FOTO */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4 animate-in fade-in backdrop-blur-sm print:hidden">
-          <Card className="w-full max-w-md shadow-2xl">
-            <CardHeader className="bg-red-50"><CardTitle className="text-red-700">Smazání reportu</CardTitle></CardHeader>
-            <CardContent className="p-6">
-              <p>Opravdu chcete nenávratně smazat report č. {record.cislo}?</p>
-              <div className="flex justify-end gap-3 mt-6">
-                <Button variant="outline" onClick={() => setShowDeleteModal(false)}>Zrušit</Button>
-                <Button variant="destructive" onClick={handleDeleteRecord} disabled={isDeleting}>{isDeleting ? "Mažu..." : "Smazat"}</Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       {/* ================================================================= */}
       {/* 1. TISKOVÁ VERZE                                                  */}
@@ -266,10 +225,14 @@ export default function RecordDetailPage() {
             <div>
               <p className="font-bold uppercase text-[11px] text-slate-500 mb-1">KONTROLOVANÝ SUBJEKT / KLIENT:</p>
               <p className="font-bold text-sm">{klient?.nazev}</p>
+              
+              {/* ZDE JE OPRAVA ADRESY KLIENTA */}
+              <p>Sídlo: {klient?.adresa || 'Neuvedeno'}{klient?.mesto ? `, ${klient.psc || ''} ${klient.mesto}` : ''}</p>
               <p>IČO: {klient?.ico}</p>
-              <div className="mt-1">
-                <span className="font-bold">Místo:</span><br/>
-                {pracovisteList.map((p: any) => <div key={p.id}>{p.fullDisplay}</div>)}
+              
+              <div className="mt-2">
+                <span className="font-bold">Místo prověrky:</span><br/>
+                {pracovisteList.map((p: any) => <div key={p.id} className="text-xs leading-snug">{p.fullDisplay}</div>)}
               </div>
             </div>
           </div>
@@ -281,35 +244,37 @@ export default function RecordDetailPage() {
             </p>
           </div>
 
-          {/* PODPISOVÝ BLOK - VYLEPŠENÝ LAYOUT */}
+          {/* PODPISOVÝ BLOK - OPRAVENÉ ROZLOŽENÍ */}
           <div className="grid grid-cols-2 gap-12 mt-20">
-            <div className="relative">
+            <div className="relative flex flex-col">
                <p className="font-bold uppercase text-[11px] mb-2">PROVEDL (ZA {auditorConfig?.firmaNazev?.toUpperCase() || 'BPYES'}):</p>
-               <div className="border-b border-black mb-4"></div>
                
-               <div className="flex justify-between items-start">
-                 <div className="flex-1 pr-4">
-                   <p className="font-bold text-base">{auditorConfig?.titul ? auditorConfig.titul + ' ' : ''}{auditorConfig?.jmeno || 'Auditor'}</p>
-                   {auditorConfig?.certifikace?.map((cert: any) => (
-                     <p key={cert.id} className="text-[10px] leading-tight text-slate-600 mt-1">{cert.nazev}{cert.cislo ? `, ${cert.cislo}` : ''}</p>
-                   ))}
+               {/* Kontejner pro absolutní pozicování razítek nad čarou */}
+               <div className="relative w-full">
+                 <div className="absolute bottom-1 left-0 flex items-end gap-2 z-0 pointer-events-none">
+                   {auditorConfig?.razitkoBase64 && (
+                     <img src={auditorConfig.razitkoBase64} alt="Razítko" className="h-28 w-28 object-contain mix-blend-multiply opacity-90" />
+                   )}
+                   {auditorConfig?.podpisBase64 && (
+                     <img src={auditorConfig.podpisBase64} alt="Podpis" className="h-16 w-32 object-contain mix-blend-multiply -ml-12 mb-2" />
+                   )}
                  </div>
-                 
-                 {/* GRAFICKÁ ZÓNA PRO RAZÍTKO A PODPIS */}
-                 <div className="relative w-36 h-28 shrink-0">
-                    {auditorConfig?.razitkoBase64 && (
-                      <img src={auditorConfig.razitkoBase64} alt="R" className="absolute right-0 top-0 h-24 w-auto object-contain mix-blend-multiply opacity-90" />
-                    )}
-                    {auditorConfig?.podpisBase64 && (
-                      <img src={auditorConfig.podpisBase64} alt="P" className="absolute right-4 top-8 h-14 w-auto object-contain mix-blend-multiply" />
-                    )}
-                 </div>
+                 {/* Samotná čára umístěná tak, aby dělala prostor pro obrázky */}
+                 <div className="border-b border-black w-full pt-20 relative z-10"></div>
+               </div>
+               
+               {/* Text s informacemi pod čarou */}
+               <div className="pt-2">
+                 <p className="font-bold text-base">{auditorConfig?.titul ? auditorConfig.titul + ' ' : ''}{auditorConfig?.jmeno || 'Auditor'}</p>
+                 {auditorConfig?.certifikace?.map((cert: any) => (
+                   <p key={cert.id} className="text-[10px] leading-tight text-slate-600 mt-1">{cert.nazev}{cert.cislo ? `, ${cert.cislo}` : ''}</p>
+                 ))}
                </div>
             </div>
             
-            <div>
+            <div className="relative flex flex-col pt-6">
                <p className="font-bold uppercase text-[11px] mb-2">ZÁSTUPCE KLIENTA / SUBJEKTU:</p>
-               <div className="border-b border-black mb-4"></div>
+               <div className="border-b border-black w-full pt-14"></div>
                <p className="text-sm text-slate-400 mt-2 italic">Podpis a datum seznámení</p>
             </div>
           </div>
@@ -382,9 +347,7 @@ export default function RecordDetailPage() {
         </div>
       </div>
 
-      {/* ================================================================= */}
-      {/* 2. WEBOVÁ VERZE (INTERAKTIVNÍ DASHBOARD)                          */}
-      {/* ================================================================= */}
+      {/* WEBOVÁ VERZE */}
       <div className="print:hidden space-y-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6">
           <div className="space-y-1">
@@ -398,33 +361,6 @@ export default function RecordDetailPage() {
             </Button>
             {isAdmin && <Button variant="outline" className="text-red-500" onClick={() => setShowDeleteModal(true)}><Trash2 className="h-4 w-4" /></Button>}
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-2 space-y-6">
-            {groupedKontrolniBody.map((group) => (
-              <Card key={group.sekce} className="border-none shadow-sm overflow-hidden">
-                <div className="bg-slate-50 p-4 border-b font-bold uppercase text-sm">{group.sekce}</div>
-                <CardContent className="p-0 divide-y">
-                  {group.items.map((kb) => (
-                    <div key={kb.id || kb.bod} className="p-4 space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold">{kb.bod}. {kb.otazka || kb.popis}</span>
-                        <span className={cn("text-[10px] font-bold uppercase px-2 py-0.5 rounded border", kb.hodnoceni === 'N' ? "text-red-700 bg-red-50" : "text-green-700 bg-green-50")}>{kb.hodnoceni === 'N' ? 'Neshoda' : 'Vyhovuje'}</span>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <Card className="h-fit sticky top-4">
-            <CardHeader><CardTitle className="text-sm uppercase text-slate-500">Informace</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <div><Label className="text-xs">Klient</Label><p className="font-bold">{klient?.nazev}</p></div>
-              <div><Label className="text-xs">Místo (Pracoviště)</Label>{pracovisteList.map((p: any) => <p key={p.id} className="text-sm font-medium">{p.fullDisplay}</p>)}</div>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>
