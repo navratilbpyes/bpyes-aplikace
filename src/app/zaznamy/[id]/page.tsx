@@ -1,6 +1,6 @@
 'use client';
 
-import { useData } from "@/components/data-provider";
+import { useData, db } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useState, useEffect, useMemo } from "react";
@@ -8,7 +8,7 @@ import { useParams, useRouter } from "next/navigation";
 import { 
   ChevronLeft, Printer, Building, MapPin, FileText,
   Loader2, Edit, ChevronDown, CheckCircle2, Clock, X, Camera,
-  CheckSquare, Square, AlertTriangle
+  CheckSquare, Square, AlertTriangle, Trash2
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/app/lib/utils";
+import { doc, deleteDoc } from "firebase/firestore";
 
 const TEXTS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRiXWE13sHgXwCiFobHGpI3zvKR8nIOnzLtLxWdK7kyn2c4BhZDOwOf5ulUycMyfF1xJXonFSTG88JS/pub?gid=1978510431&single=true&output=csv";
 
@@ -80,8 +81,10 @@ export default function RecordDetailPage() {
   const [resolvingBod, setResolvingBod] = useState<string | number | null>(null);
   const [resolveData, setResolveData] = useState({ datum: '', jmeno: '', poznamka: '', foto: [] as string[] });
   
-  // STAV PRO ZVĚTŠENOU FOTOGRAFII
+  // STAV PRO ZVĚTŠENOU FOTOGRAFII A SMAZÁNÍ ZÁZNAMU
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const isAdmin = userProfile?.role === 'admin';
 
@@ -133,6 +136,23 @@ export default function RecordDetailPage() {
       window.print();
       setIsPreparingPdf(false);
     }, 500);
+  };
+
+  const handleDeleteRecord = async () => {
+    if (!record) return;
+    setIsDeleting(true);
+    try {
+      await deleteDoc(doc(db, 'zaznamy', record.id));
+      if (setZaznamy) {
+        setZaznamy((prev: any[]) => prev.filter(z => z.id !== record.id));
+      }
+      toast({ title: "Záznam smazán", description: "Audit byl úspěšně a nenávratně odstraněn ze systému." });
+      router.push("/");
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Chyba při mazání", description: "Nepodařilo se odstranit tento záznam.", variant: "destructive" });
+      setIsDeleting(false);
+    }
   };
 
   const handleConfirmResolve = async (bodId: string | number) => {
@@ -223,6 +243,32 @@ export default function RecordDetailPage() {
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative overflow-hidden print:p-0 print:m-0 print:space-y-0">
       
+      {/* MODÁLNÍ OKNO PRO BEZPEČNÉ SMAZÁNÍ REPORTU */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4 animate-in fade-in backdrop-blur-sm">
+          <Card className="w-full max-w-md shadow-2xl animate-in zoom-in-95 border-red-200">
+            <CardHeader className="bg-red-50 border-b border-red-100 rounded-t-xl pb-4">
+              <CardTitle className="text-xl font-bold flex items-center gap-2 text-red-700">
+                <AlertTriangle className="h-6 w-6" /> Varování: Smazání reportu
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-6">
+              <p className="text-slate-700 font-medium">
+                Opravdu chcete <strong>nenávratně smazat</strong> auditní zprávu č. {record.cislo}? Tato akce je nevratná a odstraní všechna její data.
+              </p>
+              <div className="flex justify-end gap-3 pt-2">
+                <Button variant="outline" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>
+                  Zrušit
+                </Button>
+                <Button variant="destructive" onClick={handleDeleteRecord} disabled={isDeleting} className="font-bold">
+                  {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />} Ano, nenávratně smazat
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* PŘEKRYVNÉ OKNO PRO ZVĚTŠENOU FOTOGRAFII */}
       {fullscreenImage && (
         <div 
@@ -242,7 +288,7 @@ export default function RecordDetailPage() {
               src={fullscreenImage} 
               alt="Zvětšená fotografie" 
               className="max-w-full max-h-[90vh] object-contain rounded-md shadow-2xl" 
-              onClick={(e) => e.stopPropagation()} // Zabraní zavření při kliku přímo na fotku
+              onClick={(e) => e.stopPropagation()} 
             />
           </div>
         </div>
@@ -274,7 +320,8 @@ export default function RecordDetailPage() {
           </h1>
           
           <div className="text-lg font-bold mb-10">
-            ČÍSLO ZPRÁVY: {record.cislo} | REVIZE: R{record.revize || 0}
+            {/* V tisku zobrazujeme Klientské číslo, pokud je uloženo, jinak Globální */}
+            ČÍSLO ZPRÁVY: {record.cisloKlientske || record.cislo} | REVIZE: R{record.revize || 0}
           </div>
 
           <div className="space-y-6 mb-12">
@@ -478,8 +525,17 @@ export default function RecordDetailPage() {
                 {record.stav === 'uzavreny' ? 'Uzavřený report' : 'Koncept (V řešení)'}
               </span>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight">{record.cislo} <span className="text-muted-foreground font-normal text-xl">R{record.revize || 0}</span></h1>
+            
+            {/* ÚPRAVA ZOBRAZENÍ ČÍSLA - Primárně ukazujeme klientské, v závorce vaše interní, pokud se liší */}
+            <h1 className="text-3xl font-bold tracking-tight">
+              {record.cisloKlientske || record.cislo} 
+              <span className="text-muted-foreground font-normal text-xl ml-2">R{record.revize || 0}</span>
+            </h1>
+            
             <p className="text-sm text-muted-foreground">Provedeno dne {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : 'Neuvedeno'}</p>
+            {record.cisloKlientske && record.cisloKlientske !== record.cislo && (
+               <p className="text-[10px] uppercase font-bold text-slate-400 mt-1">Interní kód: {record.cislo}</p>
+            )}
           </div>
           
           <div className="flex flex-wrap gap-2 w-full md:w-auto">
@@ -488,9 +544,15 @@ export default function RecordDetailPage() {
               {isPreparingPdf ? "Příprava k tisku..." : "Stáhnout PDF report"}
             </Button>
             {isAdmin && (
-              <Button variant="secondary" className="h-11 shadow-sm" onClick={() => router.push(`/upravit-zaznam/${record.id}`)}>
-                <Edit className="h-4 w-4 mr-2" /> Upravit záznam
-              </Button>
+              <>
+                <Button variant="secondary" className="h-11 shadow-sm" onClick={() => router.push(`/upravit-zaznam/${record.id}`)}>
+                  <Edit className="h-4 w-4 mr-2" /> Upravit záznam
+                </Button>
+                {/* NOVÉ TLAČÍTKO PRO SMAZÁNÍ ZÁZNAMU */}
+                <Button variant="outline" className="h-11 shadow-sm text-red-500 hover:text-red-700 border-red-200 hover:bg-red-50" onClick={() => setShowDeleteModal(true)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </>
             )}
           </div>
         </div>
