@@ -119,7 +119,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
       {/* HLAVIČKA POUZE PRO MOBILY */}
       <div className="md:hidden flex items-center justify-between bg-slate-900 h-16 px-4 text-white print:hidden z-40 shrink-0 shadow-md">
         <div className="flex items-center gap-2">
-          <span className="font-black text-xl tracking-tight">BPyes</span>
+          <span className="font-black text-xl tracking-tight">BPyes AuditFlow</span>
           <span className="text-[10px] uppercase font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">{isAdmin ? "Admin" : "Klient"}</span>
         </div>
         <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="text-white hover:bg-slate-800">
@@ -135,7 +135,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
       )}>
         <div className="p-6 space-y-6">
           <div className="hidden md:block">
-            <h2 className="text-white text-2xl font-black tracking-tight">BPyes</h2>
+            <h2 className="text-white text-2xl font-black tracking-tight">BPyes AuditFlow</h2>
             <p className="text-[10px] uppercase tracking-wider font-bold text-blue-500 mt-0.5">
               {isAdmin ? "Administrátor systému" : "Klientský portál"}
             </p>
