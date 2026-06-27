@@ -7,7 +7,7 @@ import { useState, useEffect, useMemo } from "react";
 import { 
   CheckCircle2, ChevronRight, ChevronLeft, Plus, X, AlertTriangle,
   Calendar as CalendarIcon, User as UserIcon, StickyNote, Camera,
-  CheckSquare, Square, Filter, Loader2
+  CheckSquare, Square, Filter, Loader2, Trash2
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,12 +15,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { generateRecordNumber, cn } from "@/app/lib/utils";
+import { cn } from "@/app/lib/utils";
 import { CHECKLIST_SECTIONS, CHECKLIST_PPP, CHECKLIST_PBOZP, ChecklistPoint } from "./checklist-data";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
-import { KontrolniBod, Zavada } from "@/app/lib/types";
+import { Zavada } from "@/app/lib/types";
 import { doc, collection, setDoc } from "firebase/firestore";
 
 interface TypickaZavada { nazev: string; popis: string; opatreni: string; }
@@ -95,23 +95,20 @@ export default function NewInspectionPage() {
   const [disabledSections, setDisabledSections] = useState<string[]>([]);
   const [filterPosition, setFilterPosition] = useState<string>("all");
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
   const [revisionNumber, setRevisionNumber] = useState("0");
   const [isSaving, setIsSaving] = useState(false);
 
   const selectedKlient = klienti.find(k => k.id === formData.klientId);
   
-  // Nyní bereme pozice z nového pole pozice klienta!
   const uniquePositions = useMemo(() => {
     if (!selectedKlient) return [];
-    
-    // Zkusíme najít nové pole `pozice`, případně fallback na staré
     let positions: string[] = [];
     if (selectedKlient.pozice && selectedKlient.pozice.length > 0) {
       positions = selectedKlient.pozice.map((p:any) => p.nazev);
     } else if (selectedKlient.odpovedneOsoby && selectedKlient.odpovedneOsoby.length > 0) {
       positions = selectedKlient.odpovedneOsoby.map((o:any) => o.pozice || o.funkce);
     }
-    
     return Array.from(new Set(positions.filter(Boolean)));
   }, [selectedKlient]);
 
@@ -202,7 +199,14 @@ export default function NewInspectionPage() {
     setIsSaving(true);
     try {
       const year = new Date(formData.datum).getFullYear();
-      const countInYear = zaznamy.filter(z => new Date(z.datum).getFullYear() === year).length + 1;
+      
+      // 1. GLOBÁLNÍ ČÍSLOVÁNÍ (Pro Vás)
+      const countInYear = zaznamy.filter(z => z.datum && new Date(z.datum).getFullYear() === year).length + 1;
+      const globalCislo = `${year}/${countInYear.toString().padStart(3, '0')}/${formData.typKontroly}`;
+      
+      // 2. KLIENTSKÉ ČÍSLOVÁNÍ (Pro Klienta - Varianta A)
+      const countClientInYear = zaznamy.filter(z => z.klientId === formData.klientId && z.datum && new Date(z.datum).getFullYear() === year).length + 1;
+      const klientskeCislo = `${year}-K${countClientInYear.toString().padStart(3, '0')}/${formData.typKontroly}`;
       
       const finalKontrolniBody: any[] = [];
       const aggregatedZavady: Zavada[] = [];
@@ -248,16 +252,14 @@ export default function NewInspectionPage() {
         }
       });
 
-      const generatedCislo = generateRecordNumber(year, countInYear, formData.typKontroly);
-      const safeCislo = generatedCislo ? generatedCislo : `2026/000/${formData.typKontroly}`;
-      
       const hasUnresolvedDefects = finalKontrolniBody.some(kb => kb.hodnoceni === 'N');
       const finalStav = (isDraft || hasUnresolvedDefects) ? 'otevreny' : 'uzavreny';
 
       const newRecordRef = doc(collection(db, 'zaznamy'));
       const newRecord = {
         id: newRecordRef.id,
-        cislo: safeCislo,
+        cislo: globalCislo,             // Uložení globálního čísla
+        cisloKlientske: klientskeCislo, // Uložení klientského čísla
         revize: parseInt(revisionNumber) || 0,
         ...formData,
         kontrolniBody: finalKontrolniBody,
@@ -422,7 +424,28 @@ export default function NewInspectionPage() {
   }, [pointDefects, checklist, filterPosition]);
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative">
+      
+      {/* MODÁLNÍ OKNO PRO ZRUŠENÍ KONTROLY V PRŮBĚHU */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in">
+          <Card className="w-full max-w-md shadow-2xl border-red-200">
+            <CardHeader className="bg-red-50 border-b border-red-100 rounded-t-xl pb-4">
+              <CardTitle className="text-xl font-bold flex items-center gap-2 text-red-700">
+                <AlertTriangle className="h-6 w-6" /> Zrušit rozpracovanou kontrolu
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <p className="text-slate-700">Opravdu chcete zrušit tento rozpracovaný audit? <strong>Veškerá dosud nevyplněná data budou nenávratně ztracena.</strong> Do databáze se nic neuloží.</p>
+            </CardContent>
+            <div className="p-4 border-t flex justify-end gap-2 bg-muted/20 rounded-b-xl">
+              <Button variant="outline" onClick={() => setShowCancelModal(false)}>Pokračovat v auditu</Button>
+              <Button variant="destructive" onClick={() => router.push('/')}>Ano, zrušit a odejít</Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {showSaveModal && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in">
           <Card className="w-full max-w-md shadow-2xl">
@@ -430,7 +453,7 @@ export default function NewInspectionPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2"><Label>Číslo revize (R)</Label><div className="flex items-center gap-2"><span className="text-lg font-bold text-muted-foreground">R</span><Input type="number" min="0" value={revisionNumber} onChange={(e) => setRevisionNumber(e.target.value)} className="text-lg font-bold" /></div></div>
             </CardContent>
-            <div className="p-4 border-t flex justify-end gap-2 bg-muted/20">
+            <div className="p-4 border-t flex justify-end gap-2 bg-muted/20 rounded-b-xl">
               <Button variant="outline" onClick={() => setShowSaveModal(false)}>Zrušit</Button><Button onClick={() => executeSave(false)} disabled={isSaving}>{isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Potvrdit a uložit</Button>
             </div>
           </Card>
@@ -443,19 +466,7 @@ export default function NewInspectionPage() {
       </div>
 
       {step === 1 && (
-        <Card className="border-none shadow-sm"><CardHeader><CardTitle>Základní parametry kontroly</CardTitle></CardHeader><CardContent className="space-y-6"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-2"><Label>Klient</Label><Select value={formData.klientId} onValueChange={(v) => setFormData({...formData, klientId: v, pracovisteIds: []})}><SelectTrigger className="h-11"><SelectValue placeholder="Vyberte klienta" /></SelectTrigger><SelectContent>{klienti.map(k => <SelectItem key={k.id} value={k.id}>{k.nazev}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label>Pracoviště / Provozovny</Label>{!formData.klientId ? <div className="h-11 bg-muted rounded-md flex items-center px-3 text-sm italic">Nejprve zvolte klienta</div> : <div className="grid grid-cols-1 gap-2 p-3 border rounded-md bg-white max-h-[150px] overflow-y-auto">{(selectedKlient?.pracoviste || []).map((p: any) => (<label key={p.id} className="flex items-center gap-3 cursor-pointer"><Checkbox checked={formData.pracovisteIds.includes(p.id)} onCheckedChange={(c) => { setFormData(prev => ({...prev, pracovisteIds: c ? [...prev.pracovisteIds, p.id] : prev.pracovisteIds.filter(id => id !== p.id)})) }} /><span className="text-sm font-medium leading-none">{p.nazev}</span></label>))}</div>}</div><div className="space-y-2 md:col-span-2"><Label>Typ kontroly</Label><Select value={formData.typKontroly} onValueChange={(v: any) => setFormData({...formData, typKontroly: v})}><SelectTrigger className="h-11"><SelectValue placeholder="Zvolte typ kontroly" /></SelectTrigger><SelectContent><SelectItem value="BOZPaPO">BOZPaPO</SelectItem><SelectItem value="PPP">PPP</SelectItem><SelectItem value="PBOZP">PBOZP</SelectItem></SelectContent></Select></div><div className="space-y-2"><Label>Datum kontroly</Label><Input type="date" className="h-11" value={formData.datum} onChange={(e) => setFormData({...formData, datum: e.target.value})} /></div></div><div className="space-y-4 pt-6 border-t mt-6"><div className="flex justify-between items-center"><Label>Účastníci kontroly</Label><Button variant="ghost" size="sm" onClick={() => setFormData({...formData, ucastnici: [...formData.ucastnici, {jmeno: '', pozice: ''}]})}><Plus className="mr-2 h-4 w-4" /> Přidat osobu</Button></div>{formData.ucastnici.map((u, i) => (<div key={i} className="flex gap-2 items-center"><Input placeholder="Jméno a příjmení" value={u.jmeno} onChange={(e) => { const next = [...formData.ucastnici]; next[i].jmeno = e.target.value; setFormData({...formData, ucastnici: next}); }} className="flex-1" />
-        
-        {/* NOVINKA: ROLETKA PRO POZICI ÚČASTNÍKA MÍSTO TEXTOVÉHO POLE */}
-        <Select value={u.pozice} onValueChange={(val) => { const next = [...formData.ucastnici]; next[i].pozice = val; setFormData({...formData, ucastnici: next}); }}>
-          <SelectTrigger className="flex-1"><SelectValue placeholder="Vyberte pozici" /></SelectTrigger>
-          <SelectContent>
-            {uniquePositions.map((pozice: string) => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}
-            {/* Pokud není vybrán klient, nebo nemá pozice, umožní to zadat cokoliv */}
-            {uniquePositions.length === 0 && <SelectItem value="Neuvedeno">Žádné pozice u klienta</SelectItem>}
-          </SelectContent>
-        </Select>
-        
-        {formData.ucastnici.length > 1 && <Button variant="ghost" size="icon" onClick={() => setFormData({...formData, ucastnici: formData.ucastnici.filter((_, idx) => idx !== i)})} className="shrink-0 text-muted-foreground hover:text-red-500"><X className="h-4 w-4" /></Button>}</div>))}</div></CardContent></Card>
+        <Card className="border-none shadow-sm"><CardHeader><CardTitle>Základní parametry kontroly</CardTitle></CardHeader><CardContent className="space-y-6"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-2"><Label>Klient</Label><Select value={formData.klientId} onValueChange={(v) => setFormData({...formData, klientId: v, pracovisteIds: []})}><SelectTrigger className="h-11"><SelectValue placeholder="Vyberte klienta" /></SelectTrigger><SelectContent>{klienti.map(k => <SelectItem key={k.id} value={k.id}>{k.nazev}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label>Pracoviště / Provozovny</Label>{!formData.klientId ? <div className="h-11 bg-muted rounded-md flex items-center px-3 text-sm italic">Nejprve zvolte klienta</div> : <div className="grid grid-cols-1 gap-2 p-3 border rounded-md bg-white max-h-[150px] overflow-y-auto">{(selectedKlient?.pracoviste || []).map((p: any) => (<label key={p.id} className="flex items-center gap-3 cursor-pointer"><Checkbox checked={formData.pracovisteIds.includes(p.id)} onCheckedChange={(c) => { setFormData(prev => ({...prev, pracovisteIds: c ? [...prev.pracovisteIds, p.id] : prev.pracovisteIds.filter(id => id !== p.id)})) }} /><span className="text-sm font-medium leading-none">{p.nazev}</span></label>))}</div>}</div><div className="space-y-2 md:col-span-2"><Label>Typ kontroly</Label><Select value={formData.typKontroly} onValueChange={(v: any) => setFormData({...formData, typKontroly: v})}><SelectTrigger className="h-11"><SelectValue placeholder="Zvolte typ kontroly" /></SelectTrigger><SelectContent><SelectItem value="BOZPaPO">BOZPaPO</SelectItem><SelectItem value="PPP">PPP</SelectItem><SelectItem value="PBOZP">PBOZP</SelectItem></SelectContent></Select></div><div className="space-y-2"><Label>Datum kontroly</Label><Input type="date" className="h-11" value={formData.datum} onChange={(e) => setFormData({...formData, datum: e.target.value})} /></div></div><div className="space-y-4 pt-6 border-t mt-6"><div className="flex justify-between items-center"><Label>Účastníci kontroly</Label><Button variant="ghost" size="sm" onClick={() => setFormData({...formData, ucastnici: [...formData.ucastnici, {jmeno: '', pozice: ''}]})}><Plus className="mr-2 h-4 w-4" /> Přidat osobu</Button></div>{formData.ucastnici.map((u, i) => (<div key={i} className="flex gap-2 items-center"><Input placeholder="Jméno a příjmení" value={u.jmeno} onChange={(e) => { const next = [...formData.ucastnici]; next[i].jmeno = e.target.value; setFormData({...formData, ucastnici: next}); }} className="flex-1" /><Select value={u.pozice} onValueChange={(val) => { const next = [...formData.ucastnici]; next[i].pozice = val; setFormData({...formData, ucastnici: next}); }}><SelectTrigger className="flex-1"><SelectValue placeholder="Vyberte pozici" /></SelectTrigger><SelectContent>{uniquePositions.map((pozice: string) => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}{uniquePositions.length === 0 && <SelectItem value="Neuvedeno">Žádné pozice u klienta</SelectItem>}</SelectContent></Select>{formData.ucastnici.length > 1 && <Button variant="ghost" size="icon" onClick={() => setFormData({...formData, ucastnici: formData.ucastnici.filter((_, idx) => idx !== i)})} className="shrink-0 text-muted-foreground hover:text-red-500"><X className="h-4 w-4" /></Button>}</div>))}</div></CardContent></Card>
       )}
 
       {step === 2 && (
@@ -472,7 +483,6 @@ export default function NewInspectionPage() {
         <div className="space-y-8">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4"><Card className="p-4 flex flex-col items-center gap-1 border-green-200 bg-green-50"><span className="text-2xl font-bold text-green-700">{stats.V}</span><span className="text-[10px] uppercase font-bold text-green-600">Vyhovuje</span></Card><Card className="p-4 flex flex-col items-center gap-1 border-red-200 bg-red-50"><span className="text-2xl font-bold text-red-700">{stats.N}</span><span className="text-[10px] uppercase font-bold text-red-600">Nevyhovuje</span></Card><Card className="p-4 flex flex-col items-center gap-1 border-gray-200 bg-gray-50"><span className="text-2xl font-bold text-gray-700">{stats.NA}</span><span className="text-[10px] uppercase font-bold text-gray-600">Neaplikováno</span></Card><Card className="p-4 flex flex-col items-center gap-1 border-gray-200 bg-gray-50"><span className="text-2xl font-bold text-gray-700">{stats.NK}</span><span className="text-[10px] uppercase font-bold text-gray-600">Nekontrolováno</span></Card><Card className="p-4 flex flex-col items-center gap-1 border-amber-200 bg-amber-50"><span className="text-2xl font-bold text-amber-700">{stats.unfilled}</span><span className="text-[10px] uppercase font-bold text-amber-600">Nevyplněno</span></Card></div>
           
-          {/* NOVÁ POJISTKA - INFORMAČNÍ PANEL */}
           {stats.N > 0 && (
             <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-start gap-3 shadow-inner">
               <AlertTriangle className="h-6 w-6 text-amber-600 shrink-0 mt-0.5" />
@@ -499,12 +509,15 @@ export default function NewInspectionPage() {
 
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 z-50 flex justify-center shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
         <div className="max-w-5xl w-full flex justify-between items-center px-4 md:px-8">
-          <Button variant="ghost" disabled={step === 1} onClick={() => { setStep(s => s - 1); window.scrollTo(0, 0); }} className="h-11 px-6"><ChevronLeft className="mr-2 h-4 w-4" /> Zpět</Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" disabled={step === 1} onClick={() => { setStep(s => s - 1); window.scrollTo(0, 0); }} className="h-11 px-3 sm:px-6"><ChevronLeft className="sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Zpět</span></Button>
+            <Button variant="ghost" onClick={() => setShowCancelModal(true)} className="h-11 px-3 sm:px-6 text-red-500 hover:text-red-700 hover:bg-red-50"><Trash2 className="sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Zrušit audit</span></Button>
+          </div>
           <div className="flex gap-2">
             {step === 3 && stats.N === 0 && (
-              <Button variant="outline" className="h-11 px-6 text-amber-700 hover:text-amber-800 hover:bg-amber-50" onClick={() => executeSave(true)}>Uložit jako koncept (V řešení)</Button>
+              <Button variant="outline" className="h-11 px-6 text-amber-700 hover:text-amber-800 hover:bg-amber-50 hidden sm:flex" onClick={() => executeSave(true)}>Uložit jako koncept</Button>
             )}
-            <Button onClick={step === 3 ? () => setShowSaveModal(true) : handleNext} disabled={isSaving} className={cn("h-11 px-8 shadow-sm font-bold text-white", step === 3 && stats.N > 0 ? "bg-amber-600 hover:bg-amber-700" : "bg-blue-600 hover:bg-blue-700")}>
+            <Button onClick={step === 3 ? () => setShowSaveModal(true) : handleNext} disabled={isSaving} className={cn("h-11 px-4 sm:px-8 shadow-sm font-bold text-white", step === 3 && stats.N > 0 ? "bg-amber-600 hover:bg-amber-700" : "bg-blue-600 hover:bg-blue-700")}>
               {step === 3 ? (isSaving ? "Ukládám..." : (stats.N > 0 ? "Uložit (Zůstane v řešení)" : "Uložit jako Uzavřeno")) : "Pokračovat"}
               {step !== 3 && <ChevronRight className="ml-2 h-4 w-4" />}
             </Button>
