@@ -76,6 +76,35 @@ export default function RecordDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+  const handleSendEmailFromDetail = async () => {
+    // Zkusíme najít e-mail klienta, případně se zeptáme
+    const cilovyEmail = klient?.email || prompt("Zadejte e-mailovou adresu, na kterou chcete report odeslat:", "");
+    if (!cilovyEmail) return;
+
+    setIsSendingEmail(true);
+    try {
+      const odkaz = `${window.location.origin}/zaznamy/${zaznam.id}`;
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: cilovyEmail,
+          jmenoKlienta: klient?.nazev || "Klient",
+          cisloZpravy: zaznam.cisloKlientske || zaznam.cislo,
+          odkaz: odkaz
+        })
+      });
+      const result = await response.json();
+      if (result.success) toast({ title: "E-mail úspěšně odeslán", description: `Potvrzení bylo zasláno na: ${cilovyEmail}` });
+      else toast({ title: "Chyba při odesílání", description: "E-mail se nepodařilo odeslat.", variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Kritická chyba", description: "Nepodařilo se připojit k serveru.", variant: "destructive" });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
   const { zaznamy, klienti, userProfile, setZaznamy } = useData();
 
   const [t, setT] = useState<Record<string, string>>({
