@@ -8,7 +8,7 @@ import { useParams, useRouter } from "next/navigation";
 import { 
   ChevronLeft, Printer, Building, MapPin, FileText,
   Loader2, Edit, ChevronDown, CheckCircle2, Clock, X, Camera,
-  CheckSquare, AlertTriangle, Square
+  CheckSquare, Square, AlertTriangle
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -202,7 +202,6 @@ export default function RecordDetailPage() {
     return groups;
   }, [filteredKontrolniBody]);
 
-  // Statistiky pro stranu 2
   const stats = useMemo(() => {
     if (!record?.kontrolniBody) return { total: 0, V: 0, N: 0, NA: 0 };
     return {
@@ -221,7 +220,6 @@ export default function RecordDetailPage() {
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative overflow-hidden print:p-0 print:m-0 print:space-y-0">
       
-      {/* MAGICKÉ CSS PRO TISK (Oficiální vzhled starého PDF) */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
           @page { size: A4 portrait; margin: 15mm 15mm 20mm 15mm; }
@@ -233,13 +231,11 @@ export default function RecordDetailPage() {
       `}} />
 
       {/* ================================================================= */}
-      {/* 1. TISKOVÁ VERZE (Zcela oddělený design, na webu neviditelný) */}
+      {/* 1. TISKOVÁ VERZE (Zcela oddělený design, na webu neviditelný)     */}
       {/* ================================================================= */}
       <div className="hidden print:block text-slate-900 w-full bg-white text-sm">
         
-        {/* === STRANA 1: OBÁLKA === */}
         <div className="pb-8">
-          {/* Logo BPyes */}
           <div className="mb-8">
             <img src="/logo.png" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src="/logo.svg"; }} alt="BPyes" className="h-10 object-contain" />
           </div>
@@ -289,10 +285,8 @@ export default function RecordDetailPage() {
           </div>
         </div>
 
-        {/* Zlom stránky na Stranu 2 */}
         <div className="page-break"></div>
 
-        {/* === STRANA 2: STATISTIKY === */}
         <div className="pt-4">
           <div className="font-bold mb-4">BPyes s.r.o.</div>
           <h2 className="text-lg font-bold mb-6">1. SHRNUTÍ A STATISTIKY</h2>
@@ -348,10 +342,8 @@ export default function RecordDetailPage() {
           </div>
         </div>
 
-        {/* Zlom stránky na Stranu 3 */}
         <div className="page-break"></div>
 
-        {/* === STRANA 3: PROTOKOL ZJIŠTĚNÍ === */}
         <div className="pt-4">
           <div className="font-bold mb-4">BPyes s.r.o.</div>
           <h2 className="text-lg font-bold mb-8">2. KOMPLETNÍ AUDITNÍ PROTOKOL ZJIŠTĚNÍ</h2>
@@ -397,6 +389,18 @@ export default function RecordDetailPage() {
                              </tbody>
                            </table>
                            
+                           {/* DOPLNĚNÉ FOTKY AUDITORA DO PDF */}
+                           {kb.foto && kb.foto.length > 0 && (
+                             <div className="mt-3">
+                               <span className="text-[10px] uppercase font-bold text-slate-600 block mb-1">Fotodokumentace k neshodě</span>
+                               <div className="flex flex-wrap gap-2">
+                                 {kb.foto.map((f: string, i: number) => (
+                                   <img src={f} alt="Fotodokumentace" key={`aud-pdf-${i}`} className="h-20 w-20 object-cover border border-slate-300" />
+                                 ))}
+                               </div>
+                             </div>
+                           )}
+                           
                            {kb.vyresenoKlientem && (
                              <div className="mt-3 p-3 bg-slate-50 border border-slate-300 text-xs">
                                <div className="font-bold uppercase text-emerald-700 mb-1 flex items-center gap-1">
@@ -405,6 +409,18 @@ export default function RecordDetailPage() {
                                <div><span className="font-bold">Osoba:</span> {kb.jmenoVyresitele}</div>
                                <div><span className="font-bold">Datum:</span> {kb.datumVyreseniKlientem ? new Date(kb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</div>
                                {kb.poznamkaKlienta && <div className="mt-1 italic">"{kb.poznamkaKlienta}"</div>}
+                               
+                               {/* DŮKAZY KLIENTA V PDF */}
+                               {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
+                                <div className="mt-2">
+                                  <span className="text-[9px] uppercase font-bold text-emerald-600 block mb-1">Důkazy o odstranění</span>
+                                  <div className="flex flex-wrap gap-2">
+                                    {kb.fotoVyreseni.map((f: string, i: number) => (
+                                      <img src={f} alt="Důkaz" key={`kli-pdf-${i}`} className="h-16 w-16 object-cover border border-emerald-200" />
+                                    ))}
+                                  </div>
+                                </div>
+                               )}
                              </div>
                            )}
                          </div>
@@ -426,7 +442,6 @@ export default function RecordDetailPage() {
       {/* ================================================================= */}
       <div className="print:hidden space-y-8">
         
-        {/* HLAVIČKA A TLAČÍTKA */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -454,7 +469,6 @@ export default function RecordDetailPage() {
           </div>
         </div>
 
-        {/* DISPEČINK / FILTRY */}
         <Card className="border-blue-100 bg-blue-50/20">
           <CardHeader className="py-4 space-y-4">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-3">
@@ -545,6 +559,20 @@ export default function RecordDetailPage() {
                                       <div><span className="text-muted-foreground block mb-0.5">{t.karta_odpovednost}</span><p className="font-bold text-black">{kb.odpovednaOsoba || 'Neuvedena'}</p></div>
                                     </div>
 
+                                    {/* DŮKAZNÍ FOTKY AUDITORA VE WEBOVÉM NÁHLEDU */}
+                                    {kb.foto && kb.foto.length > 0 && (
+                                      <div className="mt-2">
+                                        <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Fotodokumentace auditora</span>
+                                        <div className="flex flex-wrap gap-2">
+                                          {kb.foto.map((f: string, i: number) => (
+                                            <a href={f} target="_blank" rel="noreferrer" key={`aud-web-${i}`}>
+                                              <img src={f} alt="Fotodokumentace" className="h-16 w-16 object-cover rounded border border-slate-200 hover:scale-105 transition-transform" />
+                                            </a>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
                                     {!isAdmin && (
                                       <div className="flex flex-col p-4 rounded-lg border border-blue-200 bg-blue-50/60 mt-4 space-y-4">
                                         <div className="space-y-0.5">
@@ -567,7 +595,7 @@ export default function RecordDetailPage() {
                                              {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
                                                <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-blue-50">
                                                  {kb.fotoVyreseni.map((f: string, i: number) => (
-                                                   <a href={f} target="_blank" rel="noreferrer" key={i}><img src={f} alt="Důkaz" className="h-16 w-16 object-cover rounded border hover:opacity-80 transition-opacity" /></a>
+                                                   <a href={f} target="_blank" rel="noreferrer" key={`kli-web-${i}`}><img src={f} alt="Důkaz" className="h-16 w-16 object-cover rounded border hover:opacity-80 transition-opacity" /></a>
                                                  ))}
                                                </div>
                                              )}
@@ -643,7 +671,7 @@ export default function RecordDetailPage() {
                                                <span className="text-[10px] uppercase font-bold text-emerald-600/70 block mb-1">Přiložené fotodůkazy</span>
                                                <div className="flex flex-wrap gap-2">
                                                  {kb.fotoVyreseni.map((f: string, i: number) => (
-                                                   <a href={f} target="_blank" rel="noreferrer" key={i}><img src={f} alt="Důkaz" className="h-16 w-16 object-cover rounded border border-emerald-200 hover:scale-105 transition-transform cursor-zoom-in" /></a>
+                                                   <a href={f} target="_blank" rel="noreferrer" key={`kli-web2-${i}`}><img src={f} alt="Důkaz" className="h-16 w-16 object-cover rounded border border-emerald-200 hover:scale-105 transition-transform cursor-zoom-in" /></a>
                                                  ))}
                                                </div>
                                              </div>
