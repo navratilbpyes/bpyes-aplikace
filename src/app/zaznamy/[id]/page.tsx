@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/app/lib/utils";
-import { doc, deleteDoc } from "firebase/firestore";
+import { doc, deleteDoc, getDoc } from "firebase/firestore";
 
 const TEXTS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRiXWE13sHgXwCiFobHGpI3zvKR8nIOnzLtLxWdK7kyn2c4BhZDOwOf5ulUycMyfF1xJXonFSTG88JS/pub?gid=1978510431&single=true&output=csv";
 
@@ -59,6 +59,19 @@ const compressImage = (file: File): Promise<string> => {
   });
 };
 
+interface AuditorConfig {
+  firmaNazev?: string;
+  firmaIco?: string;
+  firmaAdresa?: string;
+  email?: string;
+  telefon?: string;
+  titul?: string;
+  jmeno?: string;
+  certifikace?: { id: string; nazev: string; cislo: string }[];
+  razitkoBase64?: string;
+  podpisBase64?: string;
+}
+
 export default function RecordDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -81,14 +94,31 @@ export default function RecordDetailPage() {
   const [resolvingBod, setResolvingBod] = useState<string | number | null>(null);
   const [resolveData, setResolveData] = useState({ datum: '', jmeno: '', poznamka: '', foto: [] as string[] });
   
-  // STAV PRO ZVĚTŠENOU FOTOGRAFII A SMAZÁNÍ ZÁZNAMU
+  // STAV PRO NASTAVENÍ AUDITORA S PŘESNÝM TYPEM
+  const [auditorConfig, setAuditorConfig] = useState<AuditorConfig | null>(null);
+
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const isAdmin = userProfile?.role === 'admin';
 
+  // Načtení dat a konfigurace
   useEffect(() => {
+    const fetchAuditorConfig = async () => {
+      try {
+        const docRef = doc(db, "konfigurace", "auditor");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setAuditorConfig(docSnap.data() as AuditorConfig);
+        }
+      } catch (err) {
+        console.error("Nepodařilo se načíst konfiguraci auditora", err);
+      }
+    };
+
+    fetchAuditorConfig();
+
     if (zaznamy && zaznamy.length > 0) setIsLoading(false);
     const timer = setTimeout(() => setIsLoading(false), 2000);
     return () => clearTimeout(timer);
@@ -110,14 +140,14 @@ export default function RecordDetailPage() {
       }).catch(console.error);
   }, []);
 
-  const record = useMemo(() => zaznamy.find(z => z.id === params.id), [zaznamy, params.id]);
-  const klient = useMemo(() => klienti.find(k => k.id === record?.klientId), [klienti, record]);
+  const record = useMemo(() => zaznamy.find((z: any) => z.id === params.id), [zaznamy, params.id]);
+  const klient = useMemo(() => klienti.find((k: any) => k.id === record?.klientId), [klienti, record]);
   
   const pracovisteList = useMemo(() => {
     if (!klient || !record) return [];
     const prac = klient.pracoviste || [];
-    if (record.pracovisteIds && Array.isArray(record.pracovisteIds)) return prac.filter(p => record.pracovisteIds.includes(p.id));
-    if (record.pracovisteId) return prac.filter(p => p.id === record.pracovisteId);
+    if (record.pracovisteIds && Array.isArray(record.pracovisteIds)) return prac.filter((p: any) => record.pracovisteIds.includes(p.id));
+    if (record.pracovisteId) return prac.filter((p: any) => p.id === record.pracovisteId);
     return [];
   }, [klient, record]);
 
@@ -243,9 +273,8 @@ export default function RecordDetailPage() {
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative overflow-hidden print:p-0 print:m-0 print:space-y-0">
       
-      {/* MODÁLNÍ OKNO PRO BEZPEČNÉ SMAZÁNÍ REPORTU */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4 animate-in fade-in backdrop-blur-sm">
+        <div className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4 animate-in fade-in backdrop-blur-sm print:hidden">
           <Card className="w-full max-w-md shadow-2xl animate-in zoom-in-95 border-red-200">
             <CardHeader className="bg-red-50 border-b border-red-100 rounded-t-xl pb-4">
               <CardTitle className="text-xl font-bold flex items-center gap-2 text-red-700">
@@ -257,11 +286,9 @@ export default function RecordDetailPage() {
                 Opravdu chcete <strong>nenávratně smazat</strong> auditní zprávu č. {record.cislo}? Tato akce je nevratná a odstraní všechna její data.
               </p>
               <div className="flex justify-end gap-3 pt-2">
-                <Button variant="outline" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>
-                  Zrušit
-                </Button>
+                <Button variant="outline" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>Zrušit</Button>
                 <Button variant="destructive" onClick={handleDeleteRecord} disabled={isDeleting} className="font-bold">
-                  {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />} Ano, nenávratně smazat
+                  {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />} Ano, smazat
                 </Button>
               </div>
             </CardContent>
@@ -269,27 +296,16 @@ export default function RecordDetailPage() {
         </div>
       )}
 
-      {/* PŘEKRYVNÉ OKNO PRO ZVĚTŠENOU FOTOGRAFII */}
       {fullscreenImage && (
         <div 
           className="fixed inset-0 z-[1000] bg-black/90 flex flex-col items-center justify-center p-4 print:hidden backdrop-blur-sm"
           onClick={() => setFullscreenImage(null)}
         >
           <div className="relative max-w-[95vw] max-h-[95vh] animate-in zoom-in-95 duration-200">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="absolute -top-12 right-0 text-white hover:bg-white/20 hover:text-white" 
-              onClick={(e) => { e.stopPropagation(); setFullscreenImage(null); }}
-            >
+            <Button variant="ghost" size="icon" className="absolute -top-12 right-0 text-white hover:bg-white/20 hover:text-white" onClick={(e) => { e.stopPropagation(); setFullscreenImage(null); }}>
               <X className="h-8 w-8" />
             </Button>
-            <img 
-              src={fullscreenImage} 
-              alt="Zvětšená fotografie" 
-              className="max-w-full max-h-[90vh] object-contain rounded-md shadow-2xl" 
-              onClick={(e) => e.stopPropagation()} 
-            />
+            <img src={fullscreenImage} alt="Zvětšená fotografie" className="max-w-full max-h-[90vh] object-contain rounded-md shadow-2xl" onClick={(e) => e.stopPropagation()} />
           </div>
         </div>
       )}
@@ -311,7 +327,7 @@ export default function RecordDetailPage() {
         
         <div className="pb-8">
           <div className="mb-8">
-            <img src="/logo.png" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src="/logo.svg"; }} alt="BPyes" className="h-10 object-contain" />
+            <img src="/logo.png" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src="/logo.svg"; }} alt="Logo" className="h-10 object-contain" />
           </div>
 
           <h1 className="text-2xl font-bold uppercase text-slate-900 mb-6">
@@ -320,22 +336,22 @@ export default function RecordDetailPage() {
           </h1>
           
           <div className="text-lg font-bold mb-10">
-            {/* V tisku zobrazujeme Klientské číslo, pokud je uloženo, jinak Globální */}
             ČÍSLO ZPRÁVY: {record.cisloKlientske || record.cislo} | REVIZE: R{record.revize || 0}
           </div>
 
           <div className="space-y-6 mb-12">
             <div>
               <p className="font-bold uppercase mb-1">ZPRACOVATEL/POSKYTOVATEL:</p>
-              <p className="font-bold">BPyes s.r.o.</p>
-              <p>Specializovaný poskytovatel služeb v oblasti rizik BOZP a PO | IČO: 04399421 | E-mail: navratil@bpyes.cz</p>
+              <p className="font-bold">{auditorConfig?.firmaNazev || 'BPyes s.r.o.'}</p>
+              <p>{auditorConfig?.firmaAdresa || 'Specializovaný poskytovatel služeb'} | IČO: {auditorConfig?.firmaIco || '04399421'}</p>
+              <p>E-mail: {auditorConfig?.email || 'navratil@bpyes.cz'} {auditorConfig?.telefon ? `| Tel: ${auditorConfig.telefon}` : ''}</p>
             </div>
             
             <div>
               <p className="font-bold uppercase mb-1">KONTROLOVANÝ SUBJEKT/KLIENT:</p>
               <p className="font-bold">{klient?.nazev}</p>
               <p>IČO: {klient?.ico}</p>
-              <p>Místo prověrky: {pracovisteList.map(p => p.nazev).join(', ')}</p>
+              <p>Místo prověrky: {pracovisteList.map((p: any) => p.nazev).join(', ')}</p>
             </div>
           </div>
 
@@ -346,14 +362,35 @@ export default function RecordDetailPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-16">
-            <div>
-               <p className="font-bold uppercase mb-12">PROVEDL (ZA BPYES):</p>
-               <div className="border-b border-black mb-2"></div>
-               <p className="text-sm text-slate-600">Specialista BOZP a PO</p>
+          <div className="grid grid-cols-2 gap-16 mt-32">
+            <div className="relative pt-12">
+               {/* RAZÍTKO A PODPIS PŘES SEBE V TISKU */}
+               <div className="absolute -top-12 left-0 flex items-center justify-start pointer-events-none z-0">
+                 {auditorConfig?.razitkoBase64 && (
+                   <img src={auditorConfig.razitkoBase64} alt="Razítko" className="h-32 w-auto object-contain mix-blend-multiply opacity-95 -ml-4" />
+                 )}
+                 {auditorConfig?.podpisBase64 && (
+                   <img src={auditorConfig.podpisBase64} alt="Podpis" className="h-20 w-auto object-contain mix-blend-multiply absolute left-14 top-4" />
+                 )}
+               </div>
+
+               <p className="font-bold uppercase mb-2 relative z-10">
+                 PROVEDL (ZA {auditorConfig?.firmaNazev?.toUpperCase() || 'BPYES'}):
+               </p>
+               <div className="border-b border-black mb-2 relative z-10"></div>
+               
+               <p className="font-bold text-sm text-slate-800">{auditorConfig?.titul ? auditorConfig.titul + ' ' : ''}{auditorConfig?.jmeno || 'Specialista BOZP a PO'}</p>
+               {auditorConfig?.certifikace && auditorConfig.certifikace.length > 0 && (
+                 <div className="mt-1">
+                   {auditorConfig.certifikace.map((cert: any) => (
+                     <p key={cert.id} className="text-[11px] text-slate-600">{cert.nazev}{cert.cislo ? `, ${cert.cislo}` : ''}</p>
+                   ))}
+                 </div>
+               )}
             </div>
-            <div>
-               <p className="font-bold uppercase mb-12">ZÁSTUPCE KLIENTA / SUBJEKTU:</p>
+            
+            <div className="pt-12">
+               <p className="font-bold uppercase mb-2">ZÁSTUPCE KLIENTA / SUBJEKTU:</p>
                <div className="border-b border-black mb-2"></div>
                <p className="text-sm text-slate-600">Osoba seznámená s reportem</p>
             </div>
@@ -363,7 +400,7 @@ export default function RecordDetailPage() {
         <div className="page-break"></div>
 
         <div className="pt-4">
-          <div className="font-bold mb-4">BPyes s.r.o.</div>
+          <div className="font-bold mb-4">{auditorConfig?.firmaNazev || 'BPyes s.r.o.'}</div>
           <h2 className="text-lg font-bold mb-6">1. SHRNUTÍ A STATISTIKY</h2>
           
           <div className="grid grid-cols-4 gap-4 text-center mb-10">
@@ -420,7 +457,7 @@ export default function RecordDetailPage() {
         <div className="page-break"></div>
 
         <div className="pt-4">
-          <div className="font-bold mb-4">BPyes s.r.o.</div>
+          <div className="font-bold mb-4">{auditorConfig?.firmaNazev || 'BPyes s.r.o.'}</div>
           <h2 className="text-lg font-bold mb-8">2. KOMPLETNÍ AUDITNÍ PROTOKOL ZJIŠTĚNÍ</h2>
           
           <div className="space-y-8">
@@ -526,7 +563,6 @@ export default function RecordDetailPage() {
               </span>
             </div>
             
-            {/* ÚPRAVA ZOBRAZENÍ ČÍSLA - Primárně ukazujeme klientské, v závorce vaše interní, pokud se liší */}
             <h1 className="text-3xl font-bold tracking-tight">
               {record.cisloKlientske || record.cislo} 
               <span className="text-muted-foreground font-normal text-xl ml-2">R{record.revize || 0}</span>
@@ -548,7 +584,6 @@ export default function RecordDetailPage() {
                 <Button variant="secondary" className="h-11 shadow-sm" onClick={() => router.push(`/upravit-zaznam/${record.id}`)}>
                   <Edit className="h-4 w-4 mr-2" /> Upravit záznam
                 </Button>
-                {/* NOVÉ TLAČÍTKO PRO SMAZÁNÍ ZÁZNAMU */}
                 <Button variant="outline" className="h-11 shadow-sm text-red-500 hover:text-red-700 border-red-200 hover:bg-red-50" onClick={() => setShowDeleteModal(true)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -647,7 +682,6 @@ export default function RecordDetailPage() {
                                       <div><span className="text-muted-foreground block mb-0.5">{t.karta_odpovednost}</span><p className="font-bold text-black">{kb.odpovednaOsoba || 'Neuvedena'}</p></div>
                                     </div>
 
-                                    {/* FOTKY AUDITORA VE WEBOVÉM NÁHLEDU (Nyní klikací pro zvětšení) */}
                                     {kb.foto && kb.foto.length > 0 && (
                                       <div className="mt-4">
                                         <span className="text-[10px] uppercase font-bold text-slate-500 block mb-2">Fotodokumentace auditora</span>
@@ -688,7 +722,6 @@ export default function RecordDetailPage() {
                                                </div>
                                              )}
                                              
-                                             {/* FOTKY KLIENTA (Nyní klikací pro zvětšení) */}
                                              {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
                                                <div className="flex flex-wrap gap-4 mt-3 pt-3 border-t border-blue-50">
                                                  {kb.fotoVyreseni.map((f: string, i: number) => (
@@ -773,7 +806,6 @@ export default function RecordDetailPage() {
                                             </div>
                                           )}
                                           
-                                          {/* ZVĚTŠENÉ FOTKY KLIENTA V NÁHLEDU ADMINA (Klikací) */}
                                           {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
                                              <div className="mt-3">
                                                <span className="text-[10px] uppercase font-bold text-emerald-600/70 block mb-2">Přiložené fotodůkazy</span>
@@ -818,7 +850,7 @@ export default function RecordDetailPage() {
                 <div className="flex gap-3"><MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
                   <div>
                     <span className="text-xs text-muted-foreground block">Pracoviště</span>
-                    <p className="font-bold">{pracovisteList.map(p => p.nazev).join(', ') || 'Neznámé'}</p>
+                    <p className="font-bold">{pracovisteList.map((p: any) => p.nazev).join(', ') || 'Neznámé'}</p>
                   </div>
                 </div>
               </CardContent>
