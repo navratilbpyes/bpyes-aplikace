@@ -41,7 +41,14 @@ const compressImage = (file: File, quality: number = 0.6): Promise<string> => {
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
+        
+        // ZÁCHRANA PŘED ČERNOU KOSTKOU: Vykreslíme pod obrázek čistě bílé pozadí
+        if (ctx) {
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+        }
+        
         resolve(canvas.toDataURL('image/jpeg', quality));
       };
       img.src = e.target?.result as string;
