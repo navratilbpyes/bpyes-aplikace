@@ -148,9 +148,16 @@ export default function RecordDetailPage() {
     }));
   }, [klient, record]);
 
-  // Přesunuto sem dolů, aby to mělo přístup k "record" a "klient"
-  const handleSendEmailFromDetail = async () => {
-    if (!record) return;
+  // Funkce, která prohledá celý objekt klienta a najde všechny e-maily
+  const findAllEmailsInObject = (obj: any): string[] => {
+    const emails: string[] = [];
+    const search = (current: any) => {
+      if (!current) return;
+      if (typeof current === 'string' && current.includes('@')) {
+        // Vyčistíme e-mail od případných mezer nebo uvozovewek
+        const cleaned = current.trim().toLowerCase();
+        if (!emails.includes(cleaned)) emails.push(cleaned);
+      } else if (typeof current === '
     
     const nalezenyEmail = klient?.email || klient?.kontaktniOsoba?.email || klient?.odpovedneOsoby?.find((o: any) => o.email)?.email;
     const cilovyEmail = nalezenyEmail || prompt("Zadejte e-mailovou adresu, na kterou chcete report odeslat:", "");
