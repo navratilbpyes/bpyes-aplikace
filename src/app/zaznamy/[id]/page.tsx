@@ -152,7 +152,8 @@ export default function RecordDetailPage() {
   const handleSendEmailFromDetail = async () => {
     if (!record) return;
     
-    const cilovyEmail = klient?.email || prompt("Zadejte e-mailovou adresu, na kterou chcete report odeslat:", "");
+    const nalezenyEmail = klient?.email || klient?.kontaktniOsoba?.email || klient?.odpovedneOsoby?.find((o: any) => o.email)?.email;
+    const cilovyEmail = nalezenyEmail || prompt("Zadejte e-mailovou adresu, na kterou chcete report odeslat:", "");
     if (!cilovyEmail) return;
 
     setIsSendingEmail(true);
