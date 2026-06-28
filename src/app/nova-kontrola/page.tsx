@@ -334,7 +334,8 @@ export default function NewInspectionPage() {
       setJustSavedRecordId(sanitizedRecord.id);
       setJustSavedRecordCislo(klientskeCislo);
       setShowEmailPrompt(true);
-      setEmailRecipient(selectedKlient?.email || "");
+      const nalezeneEmail = selectedKlient?.email || selectedKlient?.kontaktniOsoba?.email || selectedKlient?.odpovedneOsoby?.find((o: any) => o.email)?.email || "";
+      setEmailRecipient(nalezeneEmail);
       setShowSaveModal(false);
       setIsSaving(false);
       
