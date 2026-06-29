@@ -2,13 +2,13 @@
 
 import { useData, db } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { 
   ChevronLeft, Printer, Building, MapPin, FileText,
   Loader2, Edit, ChevronDown, CheckCircle2, Clock, X, Camera,
-  CheckSquare, Square, AlertTriangle, Trash2, Send
+  Trash2, Send
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -80,14 +80,14 @@ export default function RecordDetailPage() {
   const { zaznamy, klienti, userProfile, setZaznamy } = useData();
 
   const [t, setT] = useState<Record<string, string>>({
-    nadpis_zavady: "Registr zjištěných nedostatků and nápravných opatření",
+    nadpis_zavady: "Registr zjištěných nedostatků a nápravných opatření",
     nadpis_komplet: "Kompletní auditní protokol zjištění",
     karta_opatreni: "Návrh opatření:",
     nadpis_misto: "Místo:",
     karta_termin: "Termín:",
     karta_odpovednost: "Pozice:",
     stat_vyhovuje: "VYHOVUJE",
-    stat_neshody: "COULD NOT BE FOUND (N)"
+    stat_neshody: "NESHODY (N)"
   });
   
   const [isLoading, setIsLoading] = useState(true);
@@ -189,7 +189,7 @@ export default function RecordDetailPage() {
 
   const handleDeleteRecord = async () => {
     if (!record) return;
-    isDeleting(true);
+    setIsDeleting(true);
     try {
       await deleteDoc(doc(db, 'zaznamy', record.id));
       if (setZaznamy) setZaznamy((prev: any[]) => prev.filter(z => z.id !== record.id));
@@ -436,7 +436,7 @@ export default function RecordDetailPage() {
           <div className="mb-12">
             <p className="font-bold uppercase text-[11px] text-slate-500 mb-2">PROHLÁŠENÍ O SEZNÁMENÍ:</p>
             <p className="text-justify leading-relaxed italic text-slate-700">
-              Kontrolovaný subjekt / zástupce klienta svým níže uvedeným podpisem stvrzuje, že byl v plném rozsahu, prokazatelně a jasně seznámen se všemi zjištěnými legislativními nedostatky, systémovými neshodami a doporučeními, která jsou detailně specifikována uvnitř této auditní zprávy. Souhlasí s navrženými nápravnými opatřeními a zavazuje se k their vyřešení v definovaných termínech.
+              Kontrolovaný subjekt / zástupce klienta svým níže uvedeným podpisem stvrzuje, že byl v plném rozsahu, prokazatelně a jasně seznámen se všemi zjištěnými legislativními nedostatky, systémovými neshodami a doporučeními, která jsou detailně specifikována uvnitř této auditní zprávy. Souhlasí s navrženými nápravnými opatřeními a zavazuje se k jejich vyřešení v definovaných termínech.
             </p>
           </div>
 
