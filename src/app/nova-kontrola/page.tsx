@@ -110,6 +110,16 @@ export default function NewInspectionPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   const selectedKlient = klienti.find(k => k.id === formData.klientId);
+  const uniquePositions = useMemo(() => {
+    if (!selectedKlient) return [];
+    let positions: string[] = [];
+    if (selectedKlient.pozice && selectedKlient.pozice.length > 0) {
+      positions = selectedKlient.pozice.map((p:any) => p.nazev);
+    } else if (selectedKlient.odpovedneOsoby && selectedKlient.odpovedneOsoby.length > 0) {
+      positions = selectedKlient.odpovedneOsoby.map((o:any) => o.pozice || o.funkce);
+    }
+    return Array.from(new Set(positions.filter(Boolean)));
+  }, [selectedKlient]);
   
   // CHYTRÝ PÁTRAČ E-MAILŮ
   const najdiEmail = (obj: any, visited = new Set()): string => {
