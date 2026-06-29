@@ -80,14 +80,14 @@ export default function RecordDetailPage() {
   const { zaznamy, klienti, userProfile, setZaznamy } = useData();
 
   const [t, setT] = useState<Record<string, string>>({
-    nadpis_zavady: "Registr zjištěných nedostatků a nápravných opatření",
+    nadpis_zavady: "Registr zjištěných nedostatků and nápravných opatření",
     nadpis_komplet: "Kompletní auditní protokol zjištění",
     karta_opatreni: "Návrh opatření:",
     nadpis_misto: "Místo:",
     karta_termin: "Termín:",
     karta_odpovednost: "Pozice:",
     stat_vyhovuje: "VYHOVUJE",
-    stat_neshody: "NESHODY (N)"
+    stat_neshody: "COULD NOT BE FOUND (N)"
   });
   
   const [isLoading, setIsLoading] = useState(true);
@@ -99,6 +99,10 @@ export default function RecordDetailPage() {
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Stavy pro bezpečné odesílání e-mailu bez prompt() window
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailRecipient, setEmailRecipient] = useState("");
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const isAdmin = userProfile?.role === 'admin';
@@ -148,48 +152,25 @@ export default function RecordDetailPage() {
     }));
   }, [klient, record]);
 
-  const handleSendEmailFromDetail = async () => {
-    if (!record) return;
+  // ADRESNÝ VYHLEDÁVAČ E-MAILŮ (NEPRŮSTŘELNÝ)
+  const extractEmail = (klientObj: any): string => {
+    if (!klientObj) return "";
+    if (typeof klientObj.email === 'string' && klientObj.email.includes('@')) return klientObj.email.trim();
+    if (typeof klientObj.kontaktniOsoba?.email === 'string' && klientObj.kontaktniOsoba.email.includes('@')) return klientObj.kontaktniOsoba.email.trim();
     
-    // CHYTRÝ PÁTRAČ E-MAILŮ
-    const najdiEmail = (obj: any, visited = new Set()): string => {
-      if (!obj || visited.has(obj)) return "";
-      if (typeof obj === 'string' && obj.includes('@') && obj.includes('.') && !obj.includes(' ')) return obj;
-      if (typeof obj === 'object') {
-        visited.add(obj);
-        for (const key in obj) {
-          const found = najdiEmail(obj[key], visited);
-          if (found) return found;
-        }
-      }
-      return "";
-    };
-    
-    const nalezenyEmail = najdiEmail(klient);
-    const cilovyEmail = nalezenyEmail || prompt("Zadejte e-mailovou adresu, na kterou chcete report odeslat:", "");
-    if (!cilovyEmail) return;
-
-    setIsSendingEmail(true);
-    try {
-      const odkaz = `${window.location.origin}/zaznamy/${record.id}`;
-      const response = await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: cilovyEmail,
-          jmenoKlienta: klient?.nazev || "Klient",
-          cisloZpravy: record.cisloKlientske || record.cislo,
-          odkaz: odkaz
-        })
-      });
-      const result = await response.json();
-      if (result.success) toast({ title: "E-mail úspěšně odeslán", description: `Potvrzení bylo zasláno na: ${cilovyEmail}` });
-      else toast({ title: "Chyba při odesílání", description: "E-mail se nepodařilo odeslat.", variant: "destructive" });
-    } catch (err) {
-      toast({ title: "Kritická chyba", description: "Nepodařilo se připojit k serveru.", variant: "destructive" });
-    } finally {
-      setIsSendingEmail(false);
+    if (Array.isArray(klientObj.odpovedneOsoby)) {
+      const found = klientObj.odpovedneOsoby.find((o: any) => o?.email && typeof o.email === 'string' && o.email.includes('@'));
+      if (found) return found.email.trim();
     }
+    if (Array.isArray(klientObj.kontakty)) {
+      const found = klientObj.kontakty.find((k: any) => k?.email && typeof k.email === 'string' && k.email.includes('@'));
+      if (found) return found.email.trim();
+    }
+    if (Array.isArray(klientObj.pozice)) {
+      const found = klientObj.pozice.find((p: any) => p?.email && typeof p.email === 'string' && p.email.includes('@'));
+      if (found) return found.email.trim();
+    }
+    return "";
   };
 
   const [filterPosition, setFilterPosition] = useState<string>("all");
@@ -208,7 +189,7 @@ export default function RecordDetailPage() {
 
   const handleDeleteRecord = async () => {
     if (!record) return;
-    setIsDeleting(true);
+    isDeleting(true);
     try {
       await deleteDoc(doc(db, 'zaznamy', record.id));
       if (setZaznamy) setZaznamy((prev: any[]) => prev.filter(z => z.id !== record.id));
@@ -337,6 +318,72 @@ export default function RecordDetailPage() {
         </div>
       )}
 
+      {/* MODÁLNÍ OKNO PRO BEZPEČNÉ ODESLÁNÍ E-MAILU Z DETAILU */}
+      {showEmailModal && (
+        <div className="fixed inset-0 bg-black/60 z-[150] flex items-center justify-center p-4 animate-in fade-in print:hidden">
+          <Card className="w-full max-w-md shadow-2xl border-blue-200">
+            <CardHeader className="bg-blue-50 border-b border-blue-100 rounded-t-xl pb-4">
+              <CardTitle className="text-xl font-bold flex items-center gap-2 text-blue-900">
+                <Send className="h-6 w-6 text-blue-600" /> Odeslat report klientovi
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4 text-slate-700">
+              <p>Přejete si odeslat e-mail s upozorněním a odkazem na klientský dispečink zprávy <strong>{record.cisloKlientske || record.cislo}</strong>?</p>
+              
+              <div className="space-y-2 pt-2">
+                <Label className="text-xs font-bold text-slate-700">E-mail příjemce:</Label>
+                <Input 
+                  value={emailRecipient} 
+                  onChange={(e) => setEmailRecipient(e.target.value)}
+                  placeholder="Zadejte e-mailovou adresu..."
+                  className="bg-white h-10 border-slate-200 focus:border-blue-500"
+                />
+              </div>
+            </CardContent>
+            <div className="p-4 border-t flex justify-end gap-2 bg-muted/20 rounded-b-xl">
+              <Button variant="outline" onClick={() => setShowEmailModal(false)}>Zrušit</Button>
+              <Button 
+                onClick={async () => {
+                  if (!emailRecipient.trim()) {
+                    toast({ title: "Chyba", description: "Zadejte platný e-mail.", variant: "destructive" });
+                    return;
+                  }
+                  setIsSendingEmail(true);
+                  try {
+                    const odkaz = `${window.location.origin}/zaznamy/${record.id}`;
+                    const response = await fetch('/api/send-email', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        email: emailRecipient.trim(),
+                        jmenoKlienta: klient?.nazev || "Klient",
+                        cisloZpravy: record.cisloKlientske || record.cislo,
+                        odkaz: odkaz
+                      })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                      toast({ title: "E-mail úspěšně odeslán", description: `Zpráva byla zaslána na: ${emailRecipient}` });
+                      setShowEmailModal(false);
+                    } else {
+                      toast({ title: "Chyba při odesílání", description: "E-mail se nepodařilo odeslat.", variant: "destructive" });
+                    }
+                  } catch (err) {
+                    toast({ title: "Kritická chyba", description: "Chyba připojení k serveru.", variant: "destructive" });
+                  } finally {
+                    setIsSendingEmail(false);
+                  }
+                }} 
+                disabled={isSendingEmail || !emailRecipient.trim()} 
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold"
+              >
+                {isSendingEmail ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />} Odeslat report
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* ================================================================= */}
       {/* 1. TISKOVÁ VERZE (PDF)                                            */}
       {/* ================================================================= */}
@@ -389,18 +436,13 @@ export default function RecordDetailPage() {
           <div className="mb-12">
             <p className="font-bold uppercase text-[11px] text-slate-500 mb-2">PROHLÁŠENÍ O SEZNÁMENÍ:</p>
             <p className="text-justify leading-relaxed italic text-slate-700">
-              Kontrolovaný subjekt / zástupce klienta svým níže uvedeným podpisem stvrzuje, že byl v plném rozsahu, prokazatelně a jasně seznámen se všemi zjištěnými legislativními nedostatky, systémovými neshodami a doporučeními, která jsou detailně specifikována uvnitř této auditní zprávy. Souhlasí s navrženými nápravnými opatřeními a zavazuje se k jejich vyřešení v definovaných termínech.
+              Kontrolovaný subjekt / zástupce klienta svým níže uvedeným podpisem stvrzuje, že byl v plném rozsahu, prokazatelně a jasně seznámen se všemi zjištěnými legislativními nedostatky, systémovými neshodami a doporučeními, která jsou detailně specifikována uvnitř této auditní zprávy. Souhlasí s navrženými nápravnými opatřeními a zavazuje se k their vyřešení v definovaných termínech.
             </p>
           </div>
 
-          {/* NEPRŮSTŘELNÝ PODPISOVÝ BLOK (Plán B - Blokové řazení) */}
           <div className="grid grid-cols-2 gap-12 mt-16 pt-8">
-            
-            {/* LEVÁ STRANA: AUDITOR */}
             <div className="flex flex-col">
                <p className="font-bold uppercase text-[11px] mb-2">PROVEDL:</p>
-               
-               {/* Pevná zóna pro obrázky - vždy 96px (h-24) vysoká, relativní pro absolutní pozicování uvnitř */}
                <div className="h-24 w-full relative mb-2">
                  {auditorConfig?.razitkoBase64 && (
                    <img src={auditorConfig.razitkoBase64} alt="Razítko" className="absolute left-0 bottom-0 h-24 w-24 object-contain mix-blend-multiply" />
@@ -409,11 +451,7 @@ export default function RecordDetailPage() {
                    <img src={auditorConfig.podpisBase64} alt="Podpis" className="absolute left-16 bottom-2 h-16 w-32 object-contain mix-blend-multiply" />
                  )}
                </div>
-               
-               {/* Čára - Už se nikdy neposune */}
                <div className="border-b border-black w-full"></div>
-               
-               {/* Texty pod čarou */}
                <div className="pt-2">
                  <p className="font-bold text-base">{auditorConfig?.titul ? auditorConfig.titul + ' ' : ''}{auditorConfig?.jmeno || 'Auditor'}</p>
                  {auditorConfig?.certifikace?.map((cert: any) => (
@@ -421,17 +459,10 @@ export default function RecordDetailPage() {
                  ))}
                </div>
             </div>
-            
-            {/* PRAVÁ STRANA: KLIENT */}
             <div className="flex flex-col">
                <p className="font-bold uppercase text-[11px] mb-2">ZÁSTUPCE SUBJEKTU / KLIENTA:</p>
-               
-               {/* Prázdná zóna stejné výšky (h-24), aby čáry lícovaly */}
                <div className="h-24 w-full mb-2"></div>
-               
-               {/* Čára ve stejné výšce jako ta levá */}
                <div className="border-b border-black w-full"></div>
-               
                <div className="pt-2">
                  <p className="text-xs text-slate-400 italic">Podpis a datum seznámení</p>
                </div>
@@ -441,7 +472,6 @@ export default function RecordDetailPage() {
 
         <div className="page-break"></div>
 
-        {/* SEKCE 1: SHRNUTÍ */}
         <div className="pt-4">
           <h2 className="text-base font-bold mb-6 uppercase border-b pb-2">1. SHRNUTÍ A STATISTIKY</h2>
           <div className="grid grid-cols-4 gap-4 text-center mb-8">
@@ -469,7 +499,6 @@ export default function RecordDetailPage() {
 
         <div className="page-break"></div>
 
-        {/* SEKCE 2: PROTOKOL */}
         <div className="pt-4">
           <h2 className="text-base font-bold mb-8 uppercase border-b pb-2">2. KOMPLETNÍ AUDITNÍ PROTOKOL ZJIŠTĚNÍ</h2>
           <div className="space-y-6">
@@ -511,7 +540,6 @@ export default function RecordDetailPage() {
       {/* ================================================================= */}
       <div className="print:hidden space-y-8">
         
-        {/* HORNÍ LIŠTA S TLAČÍTKY */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <div className="space-y-2">
             <Button variant="ghost" size="sm" className="p-0 h-auto text-muted-foreground hover:bg-transparent hover:text-slate-900 -ml-2" onClick={() => router.push("/")}>
@@ -529,13 +557,18 @@ export default function RecordDetailPage() {
           </div>
           
           <div className="flex flex-wrap gap-2 w-full md:w-auto">
+            {/* TLAČÍTKO PRO ODESLÁNÍ E-MAILU - KLIKNUTÍM SE OTEVŘE MODAL */}
             <Button 
-              onClick={handleSendEmailFromDetail} 
+              onClick={() => {
+                const email = extractEmail(klient);
+                setEmailRecipient(email);
+                setShowEmailModal(true);
+              }} 
               disabled={isSendingEmail}
               variant="outline"
               className="h-11 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 shadow-sm font-bold"
             >
-              {isSendingEmail ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+              <Send className="h-4 w-4 mr-2" />
               Odeslat e-mail
             </Button>
             <Button className="h-11 px-6 shadow-sm font-bold bg-blue-600 hover:bg-blue-700 text-white" onClick={handlePrint} disabled={isPreparingPdf}>
@@ -555,7 +588,6 @@ export default function RecordDetailPage() {
           </div>
         </div>
 
-        {/* FILTR NÁHLEDU */}
         <Card className="border-blue-100 bg-blue-50/40 shadow-sm">
           <CardContent className="p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="flex items-center gap-2 text-blue-900">
@@ -586,10 +618,7 @@ export default function RecordDetailPage() {
           </CardContent>
         </Card>
 
-        {/* HLAVNÍ OBSAH (MŘÍŽKA ZÁVADY / INFO) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-          
-          {/* LEOVÝ SLOUPEC - ZÁVADY */}
           <div className="md:col-span-2 space-y-6">
             <h2 className="text-xl font-bold text-slate-800">{onlyDefects ? t.nadpis_zavady : t.nadpis_komplet} <span className="text-slate-400 font-normal">({filteredKontrolniBody.length})</span></h2>
             
@@ -601,7 +630,6 @@ export default function RecordDetailPage() {
 
                 return (
                   <Card key={sekce} className="border-slate-200 shadow-sm overflow-hidden transition-all duration-200">
-                    {/* HLAVIČKA SKUPINY */}
                     <div 
                       onClick={() => toggleGroup(sekce)} 
                       className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-slate-50 border-b border-slate-100 cursor-pointer hover:bg-slate-100/70 transition-colors"
@@ -613,7 +641,6 @@ export default function RecordDetailPage() {
                       </div>
                     </div>
 
-                    {/* TĚLO SKUPINY */}
                     {!isCollapsed && (
                       <CardContent className="p-0 divide-y divide-slate-100">
                         {items.map((kb: any) => {
@@ -623,7 +650,6 @@ export default function RecordDetailPage() {
 
                           return (
                             <div key={bodId} className={cn("p-5 transition-colors", isDefect ? "bg-white" : "bg-slate-50/30")}>
-                              
                               <div className="flex justify-between items-start gap-4 mb-4">
                                 <div className="flex gap-3">
                                   <span className={cn("font-mono text-xs font-bold h-7 w-7 rounded-lg flex items-center justify-center shrink-0 border", isDefect ? "bg-red-50 text-red-700 border-red-100" : "bg-green-50 text-green-700 border-green-100")}>{kb.bod}</span>
@@ -643,19 +669,16 @@ export default function RecordDetailPage() {
 
                               {isDefect && (
                                 <div className="ml-10 space-y-4">
-                                  
-                                  {/* INFO KARTY ZÁVADY */}
                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm">
-                                    <div><span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Návrh opatření</span><p className="font-medium text-slate-900 leading-relaxed">{kb.navrhOpatreni || '-'}</p></div>
-                                    <div><span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Místo prověrky</span><p className="font-bold text-blue-900">{kb.lokalizace || '-'}</p></div>
-                                    <div><span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Termín k odstranění</span><p className="font-medium text-slate-900">{kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : '-'}</p></div>
-                                    <div><span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Odpovědná pozice</span><p className="font-bold text-slate-900">{kb.odpovednaOsoba || '-'}</p></div>
+                                    <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Návrh opatření</span><p className="font-medium text-slate-900 leading-relaxed">{kb.navrhOpatreni || '-'}</p></div>
+                                    <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Místo prověrky</span><p className="font-bold text-blue-900">{kb.lokalizace || '-'}</p></div>
+                                    <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Termín k odstranění</span><p className="font-medium text-slate-900">{kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : '-'}</p></div>
+                                    <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Odpovědná pozice</span><p className="font-bold text-slate-900">{kb.odpovednaOsoba || '-'}</p></div>
                                   </div>
 
-                                  {/* FOTKY AUDITORA */}
                                   {kb.foto && kb.foto.length > 0 && (
                                     <div>
-                                      <span className="text-[10px] uppercase font-bold text-slate-400 block mb-2">Fotodokumentace závady</span>
+                                      <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-2">Fotodokumentace závady</span>
                                       <div className="flex flex-wrap gap-3">
                                         {kb.foto.map((f: string, i: number) => (
                                           <div key={i} onClick={() => setFullscreenImage(f)} className="cursor-zoom-in relative group overflow-hidden rounded-lg border border-slate-200 shadow-sm bg-white p-1">
@@ -667,7 +690,6 @@ export default function RecordDetailPage() {
                                     </div>
                                   )}
 
-                                  {/* BLOK PRO KLIENTA (NÁHLÁŠENÍ OPRAVY) */}
                                   {!isAdmin && (
                                     <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 mt-4 shadow-sm">
                                       {isResolvedByClient ? (
@@ -730,16 +752,15 @@ export default function RecordDetailPage() {
                                     </div>
                                   )}
 
-                                  {/* ZOBRAZENÍ ODSTRANĚNÍ PRO ADMINA */}
                                   {isAdmin && isResolvedByClient && (
                                     <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mt-4 shadow-sm">
                                        <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm mb-3"><CheckCircle2 className="h-5 w-5" /> Klient nahlásil odstranění závady</div>
                                        <div className="bg-white p-3 rounded-lg border border-emerald-100 space-y-3 text-sm">
                                           <div className="grid grid-cols-2 gap-4">
-                                            <div><span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Nahlásil</span><span className="font-bold">{kb.jmenoVyresitele}</span></div>
-                                            <div><span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Dne</span><span className="font-bold">{kb.datumVyreseniKlientem ? new Date(kb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</span></div>
+                                            <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Nahlásil</span><span className="font-bold">{kb.jmenoVyresitele}</span></div>
+                                            <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Dne</span><span className="font-bold">{kb.datumVyreseniKlientem ? new Date(kb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</span></div>
                                           </div>
-                                          {kb.poznamkaKlienta && <div><span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Komentář</span><p className="italic text-slate-700">{kb.poznamkaKlienta}</p></div>}
+                                          {kb.poznamkaKlienta && <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Komentář</span><p className="italic text-slate-700">{kb.poznamkaKlienta}</p></div>}
                                           {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
                                              <div className="pt-2 border-t border-slate-50 flex gap-2">
                                                {kb.fotoVyreseni.map((f: string, i: number) => (
@@ -764,7 +785,6 @@ export default function RecordDetailPage() {
             </div>
           </div>
           
-          {/* PRAVÝ SLOUPEC - INFO KARTA */}
           <div className="space-y-6">
             <Card className="sticky top-6 shadow-sm border-slate-200 overflow-hidden">
               <CardHeader className="bg-slate-50/50 border-b pb-4">
