@@ -2,40 +2,41 @@
 
 import { useData, db } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useState, useEffect, useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
 import { 
-  ChevronLeft, Printer, Building, MapPin, FileText,
-  Loader2, Edit, ChevronDown, CheckCircle2, Clock, X, Camera,
-  Trash2, Send
+  CheckCircle2, ChevronRight, ChevronLeft, Plus, X, AlertTriangle,
+  Calendar as CalendarIcon, User as UserIcon, StickyNote, Camera,
+  CheckSquare, Square, Filter, Loader2, Trash2, Send
 } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 import { cn } from "@/app/lib/utils";
-import { doc, deleteDoc, getDoc } from "firebase/firestore";
+import { CHECKLIST_SECTIONS, CHECKLIST_PPP, CHECKLIST_PBOZP, ChecklistPoint } from "./checklist-data";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Progress } from "@/components/ui/progress";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Zavada } from "@/app/lib/types";
+import { doc, collection, setDoc } from "firebase/firestore";
 
-const TEXTS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRiXWE13sHgXwCiFobHGpI3zvKR8nIOnzLtLxWdK7kyn2c4BhZDOwOf5ulUycMyfF1xJXonFSTG88JS/pub?gid=1978510431&single=true&output=csv";
-
-function parseCSV(str: string) {
-  const arr: string[][] = []; let quote = false; let row = 0, col = 0;
-  for (let c = 0; c < str.length; c++) {
-    let cc = str[c], nc = str[c+1];
-    arr[row] = arr[row] || []; arr[row][col] = arr[row][col] || '';
-    if (cc == '"' && quote && nc == '"') { arr[row][col] += cc; ++c; continue; }
-    if (cc == '"') { quote = !quote; continue; }
-    if (cc == ',' && !quote) { ++col; continue; }
-    if (cc == '\r' && nc == '\n' && !quote) { ++row; col = 0; ++c; continue; }
-    if (cc == '\n' && !quote) { ++row; col = 0; continue; }
-    if (cc == '\r' && !quote) { ++row; col = 0; continue; }
-    arr[row][col] += cc;
-  }
-  return arr;
+interface TypickaZavada { nazev: string; popis: string; opatreni: string; }
+interface DefectFormState {
+  uid: string; popis: string; navrhOpatreni: string; terminOdstraneni: string;
+  odpovednaOsoba: string; odpovednaOsobaManualni: string; lokalizace: string;
+  zavaznost: string; odstraneno: boolean; datumOdstraneni: string;
+  zaznamProvedl: string; zaznamProvedlManualni: string; foto?: string[];
 }
+
+const createEmptyDefect = (): DefectFormState => ({
+  uid: Math.random().toString(36).substring(7), popis: "", navrhOpatreni: "",
+  terminOdstraneni: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+  odpovednaOsoba: "", odpovednaOsobaManualni: "", lokalizace: "", zavaznost: "none",
+  odstraneno: false, datumOdstraneni: "", zaznamProvedl: "", zaznamProvedlManualni: "", foto: []
+});
 
 const compressImage = (file: File): Promise<string> => {
   return new Promise((resolve) => {
@@ -59,759 +60,625 @@ const compressImage = (file: File): Promise<string> => {
   });
 };
 
-interface AuditorConfig {
-  firmaNazev?: string;
-  firmaIco?: string;
-  firmaAdresa?: string;
-  email?: string;
-  telefon?: string;
-  titul?: string;
-  jmeno?: string;
-  certifikace?: { id: string; nazev: string; cislo: string }[];
-  razitkoBase64?: string;
-  podpisBase64?: string;
+const GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTqBDqcv7REG4fkbLQHUqOQP13KzwB-wAAEaotZldSvZMvTpzfc8OlJvo8isBWkmQBpjYTm-I_X6Lls/pub?output=csv";
+function parseCSV(str: string) {
+  const arr: string[][] = []; let quote = false; let row = 0, col = 0;
+  for (let c = 0; c < str.length; c++) {
+    let cc = str[c], nc = str[c+1];
+    arr[row] = arr[row] || []; arr[row][col] = arr[row][col] || '';
+    if (cc == '"' && quote && nc == '"') { arr[row][col] += cc; ++c; continue; }
+    if (cc == '"') { quote = !quote; continue; }
+    if (cc == ',' && !quote) { ++col; continue; }
+    if (cc == '\r' && nc == '\n' && !quote) { ++row; col = 0; ++c; continue; }
+    if (cc == '\n' && !quote) { ++row; col = 0; continue; }
+    if (cc == '\r' && !quote) { ++row; col = 0; continue; }
+    arr[row][col] += cc;
+  }
+  return arr;
 }
 
-export default function RecordDetailPage() {
-  const params = useParams();
-  const router = useRouter();
+export default function NewInspectionPage() {
+  const { klienti, zaznamy, setZaznamy } = useData();
   const { toast } = useToast();
-  
-  const { zaznamy, klienti, userProfile, setZaznamy } = useData();
+  const router = useRouter();
 
-  const [t, setT] = useState<Record<string, string>>({
-    nadpis_zavady: "Registr zjištěných nedostatků a nápravných opatření",
-    nadpis_komplet: "Kompletní auditní protokol zjištění",
-    karta_opatreni: "Návrh opatření:",
-    nadpis_misto: "Místo:",
-    karta_termin: "Termín:",
-    karta_odpovednost: "Pozice:",
-    stat_vyhovuje: "VYHOVUJE",
-    stat_neshody: "NESHODY (N)"
+  const [step, setStep] = useState(1);
+  const [formData, setFormData] = useState({
+    klientId: '', pracovisteIds: [] as string[], typKontroly: 'BOZPaPO' as any,
+    datum: new Date().toISOString().split('T')[0], ucastnici: [{ jmeno: '', pozice: '' }], poznamka: ''
   });
-  
-  const [isLoading, setIsLoading] = useState(true);
-  const [isPreparingPdf, setIsPreparingPdf] = useState(false);
-  const [resolvingBod, setResolvingBod] = useState<string | number | null>(null);
-  const [resolveData, setResolveData] = useState({ datum: '', jmeno: '', poznamka: '', foto: [] as string[] });
-  
-  const [auditorConfig, setAuditorConfig] = useState<AuditorConfig | null>(null);
-  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
 
-  // Stavy pro bezpečné odesílání e-mailu bez prompt() window
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [emailRecipient, setEmailRecipient] = useState("");
+  const [checklist, setChecklist] = useState<Record<number, any>>({});
+  const [pointDefects, setPointDefects] = useState<Record<number, DefectFormState[]>>({});
+  const [googleZavady, setGoogleZavady] = useState<Record<string, Record<number, TypickaZavada[]>>>({});
+  const [customPoints, setCustomPoints] = useState<ChecklistPoint[]>([]);
+  const [disabledSections, setDisabledSections] = useState<string[]>([]);
+  const [filterPosition, setFilterPosition] = useState<string>("all");
+  
+  // Stavy pro modální okna
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  
+  // Speciální stavy pro odesílání e-mailu
+  const [showEmailPrompt, setShowEmailPrompt] = useState(false);
+  const [justSavedRecordId, setJustSavedRecordId] = useState<string | null>(null);
+  const [justSavedRecordCislo, setJustSavedRecordCislo] = useState<string | null>(null);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailRecipient, setEmailRecipient] = useState("");
 
-  const isAdmin = userProfile?.role === 'admin';
+  const [revisionNumber, setRevisionNumber] = useState("0");
+  const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    const fetchAuditorConfig = async () => {
-      try {
-        const docRef = doc(db, "konfigurace", "auditor");
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) setAuditorConfig(docSnap.data() as AuditorConfig);
-      } catch (err) { console.error("Chyba DB auditor", err); }
-    };
-    fetchAuditorConfig();
-    if (zaznamy && zaznamy.length > 0) setIsLoading(false);
-    const timer = setTimeout(() => setIsLoading(false), 2000);
-    return () => clearTimeout(timer);
-  }, [zaznamy]);
-
-  useEffect(() => {
-    fetch(TEXTS_URL).then(res => res.text()).then(csv => {
-        const rows = parseCSV(csv);
-        const map: Record<string, string> = {};
-        rows.forEach(r => { 
-          if(r[0] && r[1]) {
-            let val = r[1].trim();
-            if (val.startsWith('2. ')) val = val.substring(3).trim();
-            map[r[0].trim()] = val;
-          }
-        });
-        setT(prev => ({ ...prev, ...map }));
-      }).catch(console.error);
-  }, []);
-
-  const record = useMemo(() => zaznamy.find((z: any) => z.id === params.id), [zaznamy, params.id]);
-  const klient = useMemo(() => klienti.find((k: any) => k.id === record?.klientId), [klienti, record]);
+  const selectedKlient = klienti.find(k => k.id === formData.klientId);
+  const uniquePositions = useMemo(() => {
+    if (!selectedKlient) return [];
+    let positions: string[] = [];
+    if (selectedKlient.pozice && selectedKlient.pozice.length > 0) {
+      positions = selectedKlient.pozice.map((p:any) => p.nazev);
+    } else if (selectedKlient.odpovedneOsoby && selectedKlient.odpovedneOsoby.length > 0) {
+      positions = selectedKlient.odpovedneOsoby.map((o:any) => o.pozice || o.funkce);
+    }
+    return Array.from(new Set(positions.filter(Boolean)));
+  }, [selectedKlient]);
   
-  const pracovisteList = useMemo(() => {
-    if (!klient || !record) return [];
-    const prac = klient.pracoviste || [];
-    let filtered = [];
-    if (record.pracovisteIds && Array.isArray(record.pracovisteIds)) filtered = prac.filter((p: any) => record.pracovisteIds.includes(p.id));
-    else if (record.pracovisteId) filtered = prac.filter((p: any) => p.id === record.pracovisteId);
-    
-    return filtered.map((p: any) => ({
-      ...p,
-      fullDisplay: `${p.nazev}${p.adresa ? ', ' + p.adresa : ''}${p.mesto ? ', ' + p.mesto : ''}`
-    }));
-  }, [klient, record]);
-
-  // ADRESNÝ VYHLEDÁVAČ E-MAILŮ (NEPRŮSTŘELNÝ)
-  const extractEmail = (klientObj: any): string => {
-    if (!klientObj) return "";
-    if (typeof klientObj.email === 'string' && klientObj.email.includes('@')) return klientObj.email.trim();
-    if (typeof klientObj.kontaktniOsoba?.email === 'string' && klientObj.kontaktniOsoba.email.includes('@')) return klientObj.kontaktniOsoba.email.trim();
-    
-    if (Array.isArray(klientObj.odpovedneOsoby)) {
-      const found = klientObj.odpovedneOsoby.find((o: any) => o?.email && typeof o.email === 'string' && o.email.includes('@'));
-      if (found) return found.email.trim();
-    }
-    if (Array.isArray(klientObj.kontakty)) {
-      const found = klientObj.kontakty.find((k: any) => k?.email && typeof k.email === 'string' && k.email.includes('@'));
-      if (found) return found.email.trim();
-    }
-    if (Array.isArray(klientObj.pozice)) {
-      const found = klientObj.pozice.find((p: any) => p?.email && typeof p.email === 'string' && p.email.includes('@'));
-      if (found) return found.email.trim();
+  // CHYTRÝ PÁTRAČ E-MAILŮ
+  const najdiEmail = (obj: any, visited = new Set()): string => {
+    if (!obj || visited.has(obj)) return "";
+    if (typeof obj === 'string' && obj.includes('@') && obj.includes('.') && !obj.includes(' ')) return obj;
+    if (typeof obj === 'object') {
+      visited.add(obj);
+      for (const key in obj) {
+        const found = najdiEmail(obj[key], visited);
+        if (found) return found;
+      }
     }
     return "";
   };
 
-  const [filterPosition, setFilterPosition] = useState<string>("all");
-  const [onlyDefects, setOnlyDefects] = useState<boolean>(false);
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  // ZPŘESNĚNÝ A SPOLEHLIVÝ DETEKTOR E-MAILU KLIENTA
+  useEffect(() => {
+    if (selectedKlient) {
+      let nalezeneEmail = "";
 
-  const toggleGroup = (sec: string) => setCollapsedGroups(prev => ({ ...prev, [sec]: !prev[sec] }));
-
-  const handlePrint = () => {
-    setIsPreparingPdf(true);
-    const allOpen: Record<string, boolean> = {};
-    groupedKontrolniBody.forEach(group => { allOpen[group.sekce] = false; });
-    setCollapsedGroups(allOpen);
-    setTimeout(() => { window.print(); setIsPreparingPdf(false); }, 500);
-  };
-
-  const handleDeleteRecord = async () => {
-    if (!record) return;
-    setIsDeleting(true);
-    try {
-      await deleteDoc(doc(db, 'zaznamy', record.id));
-      if (setZaznamy) setZaznamy((prev: any[]) => prev.filter(z => z.id !== record.id));
-      toast({ title: "Záznam smazán" });
-      router.push("/");
-    } catch (error) { setIsDeleting(false); }
-  };
-
-  const handleConfirmResolve = async (bodId: string | number) => {
-    if (!record) return;
-    if (!resolveData.jmeno.trim()) { toast({ title: "Chybí jméno", description: "Zadejte jméno.", variant: "destructive" }); return; }
-    const updatedBody = record.kontrolniBody.map((kb: any) => {
-      if ((kb.id || kb.bod) === bodId) {
-        return { ...kb, vyresenoKlientem: true, datumVyreseniKlientem: resolveData.datum, jmenoVyresitele: resolveData.jmeno, poznamkaKlienta: resolveData.poznamka, fotoVyreseni: resolveData.foto };
+      // 1. Zkusíme hlavní e-mail firmy
+      if (selectedKlient.email && typeof selectedKlient.email === 'string' && selectedKlient.email.includes('@')) {
+        nalezeneEmail = selectedKlient.email.trim();
       }
-      return kb;
-    });
-    try {
-      setZaznamy((prev: any[]) => prev.map(z => z.id === record.id ? { ...z, kontrolniBody: updatedBody } : z));
-      setResolvingBod(null);
-      toast({ title: "Závada odstraněna" });
-    } catch (e) { toast({ title: "Chyba uložení", variant: "destructive" }); }
-  };
+      // 2. Zkusíme e-mail uložený v poli kontaktniOsoba
+      else if (selectedKlient.kontaktniOsoba?.email && typeof selectedKlient.kontaktniOsoba.email === 'string' && selectedKlient.kontaktniOsoba.email.includes('@')) {
+        nalezeneEmail = selectedKlient.kontaktniOsoba.email.trim();
+      }
+      // 3. Prohledáme pole odpovedneOsoby
+      else if (Array.isArray(selectedKlient.odpovedneOsoby)) {
+        const found = selectedKlient.odpovedneOsoby.find((o: any) => o?.email && typeof o.email === 'string' && o.email.includes('@'));
+        if (found) nalezeneEmail = found.email.trim();
+      }
+      // 4. Prohledáme pole kontakty
+      else if (Array.isArray(selectedKlient.kontakty)) {
+        const found = selectedKlient.kontakty.find((k: any) => k?.email && typeof k.email === 'string' && k.email.includes('@'));
+        if (found) nalezeneEmail = found.email.trim();
+      }
+      // 5. Prohledáme pole pozice
+      else if (Array.isArray(selectedKlient.pozice)) {
+        const found = selectedKlient.pozice.find((p: any) => p?.email && typeof p.email === 'string' && p.email.includes('@'));
+        if (found) nalezeneEmail = found.email.trim();
+      }
 
-  const handleCancelResolve = async (bodId: string | number) => {
-    if (!record) return;
-    const updatedBody = record.kontrolniBody.map((kb: any) => {
-      if ((kb.id || kb.bod) === bodId) { return { ...kb, vyresenoKlientem: false, datumVyreseniKlientem: null, jmenoVyresitele: null, poznamkaKlienta: null, fotoVyreseni: [] }; }
-      return kb;
-    });
-    setZaznamy((prev: any[]) => prev.map(z => z.id === record.id ? { ...z, kontrolniBody: updatedBody } : z));
-    toast({ title: "Zrušeno" });
-  };
-
-  const allSectionsInRecord = useMemo(() => {
-    const sections = new Set<string>();
-    if (record?.kontrolniBody) record.kontrolniBody.forEach((kb: any) => { if (kb.sekce) sections.add(kb.sekce); });
-    return Array.from(sections) as string[];
-  }, [record]);
-
-  const [visibleSections, setVisibleSections] = useState<Record<string, boolean>>({});
+      setEmailRecipient(nalezeneEmail);
+    } else {
+      setEmailRecipient("");
+    }
+  }, [selectedKlient]);
 
   useEffect(() => {
-    if (allSectionsInRecord.length > 0 && Object.keys(visibleSections).length === 0) {
-      const initial: Record<string, boolean> = {};
-      allSectionsInRecord.forEach(sec => { initial[sec] = true; });
-      setVisibleSections(initial);
+    fetch(GOOGLE_SHEETS_URL).then(res => res.text()).then(csvText => {
+      const rows = parseCSV(csvText);
+      if (rows.length > 1) {
+        const headers = rows[0].map(h => h.toLowerCase().trim());
+        const iTyp = headers.findIndex(h => h.includes('typ'));
+        const iId = headers.findIndex(h => h.includes('id'));
+        let iKratky = headers.findIndex(h => h === 'tag' || h.includes('zkrác') || h.includes('krát') || h.includes('název'));
+        if (iKratky === -1) iKratky = headers.findIndex(h => h.includes('nedostatek'));
+        const iPopis = headers.findIndex(h => h === 'popis' || (h.includes('popis') && !h.includes('zkr')));
+        const iOpatreni = headers.findIndex(h => h.includes('opatřen') || h.includes('opatren'));
+        const parsedDefects: Record<string, Record<number, TypickaZavada[]>> = {};
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i]; if (!r || r.length < 3) continue;
+          const typ = iTyp >= 0 ? r[iTyp]?.trim() : r[0]?.trim();
+          const id = parseInt(iId >= 0 ? r[iId] : r[2]);
+          const nazev = (iKratky >= 0 ? r[iKratky] : r[3])?.trim();
+          const popis = (iPopis >= 0 ? r[iPopis] : r[4])?.trim();
+          const opatreni = (iOpatreni >= 0 ? r[iOpatreni] : r[5])?.trim();
+          if (typ && !isNaN(id) && nazev) {
+            if (!parsedDefects[typ]) parsedDefects[typ] = {};
+            if (!parsedDefects[typ][id]) parsedDefects[typ][id] = [];
+            parsedDefects[typ][id].push({ nazev, popis: popis || "", opatreni: opatreni || "" });
+          }
+        }
+        setGoogleZavady(parsedDefects);
+      }
+    }).catch(console.error);
+  }, []);
+
+  const currentChecklistFlat = useMemo(() => {
+    let base: any[] = [];
+    if (formData.typKontroly === 'PPP') base = (CHECKLIST_PPP || []).map(p => ({ ...p, sekce: 'PPP' }));
+    else if (formData.typKontroly === 'PBOZP') base = (CHECKLIST_PBOZP || []).map(p => ({ ...p, sekce: 'PBOZP' }));
+    else if (formData.typKontroly === 'BOZPaPO') {
+      base = (CHECKLIST_SECTIONS || []).flatMap(s => s.points.map(p => ({ ...p, sekce: `ODDÍL ${s.id}: ${s.title}` })));
     }
-  }, [allSectionsInRecord]);
+    return [...base, ...customPoints.map(p => ({ ...p, sekce: 'Vlastní zjištění' }))];
+  }, [formData.typKontroly, customPoints]);
 
-  const uniquePositionsInRecord = useMemo(() => {
-    if (!record?.kontrolniBody) return [];
-    const positions = record.kontrolniBody.filter((kb: any) => kb.hodnoceni === 'N' && kb.odpovednaOsoba).map((kb: any) => kb.odpovednaOsoba);
-    return Array.from(new Set(positions)) as string[];
-  }, [record]);
-
-  const filteredKontrolniBody = useMemo(() => {
-    if (!record?.kontrolniBody) return [];
-    return record.kontrolniBody.filter((kb: any) => {
-      const sec = kb.sekce || "Ostatní";
-      if (visibleSections[sec] === false) return false;
-      if (onlyDefects && kb.hodnoceni !== 'N') return false;
-      if (filterPosition !== "all" && kb.hodnoceni === 'N' && kb.odpovednaOsoba !== filterPosition) return false;
-      return true;
-    });
-  }, [record, visibleSections, onlyDefects, filterPosition]);
-
-  const groupedKontrolniBody = useMemo(() => {
-    const groups: { sekce: string; items: any[] }[] = [];
-    const secMap = new Map<string, number>();
-    filteredKontrolniBody.forEach((kb: any) => {
-      const sec = kb.sekce || "Ostatní";
-      if (!secMap.has(sec)) { secMap.set(sec, groups.length); groups.push({ sekce: sec, items: [] }); }
-      groups[secMap.get(sec)!].items.push(kb);
-    });
-    return groups;
-  }, [filteredKontrolniBody]);
+  const activeChecklistFlat = useMemo(() => currentChecklistFlat.filter(p => !disabledSections.includes(p.sekce)), [currentChecklistFlat, disabledSections]);
+  const totalPoints = activeChecklistFlat.length > 0 ? activeChecklistFlat.length : 1;
+  const answeredPoints = activeChecklistFlat.filter(p => checklist[p.id] && checklist[p.id].hodnoceni !== '').length;
+  const progressPercent = Math.round((answeredPoints / totalPoints) * 100);
 
   const stats = useMemo(() => {
-    if (!record?.kontrolniBody) return { total: 0, V: 0, N: 0, NA: 0 };
+    const vals = activeChecklistFlat.map(p => checklist[p.id]).filter(Boolean);
     return {
-      total: record.kontrolniBody.length,
-      V: record.kontrolniBody.filter((k:any) => k.hodnoceni === 'V').length,
-      N: record.kontrolniBody.filter((k:any) => k.hodnoceni === 'N').length,
-      NA: record.kontrolniBody.filter((k:any) => k.hodnoceni === 'NA' || k.hodnoceni === 'NK').length,
+      V: vals.filter(v => v.hodnoceni === 'V').length,
+      N: vals.filter(v => v.hodnoceni === 'N').length,
+      NA: vals.filter(v => v.hodnoceni === 'NA').length,
+      NK: vals.filter(v => v.hodnoceni === 'NK').length,
+      unfilled: totalPoints - answeredPoints
     };
-  }, [record]);
+  }, [checklist, activeChecklistFlat, totalPoints, answeredPoints]);
 
-  if (!record) return isLoading ? <div className="min-h-[50vh] flex justify-center items-center"><Loader2 className="animate-spin text-blue-600 h-8 w-8" /></div> : <div className="p-8 text-center">Záznam nenalezen.</div>;
+  const handleRatingChange = (point: ChecklistPoint, rating: 'V' | 'N' | 'NA' | 'NK') => {
+    let text = "";
+    if (rating === 'V') text = "Bez zjištěných závad.";
+    if (rating === 'NK') text = "V rámci prověrky, prohlídky nebo auditu nebyla tato část kontrolována.";
+    if (rating === 'N') {
+      text = point.nText || "Zjištěn nedostatek. Je nutné zjednat nápravu.";
+      setPointDefects(prev => ({ ...prev, [point.id]: prev[point.id] && prev[point.id].length > 0 ? prev[point.id] : [createEmptyDefect()] }));
+    }
+    setChecklist(prev => ({ ...prev, [point.id]: { ...(prev[point.id] || {}), bod: point.id, hodnoceni: rating, textHodnoceni: text } }));
+  };
+
+  const updateDefect = (pointId: number, index: number, field: keyof DefectFormState, value: any) => {
+    setPointDefects(prev => {
+      const arr = [...(prev[pointId] || [])];
+      arr[index] = { ...arr[index], [field]: value };
+      return { ...prev, [pointId]: arr };
+    });
+  };
+
+  const handleNext = () => {
+    if (step === 1 && (!formData.klientId || formData.pracovisteIds.length === 0 || !formData.typKontroly)) {
+      toast({ title: "Chyba", description: "Prosím vyberte klienta a alespoň jedno pracoviště.", variant: "destructive" });
+      return;
+    }
+    setStep(s => s + 1); window.scrollTo(0, 0);
+  };
+
+  // --------------------------------------------------------------------------
+  // NOVÁ FUNKCE PRO ODESLÁNÍ E-MAILU
+  // --------------------------------------------------------------------------
+  const sendEmailToClient = async () => {
+    if (!selectedKlient?.email) {
+      toast({ title: "Chyba", description: "Klient nemá vyplněný e-mail ve své vizitce.", variant: "destructive" });
+      router.push(`/zaznamy/${justSavedRecordId}`);
+      return;
+    }
+
+    setIsSendingEmail(true);
+    try {
+      const odkaz = `${window.location.origin}/zaznamy/${justSavedRecordId}`;
+      
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: selectedKlient.email,
+          jmenoKlienta: selectedKlient.nazev,
+          cisloZpravy: justSavedRecordCislo,
+          odkaz: odkaz
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        toast({ title: "E-mail úspěšně odeslán", description: `Potvrzení bylo zasláno na: ${selectedKlient.email}` });
+      } else {
+        toast({ title: "Chyba při odesílání e-mailu", description: "E-mail se nepodařilo odeslat. Report je ale v pořádku uložen.", variant: "destructive" });
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Kritická chyba sítě", description: "Nepodařilo se připojit k poštovnímu serveru.", variant: "destructive" });
+    } finally {
+      setIsSendingEmail(false);
+      router.push(`/zaznamy/${justSavedRecordId}`);
+    }
+  };
+
+  const executeSave = async (isDraft: boolean = false) => {
+    setIsSaving(true);
+    try {
+      const year = new Date(formData.datum).getFullYear();
+      
+      // 1. GLOBÁLNÍ ČÍSLOVÁNÍ
+      const countInYear = zaznamy.filter(z => z.datum && new Date(z.datum).getFullYear() === year).length + 1;
+      const globalCislo = `${year}/${countInYear.toString().padStart(3, '0')}/${formData.typKontroly}`;
+      
+      // 2. KLIENTSKÉ ČÍSLOVÁNÍ
+      const countClientInYear = zaznamy.filter(z => z.klientId === formData.klientId && z.datum && new Date(z.datum).getFullYear() === year).length + 1;
+      const klientskeCislo = `${year}-K${countClientInYear.toString().padStart(3, '0')}/${formData.typKontroly}`;
+      
+      const finalKontrolniBody: any[] = [];
+      const aggregatedZavady: Zavada[] = [];
+      let defectCounter = 1;
+
+      activeChecklistFlat.forEach(basePoint => {
+        const pointState = checklist[basePoint.id];
+        if (!pointState || !pointState.hodnoceni || pointState.hodnoceni === 'NK') return;
+
+        const isDefect = pointState.hodnoceni === 'N';
+        const defectsForThisPoint = pointDefects[basePoint.id] || [];
+        const primaryDefect = isDefect && defectsForThisPoint.length > 0 ? defectsForThisPoint[0] : null;
+
+        finalKontrolniBody.push({
+          bod: basePoint.id,
+          otazka: basePoint.text || "Nepopsaný bod",
+          sekce: basePoint.sekce,
+          hodnoceni: pointState.hodnoceni,
+          doporuceni: pointState.doporuceni || "",
+          showDoporuceni: pointState.showDoporuceni || false,
+          poznamka: pointState.poznamka || "",
+          popis: primaryDefect?.popis || "",
+          navrhOpatreni: primaryDefect?.navrhOpatreni || "",
+          lokalizace: primaryDefect?.lokalizace || "",
+          terminOdstraneni: primaryDefect?.terminOdstraneni || "",
+          odpovednaOsoba: primaryDefect?.odpovednaOsoba === 'manual' ? primaryDefect.odpovednaOsobaManualni : (primaryDefect?.odpovednaOsoba || ""),
+          foto: primaryDefect?.foto || []
+        });
+
+        if (isDefect) {
+          defectsForThisPoint.forEach(def => {
+            aggregatedZavady.push({
+              id: def.uid, cislo: defectCounter++, bodKontroly: basePoint.id, sekce: basePoint.sekce,
+              popis: def.popis || "", navrhOpatreni: def.navrhOpatreni || "", terminOdstraneni: def.terminOdstraneni || "",
+              odpovednaOsoba: def.odpovednaOsoba === 'manual' ? def.odpovednaOsobaManualni : def.odpovednaOsoba,
+              stavOdstraneni: def.odstraneno ? 'odstranena' : 'otevrena', lokalizace: def.lokalizace || "",
+              zavaznost: def.zavaznost === 'none' ? "" : def.zavaznost,
+              datumOdstraneni: def.odstraneno ? def.datumOdstraneni : "",
+              zaznamProvedl: def.odstraneno ? (def.zaznamProvedl === 'manual' ? def.zaznamProvedlManualni : def.zaznamProvedl) : "",
+              foto: def.foto || []
+            } as any);
+          });
+        }
+      });
+
+      const hasUnresolvedDefects = finalKontrolniBody.some(kb => kb.hodnoceni === 'N');
+      const finalStav = (isDraft || hasUnresolvedDefects) ? 'otevreny' : 'uzavreny';
+
+      const newRecordRef = doc(collection(db, 'zaznamy'));
+      const newRecord = {
+        id: newRecordRef.id,
+        cislo: globalCislo,             
+        cisloKlientske: klientskeCislo, 
+        revize: parseInt(revisionNumber) || 0,
+        ...formData,
+        kontrolniBody: finalKontrolniBody,
+        zavady: aggregatedZavady,
+        stav: finalStav,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const sanitizedRecord = JSON.parse(JSON.stringify(newRecord));
+      await setDoc(newRecordRef, sanitizedRecord);
+
+      setZaznamy(prev => {
+        if (prev.some(p => p.id === sanitizedRecord.id)) return prev;
+        return [...prev, sanitizedRecord as any];
+      });
+      
+      toast({ title: isDraft ? "Uloženo jako rozpracované" : "Záznam vytvořen", description: `Kontrola úspěšně uložena do cloudu.` });
+      
+      // ZDE JE ZMĚNA: Uložíme ID reportu do stavu a ukážeme modal pro odeslání e-mailu
+      setJustSavedRecordId(sanitizedRecord.id);
+      setJustSavedRecordCislo(klientskeCislo);
+      setShowEmailPrompt(true);
+      const nalezeneEmail = selectedKlient?.email || selectedKlient?.kontaktniOsoba?.email || selectedKlient?.odpovedneOsoby?.find((o: any) => o.email)?.email || "";
+      setEmailRecipient(nalezeneEmail);
+      setShowSaveModal(false);
+      setIsSaving(false);
+      
+    } catch (e: any) {
+       console.error("Chyba při ukládání záznamu do Firebase:", e);
+       toast({ title: "Chyba uložení", description: e.message?.includes('size') ? "Záznam je příliš velký. Smažte některé fotografie." : "Nepodařilo se uložit záznam.", variant: "destructive" });
+       setIsSaving(false);
+    }
+  };
+
+  const renderDefectForm = (def: DefectFormState, idx: number, pointId: number) => {
+    const dostupneZavady = pointId ? (googleZavady[formData.typKontroly]?.[pointId] || []) : [];
+    const updateFn = (f: keyof DefectFormState, v: any) => updateDefect(pointId, idx, f, v);
+    const removeFn = () => setPointDefects(p => ({ ...p, [pointId]: p[pointId].filter((_, i) => i !== idx) }));
+    const ukazatSablony = !!pointId && pointId < 90000;
+
+    return (
+      <div key={def.uid} className="p-4 bg-white rounded-lg border border-amber-200/60 shadow-sm space-y-5 relative">
+        {pointDefects[pointId]?.length > 1 && (
+          <Button variant="ghost" size="icon" className="absolute top-2 right-2 text-muted-foreground hover:bg-red-50 hover:text-red-600" onClick={removeFn}><X className="h-4 w-4" /></Button>
+        )}
+        {ukazatSablony && (
+          <div className="bg-amber-50/50 -mx-4 -mt-4 p-4 rounded-t-lg border-b border-amber-100 mb-4">
+            <Label className="text-xs font-bold text-amber-900 mb-2 block">Rychlý výběr ze šablony zjištění</Label>
+            <Select disabled={dostupneZavady.length === 0} onValueChange={(v) => { const vybrana = dostupneZavady[parseInt(v)]; if (vybrana) { updateFn('popis', vybrana.popis); updateFn('navrhOpatreni', vybrana.opatreni); } }}>
+              <SelectTrigger className="bg-white"><SelectValue placeholder={dostupneZavady.length > 0 ? "-- Vyberte typický nedostatek --" : `Žádné šablony pro bod ID ${pointId}.`} /></SelectTrigger>
+              <SelectContent>{dostupneZavady.map((tz, i) => <SelectItem key={i} value={i.toString()}>{tz.nazev}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2"><Label className="text-xs">Místo zjištění (Lokalizace)</Label><Input value={def.lokalizace} onChange={(e) => updateFn('lokalizace', e.target.value)} className="bg-white h-10" /></div>
+          <div className="space-y-2">
+            <Label className="text-xs">Závažnost (Priorita)</Label>
+            <Select value={def.zavaznost || "none"} onValueChange={(v) => updateFn('zavaznost', v)}>
+              <SelectTrigger className="bg-white h-10"><SelectValue placeholder="Nevyplněno" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">-- Bez určení závažnosti --</SelectItem>
+                <SelectItem value="low">Nízká</SelectItem><SelectItem value="medium">Střední</SelectItem><SelectItem value="high">Vysoká</SelectItem><SelectItem value="critical">Kritická (Ihned řešit!)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2"><Label className="text-xs">Popis závady *</Label><Textarea value={def.popis} onChange={(e) => updateFn('popis', e.target.value)} className="bg-white min-h-[100px]" /></div>
+          <div className="space-y-2"><Label className="text-xs">Návrh opatření *</Label><Textarea value={def.navrhOpatreni} onChange={(e) => updateFn('navrhOpatreni', e.target.value)} className="bg-white min-h-[100px]" /></div>
+          <div className="space-y-2"><Label className="text-xs">Termín odstranění</Label><Input type="date" value={def.terminOdstraneni} onChange={(e) => updateFn('terminOdstraneni', e.target.value)} className="bg-white h-10" /></div>
+          <div className="space-y-2">
+            <Label className="text-xs">Odpovědná pozice k řešení</Label>
+            <Select value={def.odpovednaOsoba} onValueChange={(v) => updateFn('odpovednaOsoba', v)}>
+              <SelectTrigger className="bg-white h-10"><SelectValue placeholder="Vyberte pozici" /></SelectTrigger>
+              <SelectContent>
+                {uniquePositions.map((pozice: string) => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}
+                <SelectItem value="manual">-- Zadat manuálně --</SelectItem>
+              </SelectContent>
+            </Select>
+            {def.odpovednaOsoba === 'manual' && <Input placeholder="Vepište konkrétní pozici..." value={def.odpovednaOsobaManualni} onChange={(e) => updateFn('odpovednaOsobaManualni', e.target.value)} className="mt-2 h-10 bg-white border-dashed" />}
+          </div>
+        </div>
+
+        <div className="pt-2">
+          <div className="relative inline-block">
+            <Button variant="outline" size="sm" className="text-muted-foreground cursor-pointer"><Camera className="h-4 w-4 mr-2" /> Přidat fotodokumentaci</Button>
+            <Input type="file" accept="image/*" multiple className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
+              onChange={async (e) => {
+                const files = Array.from(e.target.files || []); if (files.length === 0) return;
+                const newPhotos: string[] = [];
+                for (const file of files) { const compressed = await compressImage(file); newPhotos.push(compressed); }
+                updateFn('foto', [...(def.foto || []), ...newPhotos]);
+              }}
+            />
+          </div>
+          {def.foto && def.foto.length > 0 && (
+            <div className="flex flex-wrap gap-3 mt-4 bg-muted/20 p-3 rounded-md border border-dashed">
+              {def.foto.map((photoStr, photoIdx) => (
+                <div key={photoIdx} className="relative inline-block">
+                  <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow z-10" onClick={() => { const newArr = [...(def.foto || [])]; newArr.splice(photoIdx, 1); updateFn('foto', newArr); }}><X className="h-3 w-3" /></Button>
+                  <img src={photoStr} alt="Závada" className="h-24 w-auto object-cover rounded shadow-sm border border-slate-200" />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="pt-4 mt-2 border-t border-amber-200/60 bg-amber-50/30 -mx-4 -mb-4 p-4 rounded-b-lg">
+          <div className="flex items-center gap-2 cursor-pointer select-none" onClick={() => { updateFn('odstraneno', !def.odstraneno); if (!def.odstraneno && !def.datumOdstraneni) updateFn('datumOdstraneni', new Date().toISOString().split('T')[0]); }}>
+            {def.odstraneno ? <CheckSquare className="h-5 w-5 text-green-600" /> : <Square className="h-5 w-5 text-muted-foreground" />}
+            <span className={cn("font-bold text-sm", def.odstraneno ? "text-green-700" : "text-muted-foreground")}>Nedostatek byl odstraněn</span>
+          </div>
+          {def.odstraneno && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 animate-in slide-in-from-top-2">
+              <div className="space-y-2"><Label className="text-xs">Datum odstranění</Label><Input type="date" value={def.datumOdstraneni} onChange={(e) => updateFn('datumOdstraneni', e.target.value)} className="bg-white h-10" /></div>
+              <div className="space-y-2">
+                <Label className="text-xs">Záznam o odstranění provedl</Label>
+                <Select value={def.zaznamProvedl} onValueChange={(v) => updateFn('zaznamProvedl', v)}>
+                  <SelectTrigger className="bg-white h-10"><SelectValue placeholder="Vyberte pozici" /></SelectTrigger>
+                  <SelectContent><SelectItem value="Provedl BPyes">Provedl (My / BPyes)</SelectItem>{uniquePositions.map((pozice: string) => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}<SelectItem value="manual">-- Zadat manuálně --</SelectItem></SelectContent>
+                </Select>
+                {def.zaznamProvedl === 'manual' && <Input placeholder="Vepište pozici..." value={def.zaznamProvedlManualni} onChange={(e) => updateFn('zaznamProvedlManualni', e.target.value)} className="mt-2 h-10 bg-white border-dashed" />}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderPoint = (point: ChecklistPoint, isCustom: boolean = false) => {
+    const state = checklist[point.id]; const defects = pointDefects[point.id] || [];
+    return (
+      <div key={point.id} className="pt-8 first:pt-0 space-y-4 relative group">
+        {isCustom && <Button variant="ghost" size="icon" className="absolute top-2 right-0 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setCustomPoints(prev => prev.filter(p => p.id !== point.id))}><X className="h-4 w-4" /></Button>}
+        <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+          <div className="flex gap-3 flex-1 w-full"><span className="font-mono text-muted-foreground font-bold">{isCustom ? '*' : point.id}.</span>{isCustom ? <Input value={point.text} onChange={(e) => setCustomPoints(prev => prev.map(p => p.id === point.id ? { ...p, text: e.target.value } : p))} className="font-medium text-[15px] h-8" /> : <p className="font-medium text-[15px]">{point.text}</p>}</div>
+          <div className="grid grid-cols-5 gap-1 w-full md:w-auto">
+            {[ { label: 'V', rating: 'V', color: 'bg-green-100 text-green-700 data-[state=active]:bg-green-600 data-[state=active]:text-white' }, { label: 'N', rating: 'N', color: 'bg-red-100 text-red-700 data-[state=active]:bg-red-600 data-[state=active]:text-white' }, { label: 'NA', rating: 'NA', color: 'bg-gray-100 text-gray-700 data-[state=active]:bg-gray-600 data-[state=active]:text-white' }, { label: 'NK', rating: 'NK', color: 'bg-gray-100 text-gray-700 data-[state=active]:bg-gray-600 data-[state=active]:text-white' } ].map((btn) => (
+              <Button key={btn.label} variant="outline" data-state={state?.hodnoceni === btn.rating ? 'active' : 'inactive'} className={cn("h-12 min-w-[50px] font-bold shadow-none transition-all", btn.color)} onClick={() => handleRatingChange(point, btn.rating as any)}>{btn.label}</Button>
+            ))}
+            <Button key="D" variant="outline" data-state={state?.showDoporuceni ? 'active' : 'inactive'} className={cn("h-12 min-w-[50px] font-bold shadow-none transition-all", "bg-blue-100 text-blue-700 data-[state=active]:bg-blue-600 data-[state=active]:text-white")} onClick={() => setChecklist(prev => ({ ...prev, [point.id]: { ...(prev[point.id] || { bod: point.id, hodnoceni: '' }), showDoporuceni: !prev[point.id]?.showDoporuceni } }))}>D</Button>
+          </div>
+        </div>
+        {state?.showDoporuceni && <div className="space-y-2 mt-4 ml-8"><Label className="text-xs text-blue-700 font-semibold">Doporučení auditora k tomuto bodu</Label><Textarea value={state.doporuceni || ""} onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], doporuceni: e.target.value }}))} className="bg-blue-50/50 border-blue-200" /></div>}
+        {state?.hodnoceni && state.hodnoceni !== 'NA' && (
+          <div className="space-y-4 ml-8">
+            {state.hodnoceni === 'N' && (
+              <div className="p-4 bg-amber-50/50 rounded-xl border border-amber-200 space-y-6"><div className="flex items-center gap-2 text-amber-800 font-bold text-sm uppercase"><AlertTriangle className="h-4 w-4" /> Evidence nedostatků</div><div className="space-y-6">{defects.map((def: any, idx: number) => renderDefectForm(def, idx, point.id))}</div><Button variant="outline" className="w-full border-dashed border-amber-300 text-amber-800 hover:bg-amber-100" onClick={() => setPointDefects(prev => ({ ...prev, [point.id]: [...(prev[point.id] || []), createEmptyDefect()] }))}><Plus className="h-4 w-4 mr-2" /> Přidat další závadu pod tento bod</Button></div>
+            )}
+            <div className="flex items-center gap-2">
+              {!state.poznamka && <Button variant="ghost" size="sm" onClick={() => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: " " }}))} className="text-muted-foreground"><Plus className="h-3 w-3 mr-1" /> Přidat interní poznámku</Button>}
+              {state.poznamka && <div className="flex-1 space-y-2 mt-2"><Label className="text-xs text-muted-foreground flex items-center gap-1"><StickyNote className="h-3 w-3" /> Interní poznámka k hodnocení bodu</Label><Textarea value={state.poznamka} onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], poznamka: e.target.value }}))} className="bg-muted/30" /></div>}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const filteredPointDefects = useMemo(() => {
+    return Object.entries(pointDefects).filter(([id]) => checklist[Number(id)]?.hodnoceni === 'N').map(([id, defects]) => {
+      const filtered = defects.filter(def => {
+        if (filterPosition !== 'all') { const actualPosition = def.odpovednaOsoba === 'manual' ? def.odpovednaOsobaManualni : def.odpovednaOsoba; if (actualPosition !== filterPosition) return false; }
+        return true;
+      });
+      return { id, defects: filtered };
+    }).filter(group => group.defects.length > 0);
+  }, [pointDefects, checklist, filterPosition]);
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative overflow-hidden print:p-0 print:m-0 print:space-y-0 bg-slate-50 min-h-screen print:bg-white">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative">
       
-      <style dangerouslySetInnerHTML={{__html: `
-        @media print {
-          @page { size: A4 portrait; margin: 15mm 15mm 20mm 15mm; }
-          body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: white !important; color: #000 !important; }
-          .page-break { page-break-before: always; }
-          .avoid-break { page-break-inside: avoid; break-inside: avoid; }
-        }
-      `}} />
-
-      {/* MODAL MAZÁNÍ */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4 print:hidden">
-          <Card className="w-full max-w-md shadow-2xl">
-            <CardHeader className="bg-red-50"><CardTitle className="text-red-700">Smazání reportu</CardTitle></CardHeader>
-            <CardContent className="p-6">
-              <p>Opravdu chcete nenávratně smazat tento report?</p>
-              <div className="flex justify-end gap-3 mt-6">
-                <Button variant="outline" onClick={() => setShowDeleteModal(false)}>Zrušit</Button>
-                <Button variant="destructive" onClick={handleDeleteRecord} disabled={isDeleting}>Smazat</Button>
-              </div>
+      {/* MODÁLNÍ OKNO: ZRUŠENÍ KONTROLY */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in">
+          <Card className="w-full max-w-md shadow-2xl border-red-200">
+            <CardHeader className="bg-red-50 border-b border-red-100 rounded-t-xl pb-4">
+              <CardTitle className="text-xl font-bold flex items-center gap-2 text-red-700">
+                <AlertTriangle className="h-6 w-6" /> Zrušit rozpracovanou kontrolu
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <p className="text-slate-700">Opravdu chcete zrušit tento rozpracovaný audit? <strong>Veškerá dosud nevyplněná data budou nenávratně ztracena.</strong> Do databáze se nic neuloží.</p>
             </CardContent>
+            <div className="p-4 border-t flex justify-end gap-2 bg-muted/20 rounded-b-xl">
+              <Button variant="outline" onClick={() => setShowCancelModal(false)}>Pokračovat v auditu</Button>
+              <Button variant="destructive" onClick={() => router.push('/')}>Ano, zrušit a odejít</Button>
+            </div>
           </Card>
         </div>
       )}
 
-      {/* MODAL FOTKA */}
-      {fullscreenImage && (
-        <div className="fixed inset-0 z-[1000] bg-black/90 flex flex-col items-center justify-center p-4 print:hidden" onClick={() => setFullscreenImage(null)}>
-          <div className="relative max-w-[95vw] max-h-[95vh]">
-            <Button variant="ghost" size="icon" className="absolute -top-12 right-0 text-white" onClick={() => setFullscreenImage(null)}><X className="h-8 w-8" /></Button>
-            <img src={fullscreenImage} alt="Zvětšená fotografie" className="max-w-full max-h-[90vh] object-contain rounded-md" onClick={(e) => e.stopPropagation()} />
-          </div>
+      {/* MODÁLNÍ OKNO: ULOŽENÍ */}
+      {showSaveModal && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in">
+          <Card className="w-full max-w-md shadow-2xl">
+            <CardHeader><CardTitle>Dokončení a uložení kontroly</CardTitle><CardDescription>{stats.N > 0 ? "Záznam obsahuje neshody. Bude zapsán ve stavu 'V řešení'." : "Před uložením záznamu potvrďte číslo revize dokumentu."}</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2"><Label>Číslo revize (R)</Label><div className="flex items-center gap-2"><span className="text-lg font-bold text-muted-foreground">R</span><Input type="number" min="0" value={revisionNumber} onChange={(e) => setRevisionNumber(e.target.value)} className="text-lg font-bold" /></div></div>
+            </CardContent>
+            <div className="p-4 border-t flex justify-end gap-2 bg-muted/20 rounded-b-xl">
+              <Button variant="outline" onClick={() => setShowSaveModal(false)}>Zrušit</Button>
+              <Button onClick={() => executeSave(false)} disabled={isSaving}>{isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Potvrdit a uložit do cloudu</Button>
+            </div>
+          </Card>
         </div>
       )}
 
-      {/* MODÁLNÍ OKNO PRO BEZPEČNÉ ODESLÁNÍ E-MAILU Z DETAILU */}
-      {showEmailModal && (
-        <div className="fixed inset-0 bg-black/60 z-[150] flex items-center justify-center p-4 animate-in fade-in print:hidden">
+      {/* MODÁLNÍ OKNO: VÝZVA K ODESLÁNÍ E-MAILU */}
+      {showEmailPrompt && justSavedRecordId && (
+        <div className="fixed inset-0 bg-black/60 z-[150] flex items-center justify-center p-4 animate-in fade-in">
           <Card className="w-full max-w-md shadow-2xl border-blue-200">
             <CardHeader className="bg-blue-50 border-b border-blue-100 rounded-t-xl pb-4">
               <CardTitle className="text-xl font-bold flex items-center gap-2 text-blue-900">
-                <Send className="h-6 w-6 text-blue-600" /> Odeslat report klientovi
+                <CheckCircle2 className="h-6 w-6 text-green-600" /> Kontrola byla uložena
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-4 text-slate-700">
-              <p>Přejete si odeslat e-mail s upozorněním a odkazem na klientský dispečink zprávy <strong>{record.cisloKlientske || record.cislo}</strong>?</p>
+              <p>Záznam byl úspěšně zaevidován pod číslem <strong>{justSavedRecordCislo}</strong>.</p>
+              <p>Přejete si nyní odeslat e-mail s upozorněním a odkazem na klientský dispečink reportu?</p>
               
               <div className="space-y-2 pt-2">
-                <Label className="text-xs font-bold text-slate-700">E-mail příjemce:</Label>
-                <Input 
-                  value={emailRecipient} 
-                  onChange={(e) => setEmailRecipient(e.target.value)}
-                  placeholder="Zadejte e-mailovou adresu..."
-                  className="bg-white h-10 border-slate-200 focus:border-blue-500"
-                />
+                <Label>E-mail příjemce (můžete upravit):</Label>
+                <div className="flex items-center gap-2">
+                  <Input 
+                    value={emailRecipient} 
+                    onChange={(e) => setEmailRecipient(e.target.value)}
+                    placeholder="Zadejte e-mail..."
+                    className="bg-white"
+                  />
+                </div>
               </div>
             </CardContent>
             <div className="p-4 border-t flex justify-end gap-2 bg-muted/20 rounded-b-xl">
-              <Button variant="outline" onClick={() => setShowEmailModal(false)}>Zrušit</Button>
+              <Button variant="outline" onClick={() => router.push(`/zaznamy/${justSavedRecordId}`)}>Neodesílat, přejít na detail</Button>
               <Button 
                 onClick={async () => {
-                  if (!emailRecipient.trim()) {
-                    toast({ title: "Chyba", description: "Zadejte platný e-mail.", variant: "destructive" });
-                    return;
-                  }
                   setIsSendingEmail(true);
                   try {
-                    const odkaz = `${window.location.origin}/zaznamy/${record.id}`;
-                    const response = await fetch('/api/send-email', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        email: emailRecipient.trim(),
-                        jmenoKlienta: klient?.nazev || "Klient",
-                        cisloZpravy: record.cisloKlientske || record.cislo,
-                        odkaz: odkaz
-                      })
-                    });
+                    const odkaz = `${window.location.origin}/zaznamy/${justSavedRecordId}`;
+                    const response = await fetch('/api/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: emailRecipient, jmenoKlienta: selectedKlient?.nazev || "Klient", cisloZpravy: justSavedRecordCislo, odkaz: odkaz }) });
                     const result = await response.json();
-                    if (result.success) {
-                      toast({ title: "E-mail úspěšně odeslán", description: `Zpráva byla zaslána na: ${emailRecipient}` });
-                      setShowEmailModal(false);
-                    } else {
-                      toast({ title: "Chyba při odesílání", description: "E-mail se nepodařilo odeslat.", variant: "destructive" });
-                    }
-                  } catch (err) {
-                    toast({ title: "Kritická chyba", description: "Chyba připojení k serveru.", variant: "destructive" });
-                  } finally {
-                    setIsSendingEmail(false);
-                  }
+                    if (result.success) toast({ title: "Odesláno", description: `E-mail odeslán na: ${emailRecipient}` });
+                    else toast({ title: "Chyba", description: "Nepodařilo se odeslat.", variant: "destructive" });
+                  } catch (err) { toast({ title: "Kritická chyba", description: "Chyba sítě.", variant: "destructive" }); } 
+                  finally { setIsSendingEmail(false); router.push(`/zaznamy/${justSavedRecordId}`); }
                 }} 
-                disabled={isSendingEmail || !emailRecipient.trim()} 
+                disabled={isSendingEmail || emailRecipient.trim() === ""} 
                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold"
               >
-                {isSendingEmail ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />} Odeslat report
+                {isSendingEmail ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />} Odeslat
               </Button>
             </div>
           </Card>
         </div>
       )}
 
-      {/* ================================================================= */}
-      {/* 1. TISKOVÁ VERZE (PDF)                                            */}
-      {/* ================================================================= */}
-      <div className="hidden print:block text-slate-900 w-full bg-white text-[13px]">
-        
-        <div className="pb-8">
-          <div className="mb-8 flex justify-between items-start">
-            <img src="/logo.png" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src="/logo.svg"; }} alt="Logo" className="h-10 object-contain" />
-            <div className="text-right text-[10px] text-slate-500 uppercase font-bold">AuditFlow | BPyes System</div>
-          </div>
-
-          <h1 className="text-xl font-bold uppercase text-slate-900 mb-4 leading-tight">
-            {record.typKontroly === 'BOZPaPO' ? 'PROVĚRKA BOZP A PREVENTIVNÍ POŽÁRNÍ PROHLÍDKA, KONTROLA DOKUMENTACE POŽÁRNÍ OCHRANY' : 
-             record.typKontroly === 'PPP' ? 'PREVENTIVNÍ POŽÁRNÍ PROHLÍDKA' : 'PROVĚRKA BOZP PRACOVIŠTĚ'}
-          </h1>
-          
-          <div className="text-base font-bold mb-8 pb-4 border-b-2 border-slate-100">
-            ČÍSLO ZPRÁVY: {record.cisloKlientske || record.cislo} | REVIZE: R{record.revize || 0}
-          </div>
-
-          <div className="grid grid-cols-2 gap-8 mb-10">
-            <div>
-              <p className="font-bold uppercase text-[11px] text-slate-500 mb-1">ZPRACOVATEL / POSKYTOVATEL:</p>
-              <p className="font-bold text-sm">{auditorConfig?.firmaNazev || 'BPyes s.r.o.'}</p>
-              <p>{auditorConfig?.firmaAdresa || 'Sídlo neuvedeno'}</p>
-              <p>IČO: {auditorConfig?.firmaIco || '-'}</p>
-              <p>E-mail: {auditorConfig?.email || '-'}</p>
-              <p>Telefon: {auditorConfig?.telefon || '-'}</p>
-            </div>
-            
-            <div>
-              <p className="font-bold uppercase text-[11px] text-slate-500 mb-1">KONTROLOVANÝ SUBJEKT / KLIENT:</p>
-              <p className="font-bold text-sm">{klient?.nazev}</p>
-              
-              <p>Sídlo: {(() => {
-                const adresa = klient?.adresa || '';
-                const mestoPSC = klient?.mesto ? `${klient.psc || ''} ${klient.mesto}`.trim() : '';
-                const plnaAdresa = [adresa, mestoPSC].filter(Boolean).join(', ');
-                return plnaAdresa || 'Neuvedeno';
-              })()}</p>
-              <p>IČO: {klient?.ico}</p>
-              
-              <div className="mt-2">
-                <span className="font-bold">Místo prověrky:</span><br/>
-                {pracovisteList.map((p: any) => <div key={p.id} className="text-xs leading-snug">{p.fullDisplay}</div>)}
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-12">
-            <p className="font-bold uppercase text-[11px] text-slate-500 mb-2">PROHLÁŠENÍ O SEZNÁMENÍ:</p>
-            <p className="text-justify leading-relaxed italic text-slate-700">
-              Kontrolovaný subjekt / zástupce klienta svým níže uvedeným podpisem stvrzuje, že byl v plném rozsahu, prokazatelně a jasně seznámen se všemi zjištěnými legislativními nedostatky, systémovými neshodami a doporučeními, která jsou detailně specifikována uvnitř této auditní zprávy. Souhlasí s navrženými nápravnými opatřeními a zavazuje se k jejich vyřešení v definovaných termínech.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-12 mt-16 pt-8">
-            <div className="flex flex-col">
-               <p className="font-bold uppercase text-[11px] mb-2">PROVEDL:</p>
-               <div className="h-24 w-full relative mb-2">
-                 {auditorConfig?.razitkoBase64 && (
-                   <img src={auditorConfig.razitkoBase64} alt="Razítko" className="absolute left-0 bottom-0 h-24 w-24 object-contain mix-blend-multiply" />
-                 )}
-                 {auditorConfig?.podpisBase64 && (
-                   <img src={auditorConfig.podpisBase64} alt="Podpis" className="absolute left-16 bottom-2 h-16 w-32 object-contain mix-blend-multiply" />
-                 )}
-               </div>
-               <div className="border-b border-black w-full"></div>
-               <div className="pt-2">
-                 <p className="font-bold text-base">{auditorConfig?.titul ? auditorConfig.titul + ' ' : ''}{auditorConfig?.jmeno || 'Auditor'}</p>
-                 {auditorConfig?.certifikace?.map((cert: any) => (
-                   <p key={cert.id} className="text-[10px] leading-tight text-slate-600 mt-0.5">{cert.nazev}{cert.cislo ? `, ${cert.cislo}` : ''}</p>
-                 ))}
-               </div>
-            </div>
-            <div className="flex flex-col">
-               <p className="font-bold uppercase text-[11px] mb-2">ZÁSTUPCE SUBJEKTU / KLIENTA:</p>
-               <div className="h-24 w-full mb-2"></div>
-               <div className="border-b border-black w-full"></div>
-               <div className="pt-2">
-                 <p className="text-xs text-slate-400 italic">Podpis a datum seznámení</p>
-               </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="page-break"></div>
-
-        <div className="pt-4">
-          <h2 className="text-base font-bold mb-6 uppercase border-b pb-2">1. SHRNUTÍ A STATISTIKY</h2>
-          <div className="grid grid-cols-4 gap-4 text-center mb-8">
-            <div className="border p-3 bg-slate-50"><div className="text-xl font-bold">{stats.total}</div><div className="text-[9px] font-bold">BODY CELKEM</div></div>
-            <div className="border p-3 bg-green-50"><div className="text-xl font-bold text-green-700">{stats.V}</div><div className="text-[9px] font-bold text-green-700">VYHOVUJE</div></div>
-            <div className="border p-3 bg-red-50"><div className="text-xl font-bold text-red-700">{stats.N}</div><div className="text-[9px] font-bold text-red-700">NESHODY (N)</div></div>
-            <div className="border p-3 bg-slate-50"><div className="text-xl font-bold text-slate-500">{stats.NA}</div><div className="text-[9px] font-bold text-slate-500">NEHODNOCENO</div></div>
-          </div>
-          <div className="mb-8">
-            <p className="text-[11px] font-bold uppercase text-slate-500 mb-1">ZÁVĚREČNÉ VYHODNOCENÍ AUDITORA:</p>
-            <div className="border p-4 bg-slate-50 italic text-slate-800 leading-relaxed whitespace-pre-wrap">{record.poznamka || "Nebyl vložen žádný text."}</div>
-          </div>
-          <div>
-            <p className="text-[11px] font-bold uppercase text-slate-500 mb-2">SEZNAM ZÚČASTNĚNÝCH OSOB:</p>
-            <table className="w-full border-collapse border text-xs">
-              <thead className="bg-slate-100"><tr><th className="border p-2 text-left">Jméno a příjmení</th><th className="border p-2 text-left">Pozice / Vztah k subjektu</th></tr></thead>
-              <tbody>
-                {record.ucastnici?.map((u: any, i: number) => (
-                  <tr key={i}><td className="border p-2 font-bold">{u.jmeno}</td><td className="border p-2">{u.pozice}</td></tr>
-                )) || <tr><td colSpan={2} className="border p-2 text-center">Neuvedeno</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="page-break"></div>
-
-        <div className="pt-4">
-          <h2 className="text-base font-bold mb-8 uppercase border-b pb-2">2. KOMPLETNÍ AUDITNÍ PROTOKOL ZJIŠTĚNÍ</h2>
-          <div className="space-y-6">
-            {groupedKontrolniBody.map((group) => (
-               group.items.map((kb: any) => {
-                 const isDefect = kb.hodnoceni === 'N';
-                 return (
-                   <div key={kb.id || kb.bod} className="avoid-break border-b pb-6 mb-6">
-                     <div className="flex justify-between items-start mb-2">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">[{kb.bod}] KAPITOLA: {group.sekce}</div>
-                        <div className={cn("text-[9px] font-bold px-2 py-0.5 border rounded uppercase", isDefect ? "text-red-700 border-red-200 bg-red-50" : "text-green-700 border-green-200 bg-green-50")}>{isDefect ? 'Neshoda' : 'Vyhovuje'}</div>
-                     </div>
-                     <div className="font-bold text-slate-900 mb-3">{kb.otazka || kb.popis}</div>
-                     {isDefect && (
-                       <div className="bg-slate-50 p-3 border rounded space-y-3">
-                         <div className="grid grid-cols-2 gap-4 text-[11px]">
-                           <div><span className="text-slate-500 font-bold block">NÁVRH OPATŘENÍ:</span>{kb.navrhOpatreni}</div>
-                           <div><span className="text-slate-500 font-bold block">MÍSTO:</span><span className="font-bold text-blue-800">{kb.lokalizace}</span></div>
-                           <div><span className="text-slate-500 font-bold block">TERMÍN:</span>{kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : '-'}</div>
-                           <div><span className="text-slate-500 font-bold block">ODPOVĚDNÁ POZICE:</span><span className="font-bold">{kb.odpovednaOsoba}</span></div>
-                         </div>
-                         {kb.foto && kb.foto.length > 0 && (
-                           <div className="pt-2 flex flex-wrap gap-2">
-                             {kb.foto.map((f: string, idx: number) => <img src={f} key={idx} className="h-40 w-40 object-cover border bg-white" />)}
-                           </div>
-                         )}
-                       </div>
-                     )}
-                   </div>
-                 )
-               })
-            ))}
-          </div>
-        </div>
+      <div className="flex flex-col gap-4">
+        <div className="flex justify-between items-center"><h1 className="text-3xl font-bold tracking-tight">Nová kontrola</h1>{step > 1 && <div className="flex items-center gap-3 w-48"><span className="text-xs font-bold text-muted-foreground uppercase">{progressPercent}%</span><Progress value={progressPercent} className="h-2" /></div>}</div>
+        <div className="flex items-center gap-2">{[1, 2, 3].map((i) => (<div key={i} className="flex items-center gap-2"><div className={cn("h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold", step === i ? "bg-primary text-white" : step > i ? "bg-muted text-muted-foreground" : "bg-green-100 text-green-700")}>{step > i ? <CheckCircle2 className="h-5 w-5" /> : i}</div>{i < 3 && <div className={cn("h-px w-8 bg-muted", step > i && "bg-green-200")} />}</div>))}<span className="ml-4 text-sm font-medium text-muted-foreground">{step === 1 ? "Výběr klienta a typu" : step === 2 ? "Kontrolní list" : "Shrnutí"}</span></div>
       </div>
 
-      {/* ================================================================= */}
-      {/* 2. WEBOVÁ VERZE (INTERAKTIVNÍ DASHBOARD)                          */}
-      {/* ================================================================= */}
-      <div className="print:hidden space-y-8">
-        
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <div className="space-y-2">
-            <Button variant="ghost" size="sm" className="p-0 h-auto text-muted-foreground hover:bg-transparent hover:text-slate-900 -ml-2" onClick={() => router.push("/")}>
-              <ChevronLeft className="h-4 w-4 mr-1" /> Zpět na přehled
-            </Button>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">{record.cisloKlientske || record.cislo}</h1>
-              <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border", record.stav === 'uzavreny' ? "text-green-700 bg-green-50 border-green-200" : "text-amber-700 bg-amber-50 border-amber-200")}>
-                {record.stav === 'uzavreny' ? 'Uzavřeno' : 'V řešení'}
-              </span>
-            </div>
-            <p className="text-sm text-slate-500 font-medium flex items-center gap-2">
-              <Clock className="h-4 w-4" /> Audit ze dne {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : '-'}
-            </p>
-          </div>
-          
-          <div className="flex flex-wrap gap-2 w-full md:w-auto">
-            {/* TLAČÍTKO PRO ODESLÁNÍ E-MAILU - KLIKNUTÍM SE OTEVŘE MODAL */}
-            <Button 
-              onClick={() => {
-                const email = extractEmail(klient);
-                setEmailRecipient(email);
-                setShowEmailModal(true);
-              }} 
-              disabled={isSendingEmail}
-              variant="outline"
-              className="h-11 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 shadow-sm font-bold"
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Odeslat e-mail
-            </Button>
-            <Button className="h-11 px-6 shadow-sm font-bold bg-blue-600 hover:bg-blue-700 text-white" onClick={handlePrint} disabled={isPreparingPdf}>
-              {isPreparingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Printer className="h-4 w-4 mr-2" />}
-              {isPreparingPdf ? "Příprava PDF..." : "Tisk reportu"}
-            </Button>
-            {isAdmin && (
-              <>
-                <Button variant="outline" className="h-11 bg-white" onClick={() => router.push(`/upravit-zaznam/${record.id}`)}>
-                  <Edit className="h-4 w-4 mr-2" /> Upravit
-                </Button>
-                <Button variant="outline" className="h-11 text-red-600 hover:bg-red-50 hover:text-red-700 border-red-200 bg-white" onClick={() => setShowDeleteModal(true)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </>
-            )}
-          </div>
+      {step === 1 && (
+        <Card className="border-none shadow-sm"><CardHeader><CardTitle>Základní parametry kontroly</CardTitle></CardHeader><CardContent className="space-y-6"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-2"><Label>Klient</Label><Select value={formData.klientId} onValueChange={(v) => setFormData({...formData, klientId: v, pracovisteIds: []})}><SelectTrigger className="h-11"><SelectValue placeholder="Vyberte klienta" /></SelectTrigger><SelectContent>{klienti.map(k => <SelectItem key={k.id} value={k.id}>{k.nazev}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label>Pracoviště / Provozovny</Label>{!formData.klientId ? <div className="h-11 bg-muted rounded-md flex items-center px-3 text-sm italic">Nejprve zvolte klienta</div> : <div className="grid grid-cols-1 gap-2 p-3 border rounded-md bg-white max-h-[150px] overflow-y-auto">{(selectedKlient?.pracoviste || []).map((p: any) => (<label key={p.id} className="flex items-center gap-3 cursor-pointer"><Checkbox checked={formData.pracovisteIds.includes(p.id)} onCheckedChange={(c) => { setFormData(prev => ({...prev, pracovisteIds: c ? [...prev.pracovisteIds, p.id] : prev.pracovisteIds.filter(id => id !== p.id)})) }} /><span className="text-sm font-medium leading-none">{p.nazev}</span></label>))}</div>}</div><div className="space-y-2 md:col-span-2"><Label>Typ kontroly</Label><Select value={formData.typKontroly} onValueChange={(v: any) => setFormData({...formData, typKontroly: v})}><SelectTrigger className="h-11"><SelectValue placeholder="Zvolte typ kontroly" /></SelectTrigger><SelectContent><SelectItem value="BOZPaPO">BOZPaPO</SelectItem><SelectItem value="PPP">PPP</SelectItem><SelectItem value="PBOZP">PBOZP</SelectItem></SelectContent></Select></div><div className="space-y-2"><Label>Datum kontroly</Label><Input type="date" className="h-11" value={formData.datum} onChange={(e) => setFormData({...formData, datum: e.target.value})} /></div></div><div className="space-y-4 pt-6 border-t mt-6"><div className="flex justify-between items-center"><Label>Účastníci kontroly</Label><Button variant="ghost" size="sm" onClick={() => setFormData({...formData, ucastnici: [...formData.ucastnici, {jmeno: '', pozice: ''}]})}><Plus className="mr-2 h-4 w-4" /> Přidat osobu</Button></div>{formData.ucastnici.map((u, i) => (<div key={i} className="flex gap-2 items-center"><Input placeholder="Jméno a příjmení" value={u.jmeno} onChange={(e) => { const next = [...formData.ucastnici]; next[i].jmeno = e.target.value; setFormData({...formData, ucastnici: next}); }} className="flex-1" /><Select value={u.pozice} onValueChange={(val) => { const next = [...formData.ucastnici]; next[i].pozice = val; setFormData({...formData, ucastnici: next}); }}><SelectTrigger className="flex-1"><SelectValue placeholder="Vyberte pozici" /></SelectTrigger><SelectContent>{uniquePositions.map((pozice: string) => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}{uniquePositions.length === 0 && <SelectItem value="Neuvedeno">Žádné pozice u klienta</SelectItem>}</SelectContent></Select>{formData.ucastnici.length > 1 && <Button variant="ghost" size="icon" onClick={() => setFormData({...formData, ucastnici: formData.ucastnici.filter((_, idx) => idx !== i)})} className="shrink-0 text-muted-foreground hover:text-red-500"><X className="h-4 w-4" /></Button>}</div>))}</div></CardContent></Card>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-6">
+          <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm pb-4 border-b"><div className="flex justify-between items-center"><h2 className="font-bold text-lg">Průběh auditování</h2><span className="px-3 py-1 rounded-full bg-secondary text-secondary-foreground text-xs font-bold">Typ: {formData.typKontroly}</span></div></div>
+          {formData.typKontroly === 'BOZPaPO' && <Accordion type="multiple" className="space-y-4" defaultValue={["A"]}>{CHECKLIST_SECTIONS.map((section) => { const sectionName = `ODDÍL ${section.id}: ${section.title}`; const isSectionDisabled = disabledSections.includes(sectionName); return (<div key={section.id} className={cn("border rounded-lg bg-white shadow-sm relative", isSectionDisabled && "opacity-50")}><div className="absolute top-4 right-10 z-10 flex items-center gap-2 bg-white/90 px-3 py-1.5 rounded-full shadow-sm border"><Checkbox id={`disable-${section.id}`} checked={!isSectionDisabled} onCheckedChange={(c) => setDisabledSections(prev => c ? prev.filter(s => s !== sectionName) : [...prev, sectionName])} /><label htmlFor={`disable-${section.id}`} className="text-xs font-bold cursor-pointer select-none">Zahrnout do prověrky</label></div><AccordionItem value={section.id} className={cn("border-none", isSectionDisabled && "pointer-events-none")}><AccordionTrigger className="px-6 py-4"><div className="flex flex-col items-start gap-1"><span className="text-xs font-bold uppercase text-muted-foreground">Oddíl {section.id}</span><span className="text-base font-bold">{section.title}</span></div></AccordionTrigger><AccordionContent className="px-6 pb-6 space-y-8 pt-4 divide-y">{section.points.map(p => renderPoint(p, false))}</AccordionContent></AccordionItem></div>) })}</Accordion>}
+          {formData.typKontroly === 'PPP' && <div className="border rounded-lg bg-white overflow-hidden shadow-sm"><div className="px-6 py-4 bg-muted/10 border-b"><span className="text-base font-bold">Preventivní požární prohlídka</span></div><div className="px-6 pb-6 space-y-8 pt-4 divide-y">{CHECKLIST_PPP.map(p => renderPoint(p, false))}</div></div>}
+          {formData.typKontroly === 'PBOZP' && <div className="border rounded-lg bg-white overflow-hidden shadow-sm"><div className="px-6 py-4 bg-muted/10 border-b"><span className="text-base font-bold">Prověrka BOZP pracoviště</span></div><div className="px-6 pb-6 space-y-8 pt-4 divide-y">{CHECKLIST_PBOZP.map(p => renderPoint(p, false))}</div></div>}
+          <div className="border rounded-lg bg-white overflow-hidden shadow-sm border-blue-200 mt-6"><div className="px-6 py-4 bg-blue-50 border-b flex justify-between items-center"><span className="text-base font-bold text-blue-900">Vlastní zjištění (Volné body)</span><Button size="sm" onClick={() => setCustomPoints(prev => [...prev, { id: 99000 + prev.length, text: "" }])}><Plus className="h-4 w-4 mr-2" /> Přidat vlastní bod</Button></div>{customPoints.length > 0 ? <div className="px-6 pb-6 space-y-8 pt-4 divide-y">{customPoints.map(p => renderPoint(p, true))}</div> : <div className="p-8 text-center text-muted-foreground text-sm italic">Zatím nebyly přidány žádné volné body.</div>}</div>
         </div>
+      )}
 
-        <Card className="border-blue-100 bg-blue-50/40 shadow-sm">
-          <CardContent className="p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div className="flex items-center gap-2 text-blue-900">
-              <FileText className="h-5 w-5" />
-              <div>
-                <h3 className="font-bold text-sm">Zobrazení protokolu</h3>
-                <p className="text-xs text-blue-700/70">Upravte si výpis závad na obrazovce</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              {uniquePositionsInRecord.length > 0 && (
-                <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border shadow-sm w-full md:w-auto">
-                  <span className="text-xs font-bold text-slate-500">Pozice:</span>
-                  <Select value={filterPosition} onValueChange={setFilterPosition}>
-                    <SelectTrigger className="h-8 border-none p-0 focus:ring-0 shadow-none text-xs font-bold w-40"><SelectValue placeholder="Všechny pozice" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Zobrazit vše</SelectItem>
-                      {uniquePositionsInRecord.map(pos => <SelectItem key={pos} value={pos}>{pos}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <div className="flex items-center space-x-2 bg-white px-3 py-2 rounded-lg border shadow-sm h-11 cursor-pointer hover:bg-slate-50" onClick={() => setOnlyDefects(!onlyDefects)}>
-                <Checkbox id="onlyDefects" checked={onlyDefects} onCheckedChange={(c) => setOnlyDefects(!!c)} />
-                <label className="text-xs font-bold text-slate-700 cursor-pointer select-none">Pouze neshody</label>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-          <div className="md:col-span-2 space-y-6">
-            <h2 className="text-xl font-bold text-slate-800">{onlyDefects ? t.nadpis_zavady : t.nadpis_komplet} <span className="text-slate-400 font-normal">({filteredKontrolniBody.length})</span></h2>
-            
-            <div className="space-y-4">
-              {groupedKontrolniBody.map((group) => {
-                const { sekce, items } = group;
-                const isCollapsed = collapsedGroups[sekce];
-                const groupStats = { N: items.filter(i => i.hodnoceni === 'N').length };
-
-                return (
-                  <Card key={sekce} className="border-slate-200 shadow-sm overflow-hidden transition-all duration-200">
-                    <div 
-                      onClick={() => toggleGroup(sekce)} 
-                      className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-slate-50 border-b border-slate-100 cursor-pointer hover:bg-slate-100/70 transition-colors"
-                    >
-                      <h3 className="font-bold text-slate-800 text-sm uppercase">{sekce}</h3>
-                      <div className="flex items-center gap-4 mt-2 sm:mt-0">
-                        {groupStats.N > 0 && <span className="text-[10px] font-bold uppercase tracking-wider text-red-700 bg-red-100 px-2 py-0.5 rounded shadow-sm">Neshod: {groupStats.N}</span>}
-                        <ChevronDown className={cn("h-5 w-5 text-slate-400 transition-transform", isCollapsed && "-rotate-90")} />
-                      </div>
-                    </div>
-
-                    {!isCollapsed && (
-                      <CardContent className="p-0 divide-y divide-slate-100">
-                        {items.map((kb: any) => {
-                          const isDefect = kb.hodnoceni === 'N';
-                          const bodId = kb.id || kb.bod;
-                          const isResolvedByClient = !!kb.vyresenoKlientem;
-
-                          return (
-                            <div key={bodId} className={cn("p-5 transition-colors", isDefect ? "bg-white" : "bg-slate-50/30")}>
-                              <div className="flex justify-between items-start gap-4 mb-4">
-                                <div className="flex gap-3">
-                                  <span className={cn("font-mono text-xs font-bold h-7 w-7 rounded-lg flex items-center justify-center shrink-0 border", isDefect ? "bg-red-50 text-red-700 border-red-100" : "bg-green-50 text-green-700 border-green-100")}>{kb.bod}</span>
-                                  <div>
-                                    <h4 className={cn("font-bold text-[14px] leading-snug", isDefect ? "text-slate-900" : "text-slate-600")}>{kb.otazka || kb.popis}</h4>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  {isDefect && isResolvedByClient && (
-                                    <span className="text-[10px] font-bold uppercase px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200 shadow-sm flex items-center gap-1"><Clock className="h-3 w-3" /> Vyřešeno</span>
-                                  )}
-                                  <span className={cn("text-[10px] font-bold uppercase px-2 py-1 rounded shadow-sm border", isDefect ? (isResolvedByClient ? "bg-slate-50 text-slate-500 border-slate-200" : "bg-red-600 text-white border-red-700") : "bg-emerald-50 text-emerald-700 border-emerald-200")}>
-                                    {isDefect ? 'Neshoda' : 'Vyhovuje'}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {isDefect && (
-                                <div className="ml-10 space-y-4">
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm">
-                                    <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Návrh opatření</span><p className="font-medium text-slate-900 leading-relaxed">{kb.navrhOpatreni || '-'}</p></div>
-                                    <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Místo prověrky</span><p className="font-bold text-blue-900">{kb.lokalizace || '-'}</p></div>
-                                    <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Termín k odstranění</span><p className="font-medium text-slate-900">{kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : '-'}</p></div>
-                                    <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Odpovědná pozice</span><p className="font-bold text-slate-900">{kb.odpovednaOsoba || '-'}</p></div>
-                                  </div>
-
-                                  {kb.foto && kb.foto.length > 0 && (
-                                    <div>
-                                      <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-2">Fotodokumentace závady</span>
-                                      <div className="flex flex-wrap gap-3">
-                                        {kb.foto.map((f: string, i: number) => (
-                                          <div key={i} onClick={() => setFullscreenImage(f)} className="cursor-zoom-in relative group overflow-hidden rounded-lg border border-slate-200 shadow-sm bg-white p-1">
-                                            <img src={f} alt="Foto" className="h-24 w-24 sm:h-32 sm:w-32 object-cover rounded group-hover:scale-105 transition-transform" />
-                                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none"><Camera className="text-white h-6 w-6" /></div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {!isAdmin && (
-                                    <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 mt-4 shadow-sm">
-                                      {isResolvedByClient ? (
-                                         <div className="space-y-3 bg-white p-4 rounded-lg border border-blue-50">
-                                           <div className="flex items-center gap-2 text-emerald-700 font-bold text-sm mb-2"><CheckCircle2 className="h-5 w-5" /> Závada byla nahlášena jako odstraněná</div>
-                                           <div className="grid grid-cols-2 gap-4 text-sm">
-                                             <div><span className="text-xs text-slate-500 block">Nahlásil(a):</span> <span className="font-bold">{kb.jmenoVyresitele}</span></div>
-                                             <div><span className="text-xs text-slate-500 block">Datum odstranění:</span> <span className="font-bold">{kb.datumVyreseniKlientem ? new Date(kb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</span></div>
-                                           </div>
-                                           {kb.poznamkaKlienta && <div className="pt-2 border-t border-slate-100"><span className="text-xs text-slate-500 block mb-1">Poznámka k řešení:</span><p className="text-sm italic text-slate-700">{kb.poznamkaKlienta}</p></div>}
-                                           {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
-                                             <div className="pt-3 border-t border-slate-100 flex gap-2">
-                                               {kb.fotoVyreseni.map((f: string, i: number) => (
-                                                 <img key={i} src={f} onClick={() => setFullscreenImage(f)} className="h-16 w-16 object-cover rounded border cursor-zoom-in hover:opacity-80" />
-                                               ))}
-                                             </div>
-                                           )}
-                                           <Button variant="ghost" size="sm" onClick={() => handleCancelResolve(bodId)} className="text-red-600 hover:text-red-700 hover:bg-red-50 mt-2 p-0 h-auto font-bold text-xs">Vrátit závadu zpět do řešení</Button>
-                                         </div>
-                                      ) : (
-                                        resolvingBod === bodId ? (
-                                          <div className="bg-white p-4 rounded-lg border border-blue-200 shadow-lg animate-in slide-in-from-top-2">
-                                            <h5 className="font-bold text-blue-900 mb-4 text-sm">Nahlášení odstranění závady</h5>
-                                            <div className="space-y-4">
-                                              <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-1.5"><Label className="text-xs font-bold text-slate-700">Kdy bylo odstraněno?</Label><Input type="date" value={resolveData.datum} onChange={e => setResolveData(p => ({...p, datum: e.target.value}))} className="h-9" /></div>
-                                                <div className="space-y-1.5"><Label className="text-xs font-bold text-slate-700">Vaše jméno</Label><Input value={resolveData.jmeno} onChange={e => setResolveData(p => ({...p, jmeno: e.target.value}))} placeholder="Jan Novák" className="h-9" /></div>
-                                              </div>
-                                              <div className="space-y-1.5"><Label className="text-xs font-bold text-slate-700">Doplňující komentář</Label><Textarea value={resolveData.poznamka} onChange={e => setResolveData(p => ({...p, poznamka: e.target.value}))} placeholder="Jak byla závada odstraněna..." className="min-h-[60px] text-sm" /></div>
-                                              <div className="space-y-1.5">
-                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-2"><Camera className="h-4 w-4 text-blue-600" /> Nahrát fotodůkaz (volitelně)</Label>
-                                                <Input type="file" accept="image/*" multiple onChange={async (e) => {
-                                                    const files = Array.from(e.target.files || []); if (files.length === 0) return;
-                                                    const newPhotos: string[] = []; for (const f of files) newPhotos.push(await compressImage(f));
-                                                    setResolveData(p => ({...p, foto: [...p.foto, ...newPhotos]}));
-                                                }} className="h-9 cursor-pointer text-xs" />
-                                                {resolveData.foto.length > 0 && (
-                                                  <div className="flex gap-2 mt-2 p-2 bg-slate-50 rounded border border-dashed">
-                                                    {resolveData.foto.map((f, i) => (
-                                                      <div key={i} className="relative group">
-                                                         <img src={f} className="h-12 w-12 object-cover rounded shadow-sm border" />
-                                                         <button onClick={() => setResolveData(p => ({...p, foto: p.foto.filter((_, idx) => idx !== i)}))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 shadow"><X className="h-3 w-3" /></button>
-                                                      </div>
-                                                    ))}
-                                                  </div>
-                                                )}
-                                              </div>
-                                              <div className="flex gap-2 pt-2 border-t border-slate-100">
-                                                <Button size="sm" onClick={() => handleConfirmResolve(bodId)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold">Odeslat</Button>
-                                                <Button size="sm" variant="ghost" onClick={() => setResolvingBod(null)}>Zrušit</Button>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        ) : (
-                                          <Button onClick={() => { setResolvingBod(bodId); setResolveData({ datum: new Date().toISOString().split('T')[0], jmeno: '', poznamka: '', foto: [] }); }} size="sm" className="bg-white text-blue-700 border-blue-200 hover:bg-blue-50 font-bold shadow-sm">
-                                             Odstranil(a) jsem tuto závadu
-                                          </Button>
-                                        )
-                                      )}
-                                    </div>
-                                  )}
-
-                                  {isAdmin && isResolvedByClient && (
-                                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mt-4 shadow-sm">
-                                       <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm mb-3"><CheckCircle2 className="h-5 w-5" /> Klient nahlásil odstranění závady</div>
-                                       <div className="bg-white p-3 rounded-lg border border-emerald-100 space-y-3 text-sm">
-                                          <div className="grid grid-cols-2 gap-4">
-                                            <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Nahlásil</span><span className="font-bold">{kb.jmenoVyresitele}</span></div>
-                                            <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Dne</span><span className="font-bold">{kb.datumVyreseniKlientem ? new Date(kb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</span></div>
-                                          </div>
-                                          {kb.poznamkaKlienta && <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Komentář</span><p className="italic text-slate-700">{kb.poznamkaKlienta}</p></div>}
-                                          {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
-                                             <div className="pt-2 border-t border-slate-50 flex gap-2">
-                                               {kb.fotoVyreseni.map((f: string, i: number) => (
-                                                 <img key={i} src={f} onClick={() => setFullscreenImage(f)} className="h-16 w-16 object-cover rounded border cursor-zoom-in hover:opacity-80" />
-                                               ))}
-                                             </div>
-                                          )}
-                                       </div>
-                                    </div>
-                                  )}
-
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </CardContent>
-                    )}
-                  </Card>
-                );
-              })}
-            </div>
-          </div>
+      {step === 3 && (
+        <div className="space-y-8">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4"><Card className="p-4 flex flex-col items-center gap-1 border-green-200 bg-green-50"><span className="text-2xl font-bold text-green-700">{stats.V}</span><span className="text-[10px] uppercase font-bold text-green-600">Vyhovuje</span></Card><Card className="p-4 flex flex-col items-center gap-1 border-red-200 bg-red-50"><span className="text-2xl font-bold text-red-700">{stats.N}</span><span className="text-[10px] uppercase font-bold text-red-600">Nevyhovuje</span></Card><Card className="p-4 flex flex-col items-center gap-1 border-gray-200 bg-gray-50"><span className="text-2xl font-bold text-gray-700">{stats.NA}</span><span className="text-[10px] uppercase font-bold text-gray-600">Neaplikováno</span></Card><Card className="p-4 flex flex-col items-center gap-1 border-gray-200 bg-gray-50"><span className="text-2xl font-bold text-gray-700">{stats.NK}</span><span className="text-[10px] uppercase font-bold text-gray-600">Nekontrolováno</span></Card><Card className="p-4 flex flex-col items-center gap-1 border-amber-200 bg-amber-50"><span className="text-2xl font-bold text-amber-700">{stats.unfilled}</span><span className="text-[10px] uppercase font-bold text-amber-600">Nevyplněno</span></Card></div>
           
-          <div className="space-y-6">
-            <Card className="sticky top-6 shadow-sm border-slate-200 overflow-hidden">
-              <CardHeader className="bg-slate-50/50 border-b pb-4">
-                <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-800">
-                  <Building className="h-4 w-4 text-blue-600" /> Detaily auditu
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-5 space-y-5 text-sm">
-                <div>
-                  <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-1">Klient</Label>
-                  <p className="font-bold text-slate-900">{klient?.nazev || 'Neznámý'}</p>
-                </div>
-                <div>
-                  <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-1">Kontrolovaná pracoviště</Label>
-                  <div className="space-y-2 mt-1">
-                    {pracovisteList.map((p: any) => (
-                      <div key={p.id} className="flex gap-2 items-start bg-slate-50 p-2 rounded-lg border border-slate-100">
-                        <MapPin className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
-                        <span className="font-medium text-slate-700 leading-snug">{p.fullDisplay}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          {stats.N > 0 && (
+            <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-start gap-3 shadow-inner">
+              <AlertTriangle className="h-6 w-6 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-bold text-amber-900 text-lg">Tento report nelze uzavřít</h4>
+                <p className="text-sm text-amber-800 mt-1">Dokud nebudou všechny zjištěné neshody ({stats.N}) opraveny klientem a vámi překlasifikovány na <strong>[V] Vyhovuje</strong>, záznam bude automaticky ukládán do stavu <strong>V řešení</strong>.</p>
+              </div>
+            </div>
+          )}
 
+          <Card className="border-none shadow-sm"><CardHeader><CardTitle>Závěrečné hodnocení a doporučení</CardTitle></CardHeader><CardContent><Textarea placeholder="Napište celkové zhodnocení..." className="min-h-[120px] bg-white" value={formData.poznamka} onChange={(e) => setFormData(prev => ({ ...prev, poznamka: e.target.value }))} /></CardContent></Card>
+          <Card className="border-none shadow-sm">
+            <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/20 border-b pb-4">
+              <div><CardTitle>Náhled zjištěných závad</CardTitle></div>
+              <div className="flex items-center gap-2 bg-white p-2 rounded-md border shadow-sm"><Filter className="h-4 w-4 text-muted-foreground ml-2" /><Select value={filterPosition} onValueChange={setFilterPosition}><SelectTrigger className="h-9 w-[220px] border-none shadow-none focus:ring-0"><SelectValue placeholder="Filtrovat pozici" /></SelectTrigger><SelectContent><SelectItem value="all">Zobrazit vše</SelectItem>{uniquePositions.map((pozice: string) => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}<SelectItem value="manual">Vlastní zadání</SelectItem></SelectContent></Select></div>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-6">
+              {filteredPointDefects.map(group => group.defects.map(defect => (<div key={defect.uid} className="p-4 border rounded-lg flex items-start gap-4 hover:bg-muted/20"><div className="bg-red-600 text-white font-mono text-xs h-6 w-6 rounded-full flex items-center justify-center shrink-0 mt-1">{Number(group.id) > 90000 ? '*' : group.id}</div><div className="flex-1 space-y-2"><p className="font-bold">{defect.popis}</p><div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground"><div className="flex items-center gap-2"><CalendarIcon className="h-3 w-3" />{defect.terminOdstraneni ? new Date(defect.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neuvedeno'}</div><div className="flex items-center gap-2"><UserIcon className="h-3 w-3" /><span className="font-medium text-black">{defect.odpovednaOsoba === 'manual' ? defect.odpovednaOsobaManualni : (defect.odpovednaOsoba || 'Neuvedena')}</span></div></div></div></div>)))}
+              {filteredPointDefects.length === 0 && <div className="py-12 text-center text-muted-foreground italic">Nebyly zjištěny žádné závady k uložení.</div>}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 z-50 flex justify-center shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+        <div className="max-w-5xl w-full flex justify-between items-center px-4 md:px-8">
+          <div className="flex gap-2">
+            <Button variant="ghost" disabled={step === 1} onClick={() => { setStep(s => s - 1); window.scrollTo(0, 0); }} className="h-11 px-3 sm:px-6"><ChevronLeft className="sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Zpět</span></Button>
+            <Button variant="ghost" onClick={() => setShowCancelModal(true)} className="h-11 px-3 sm:px-6 text-red-500 hover:text-red-700 hover:bg-red-50"><Trash2 className="sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Zrušit audit</span></Button>
+          </div>
+          <div className="flex gap-2">
+            {step === 3 && stats.N === 0 && (
+              <Button variant="outline" className="h-11 px-6 text-amber-700 hover:text-amber-800 hover:bg-amber-50 hidden sm:flex" onClick={() => executeSave(true)}>Uložit jako koncept</Button>
+            )}
+            <Button onClick={step === 3 ? () => setShowSaveModal(true) : handleNext} disabled={isSaving} className={cn("h-11 px-4 sm:px-8 shadow-sm font-bold text-white", step === 3 && stats.N > 0 ? "bg-amber-600 hover:bg-amber-700" : "bg-blue-600 hover:bg-blue-700")}>
+              {step === 3 ? (isSaving ? "Ukládám..." : (stats.N > 0 ? "Uložit (Zůstane v řešení)" : "Uložit jako Uzavřeno")) : "Pokračovat"}
+              {step !== 3 && <ChevronRight className="ml-2 h-4 w-4" />}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
