@@ -152,25 +152,28 @@ export default function RecordDetailPage() {
     }));
   }, [klient, record]);
 
-  // ADRESNÝ VYHLEDÁVAČ E-MAILŮ (NEPRŮSTŘELNÝ)
+  // ADRESNÝ VYHLEDÁVAČ VŠECH E-MAILŮ (NEPRŮSTŘELNÝ MULTI-EMAIL)
   const extractEmail = (klientObj: any): string => {
     if (!klientObj) return "";
-    if (typeof klientObj.email === 'string' && klientObj.email.includes('@')) return klientObj.email.trim();
-    if (typeof klientObj.kontaktniOsoba?.email === 'string' && klientObj.kontaktniOsoba.email.includes('@')) return klientObj.kontaktniOsoba.email.trim();
+    const emaily = new Set<string>();
     
-    if (Array.isArray(klientObj.odpovedneOsoby)) {
-      const found = klientObj.odpovedneOsoby.find((o: any) => o?.email && typeof o.email === 'string' && o.email.includes('@'));
-      if (found) return found.email.trim();
-    }
-    if (Array.isArray(klientObj.kontakty)) {
-      const found = klientObj.kontakty.find((k: any) => k?.email && typeof k.email === 'string' && k.email.includes('@'));
-      if (found) return found.email.trim();
-    }
-    if (Array.isArray(klientObj.pozice)) {
-      const found = klientObj.pozice.find((p: any) => p?.email && typeof p.email === 'string' && p.email.includes('@'));
-      if (found) return found.email.trim();
-    }
-    return "";
+    const pridejEmail = (val: any) => {
+      if (typeof val === 'string' && val.includes('@') && val.includes('.')) {
+        emaily.add(val.trim());
+      }
+    };
+
+    pridejEmail(klientObj.email);
+    pridejEmail(klientObj.kontaktniOsoba?.email);
+    
+    const poleKeKontrole = ['odpovedneOsoby', 'kontakty', 'pozice'];
+    poleKeKontrole.forEach(nazevPole => {
+      if (Array.isArray(klientObj[nazevPole])) {
+        klientObj[nazevPole].forEach((polozka: any) => pridejEmail(polozka?.email));
+      }
+    });
+
+    return Array.from(emaily).join(', ');
   };
 
   const [filterPosition, setFilterPosition] = useState<string>("all");
