@@ -135,38 +135,31 @@ export default function NewInspectionPage() {
     return "";
   };
 
-  // ZPŘESNĚNÝ A SPOLEHLIVÝ DETEKTOR E-MAILU KLIENTA
+  // MULTI-EMAIL DETEKTOR (Najde všechny e-maily a udrží je v paměti)
   useEffect(() => {
     if (selectedKlient) {
-      let nalezeneEmail = "";
+      const emaily = new Set<string>(); // Set zaručí, že se e-maily nebudou duplikovat
+      
+      const pridejEmail = (val: any) => {
+        if (typeof val === 'string' && val.includes('@') && val.includes('.')) {
+          emaily.add(val.trim());
+        }
+      };
 
-      // 1. Zkusíme hlavní e-mail firmy
-      if (selectedKlient.email && typeof selectedKlient.email === 'string' && selectedKlient.email.includes('@')) {
-        nalezeneEmail = selectedKlient.email.trim();
-      }
-      // 2. Zkusíme e-mail uložený v poli kontaktniOsoba
-      else if (selectedKlient.kontaktniOsoba?.email && typeof selectedKlient.kontaktniOsoba.email === 'string' && selectedKlient.kontaktniOsoba.email.includes('@')) {
-        nalezeneEmail = selectedKlient.kontaktniOsoba.email.trim();
-      }
-      // 3. Prohledáme pole odpovedneOsoby
-      else if (Array.isArray(selectedKlient.odpovedneOsoby)) {
-        const found = selectedKlient.odpovedneOsoby.find((o: any) => o?.email && typeof o.email === 'string' && o.email.includes('@'));
-        if (found) nalezeneEmail = found.email.trim();
-      }
-      // 4. Prohledáme pole kontakty
-      else if (Array.isArray(selectedKlient.kontakty)) {
-        const found = selectedKlient.kontakty.find((k: any) => k?.email && typeof k.email === 'string' && k.email.includes('@'));
-        if (found) nalezeneEmail = found.email.trim();
-      }
-      // 5. Prohledáme pole pozice
-      else if (Array.isArray(selectedKlient.pozice)) {
-        const found = selectedKlient.pozice.find((p: any) => p?.email && typeof p.email === 'string' && p.email.includes('@'));
-        if (found) nalezeneEmail = found.email.trim();
-      }
+      // 1. Zkusíme hlavní e-mail a kontaktní osobu
+      pridejEmail(selectedKlient.email);
+      pridejEmail(selectedKlient.kontaktniOsoba?.email);
 
-      setEmailRecipient(nalezeneEmail);
-    } else {
-      setEmailRecipient("");
+      // 2. Projdeme všechna pole, kde by mohl být někdo schovaný
+      const poleKeKontrole = ['odpovedneOsoby', 'kontakty', 'pozice'];
+      poleKeKontrole.forEach(nazevPole => {
+        if (Array.isArray(selectedKlient[nazevPole])) {
+          selectedKlient[nazevPole].forEach((polozka: any) => pridejEmail(polozka?.email));
+        }
+      });
+
+      // Spojíme všechny nalezené e-maily čárkou
+      setEmailRecipient(Array.from(emaily).join(', '));
     }
   }, [selectedKlient]);
 
