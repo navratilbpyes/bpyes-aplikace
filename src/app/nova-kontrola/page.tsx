@@ -125,23 +125,39 @@ export default function NewInspectionPage() {
     return "";
   };
 
+  // ZPŘESNĚNÝ A SPOLEHLIVÝ DETEKTOR E-MAILU KLIENTA
   useEffect(() => {
     if (selectedKlient) {
-      setEmailRecipient(najdiEmail(selectedKlient));
+      let nalezeneEmail = "";
+
+      // 1. Zkusíme hlavní e-mail firmy
+      if (selectedKlient.email && typeof selectedKlient.email === 'string' && selectedKlient.email.includes('@')) {
+        nalezeneEmail = selectedKlient.email.trim();
+      }
+      // 2. Zkusíme e-mail uložený v poli kontaktniOsoba
+      else if (selectedKlient.kontaktniOsoba?.email && typeof selectedKlient.kontaktniOsoba.email === 'string' && selectedKlient.kontaktniOsoba.email.includes('@')) {
+        nalezeneEmail = selectedKlient.kontaktniOsoba.email.trim();
+      }
+      // 3. Prohledáme pole odpovedneOsoby
+      else if (Array.isArray(selectedKlient.odpovedneOsoby)) {
+        const found = selectedKlient.odpovedneOsoby.find((o: any) => o?.email && typeof o.email === 'string' && o.email.includes('@'));
+        if (found) nalezeneEmail = found.email.trim();
+      }
+      // 4. Prohledáme pole kontakty
+      else if (Array.isArray(selectedKlient.kontakty)) {
+        const found = selectedKlient.kontakty.find((k: any) => k?.email && typeof k.email === 'string' && k.email.includes('@'));
+        if (found) nalezeneEmail = found.email.trim();
+      }
+      // 5. Prohledáme pole pozice
+      else if (Array.isArray(selectedKlient.pozice)) {
+        const found = selectedKlient.pozice.find((p: any) => p?.email && typeof p.email === 'string' && p.email.includes('@'));
+        if (found) nalezeneEmail = found.email.trim();
+      }
+
+      setEmailRecipient(nalezeneEmail);
     } else {
       setEmailRecipient("");
     }
-  }, [selectedKlient]);
-  
-  const uniquePositions = useMemo(() => {
-    if (!selectedKlient) return [];
-    let positions: string[] = [];
-    if (selectedKlient.pozice && selectedKlient.pozice.length > 0) {
-      positions = selectedKlient.pozice.map((p:any) => p.nazev);
-    } else if (selectedKlient.odpovedneOsoby && selectedKlient.odpovedneOsoby.length > 0) {
-      positions = selectedKlient.odpovedneOsoby.map((o:any) => o.pozice || o.funkce);
-    }
-    return Array.from(new Set(positions.filter(Boolean)));
   }, [selectedKlient]);
 
   useEffect(() => {
