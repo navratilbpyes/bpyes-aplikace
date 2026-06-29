@@ -148,11 +148,24 @@ export default function RecordDetailPage() {
     }));
   }, [klient, record]);
 
-  // Přesunuto sem dolů, aby to mělo přístup k "record" a "klient"
   const handleSendEmailFromDetail = async () => {
     if (!record) return;
     
-    const nalezenyEmail = klient?.email || klient?.kontaktniOsoba?.email || klient?.odpovedneOsoby?.find((o: any) => o.email)?.email;
+    // CHYTRÝ PÁTRAČ E-MAILŮ
+    const najdiEmail = (obj: any, visited = new Set()): string => {
+      if (!obj || visited.has(obj)) return "";
+      if (typeof obj === 'string' && obj.includes('@') && obj.includes('.') && !obj.includes(' ')) return obj;
+      if (typeof obj === 'object') {
+        visited.add(obj);
+        for (const key in obj) {
+          const found = najdiEmail(obj[key], visited);
+          if (found) return found;
+        }
+      }
+      return "";
+    };
+    
+    const nalezenyEmail = najdiEmail(klient);
     const cilovyEmail = nalezenyEmail || prompt("Zadejte e-mailovou adresu, na kterou chcete report odeslat:", "");
     if (!cilovyEmail) return;
 
