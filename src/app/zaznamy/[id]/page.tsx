@@ -358,7 +358,7 @@ export default function RecordDetailPage() {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
-                        email: emailRecipient.trim(),
+                        email: emailRecipient.split(',').map((e: string) => e.trim()).filter((e: string) => e.includes('@')),
                         jmenoKlienta: klient?.nazev || "Klient",
                         cisloZpravy: record.cisloKlientske || record.cislo,
                         odkaz: odkaz
