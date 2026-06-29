@@ -77,6 +77,23 @@ function parseCSV(str: string) {
   return arr;
 }
 
+// ADRESNÝ VYHLEDÁVAČ VŠECH E-MAILŮ
+const extractEmail = (klientObj: any): string => {
+  if (!klientObj) return "";
+  const emaily = new Set<string>();
+  const pridejEmail = (val: any) => {
+    if (typeof val === 'string' && val.includes('@') && val.includes('.')) emaily.add(val.trim());
+  };
+  pridejEmail(klientObj.email);
+  pridejEmail(klientObj.kontaktniOsoba?.email);
+  ['odpovedneOsoby', 'kontakty', 'pozice'].forEach(nazevPole => {
+    if (Array.isArray(klientObj[nazevPole])) {
+      klientObj[nazevPole].forEach((polozka: any) => pridejEmail(polozka?.email));
+    }
+  });
+  return Array.from(emaily).join(', ');
+};
+
 export default function NewInspectionPage() {
   const { klienti, zaznamy, setZaznamy } = useData();
   const { toast } = useToast();
@@ -119,48 +136,6 @@ export default function NewInspectionPage() {
       positions = selectedKlient.odpovedneOsoby.map((o:any) => o.pozice || o.funkce);
     }
     return Array.from(new Set(positions.filter(Boolean)));
-  }, [selectedKlient]);
-  
-  // CHYTRÝ PÁTRAČ E-MAILŮ
-  const najdiEmail = (obj: any, visited = new Set()): string => {
-    if (!obj || visited.has(obj)) return "";
-    if (typeof obj === 'string' && obj.includes('@') && obj.includes('.') && !obj.includes(' ')) return obj;
-    if (typeof obj === 'object') {
-      visited.add(obj);
-      for (const key in obj) {
-        const found = najdiEmail(obj[key], visited);
-        if (found) return found;
-      }
-    }
-    return "";
-  };
-
-  // MULTI-EMAIL DETEKTOR (Najde všechny e-maily a udrží je v paměti)
-  useEffect(() => {
-    if (selectedKlient) {
-      const emaily = new Set<string>(); // Set zaručí, že se e-maily nebudou duplikovat
-      
-      const pridejEmail = (val: any) => {
-        if (typeof val === 'string' && val.includes('@') && val.includes('.')) {
-          emaily.add(val.trim());
-        }
-      };
-
-      // 1. Zkusíme hlavní e-mail a kontaktní osobu
-      pridejEmail(selectedKlient.email);
-      pridejEmail(selectedKlient.kontaktniOsoba?.email);
-
-      // 2. Projdeme všechna pole, kde by mohl být někdo schovaný
-      const poleKeKontrole = ['odpovedneOsoby', 'kontakty', 'pozice'];
-      poleKeKontrole.forEach(nazevPole => {
-        if (Array.isArray(selectedKlient[nazevPole])) {
-          selectedKlient[nazevPole].forEach((polozka: any) => pridejEmail(polozka?.email));
-        }
-      });
-
-      // Spojíme všechny nalezené e-maily čárkou
-      setEmailRecipient(Array.from(emaily).join(', '));
-    }
   }, [selectedKlient]);
 
   useEffect(() => {
@@ -374,9 +349,8 @@ export default function NewInspectionPage() {
       // ZDE JE ZMĚNA: Uložíme ID reportu do stavu a ukážeme modal pro odeslání e-mailu
       setJustSavedRecordId(sanitizedRecord.id);
       setJustSavedRecordCislo(klientskeCislo);
+      setEmailRecipient(extractEmail(selectedKlient));
       setShowEmailPrompt(true);
-      const nalezeneEmail = selectedKlient?.email || selectedKlient?.kontaktniOsoba?.email || selectedKlient?.odpovedneOsoby?.find((o: any) => o.email)?.email || "";
-      setEmailRecipient(nalezeneEmail);
       setShowSaveModal(false);
       setIsSaving(false);
       
@@ -593,7 +567,16 @@ export default function NewInspectionPage() {
                   setIsSendingEmail(true);
                   try {
                     const odkaz = `${window.location.origin}/zaznamy/${justSavedRecordId}`;
-                    const response = await fetch('/api/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: emailRecipient, jmenoKlienta: selectedKlient?.nazev || "Klient", cisloZpravy: justSavedRecordCislo, odkaz: odkaz }) });
+                    const response = await fetch('/api/send-email', { 
+                      method: 'POST', 
+                      headers: { 'Content-Type': 'application/json' }, 
+                      body: JSON.stringify({ 
+                        email: emailRecipient.split(',').map((e: string) => e.trim()).filter((e: string) => e.includes('@')), 
+                        jmenoKlienta: selectedKlient?.nazev || "Klient", 
+                        cisloZpravy: justSavedRecordCislo, 
+                        odkaz: odkaz 
+                      }) 
+                    });
                     const result = await response.json();
                     if (result.success) toast({ title: "Odesláno", description: `E-mail odeslán na: ${emailRecipient}` });
                     else toast({ title: "Chyba", description: "Nepodařilo se odeslat.", variant: "destructive" });
