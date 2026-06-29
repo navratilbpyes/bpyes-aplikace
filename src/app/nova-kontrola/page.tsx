@@ -111,29 +111,23 @@ export default function NewInspectionPage() {
 
   const selectedKlient = klienti.find(k => k.id === formData.klientId);
   
-  // AUTOMATICKÉ NAČTENÍ E-MAILU IHNED PO VÝBĚRU KLIENTA
+  // CHYTRÝ PÁTRAČ E-MAILŮ
+  const najdiEmail = (obj: any, visited = new Set()): string => {
+    if (!obj || visited.has(obj)) return "";
+    if (typeof obj === 'string' && obj.includes('@') && obj.includes('.') && !obj.includes(' ')) return obj;
+    if (typeof obj === 'object') {
+      visited.add(obj);
+      for (const key in obj) {
+        const found = najdiEmail(obj[key], visited);
+        if (found) return found;
+      }
+    }
+    return "";
+  };
+
   useEffect(() => {
     if (selectedKlient) {
-      let nalezeneEmail = selectedKlient.email || "";
-
-      // Zkusíme najít e-mail v poli "odpovedneOsoby"
-      if (!nalezeneEmail && Array.isArray(selectedKlient.odpovedneOsoby)) {
-        const osoba = selectedKlient.odpovedneOsoby.find((o: any) => o.email && o.email.includes('@'));
-        if (osoba) nalezeneEmail = osoba.email;
-      }
-      
-      // Zkusíme najít e-mail v poli "kontakty" (alternativní název v databázi)
-      if (!nalezeneEmail && Array.isArray(selectedKlient.kontakty)) {
-        const kontakt = selectedKlient.kontakty.find((k: any) => k.email && k.email.includes('@'));
-        if (kontakt) nalezeneEmail = kontakt.email;
-      }
-
-      // Zkusíme najít e-mail v objektu "kontaktniOsoba"
-      if (!nalezeneEmail && selectedKlient.kontaktniOsoba?.email) {
-        nalezeneEmail = selectedKlient.kontaktniOsoba.email;
-      }
-
-      setEmailRecipient(nalezeneEmail);
+      setEmailRecipient(najdiEmail(selectedKlient));
     } else {
       setEmailRecipient("");
     }
