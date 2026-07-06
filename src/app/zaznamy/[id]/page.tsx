@@ -288,10 +288,40 @@ export default function RecordDetailPage() {
       
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
-          @page { size: A4 portrait; margin: 15mm 15mm 20mm 15mm; }
-          body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: white !important; color: #000 !important; }
+          /* Odstraní výchozí URL a záhlaví prohlížeče nastavením marginu na nulu na samotné stránce */
+          @page { 
+            size: A4 portrait; 
+            margin: 20mm 15mm 20mm 15mm;
+          }
+          body { 
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important; 
+            background: white !important; 
+            color: #000 !important; 
+          }
           .page-break { page-break-before: always; }
           .avoid-break { page-break-inside: avoid; break-inside: avoid; }
+
+          /* Vytvoří fixní tiskové záhlaví a zápatí na každé stránce */
+          body {
+            padding-top: 10mm;
+          }
+          
+          /* Zápis čísla reportu na každou vytisknutou stránku */
+          @page {
+            @top-right {
+              content: "Zpráva č.: ${record.cisloKlientske || record.cislo}";
+              font-family: sans-serif;
+              font-size: 9px;
+              color: #64748b;
+            }
+            @bottom-right {
+              content: "Zpráva č.: ${record.cisloKlientske || record.cislo}";
+              font-family: sans-serif;
+              font-size: 8px;
+              color: #94a3b8;
+            }
+          }
         }
       `}} />
 
