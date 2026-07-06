@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     const { email, jmenoKlienta, cisloZpravy, odkaz } = await request.json();
 
     const data = await resend.emails.send({
-      from: 'AuditFlow | BPyes <onboarding@resend.dev>', // ZATÍM TESTOVACÍ ADRESA (později změníme na vaši)
+      from: 'AuditFlow | BPyes <navratil@bpyes.cz>',
       to: email,
       subject: `Nový auditní report: ${cisloZpravy} | ${jmenoKlienta}`,
       html: `
