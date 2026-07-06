@@ -267,13 +267,35 @@ export default function NewInspectionPage() {
     try {
       const year = new Date(formData.datum).getFullYear();
       
-      // 1. GLOBÁLNÍ ČÍSLOVÁNÍ
-      const countInYear = zaznamy.filter(z => z.datum && new Date(z.datum).getFullYear() === year).length + 1;
-      const globalCislo = `${year}/${countInYear.toString().padStart(3, '0')}/${formData.typKontroly}`;
+      // 1. GLOBÁLNÍ ČÍSLOVÁNÍ (Hledá vždy nejvyšší použité číslo v roce)
+      const zaznamyTentoRok = zaznamy.filter((z: any) => z.datum && new Date(z.datum).getFullYear() === year);
+      let maxGlobal = 0;
+      zaznamyTentoRok.forEach((z: any) => {
+        if (z.cislo) {
+          const casti = z.cislo.split('/');
+          if (casti.length > 1) {
+            const cislo = parseInt(casti[1], 10);
+            if (!isNaN(cislo) && cislo > maxGlobal) maxGlobal = cislo;
+          }
+        }
+      });
+      const nextGlobal = maxGlobal + 1;
+      const globalCislo = `${year}/${nextGlobal.toString().padStart(3, '0')}/${formData.typKontroly}`;
       
       // 2. KLIENTSKÉ ČÍSLOVÁNÍ
-      const countClientInYear = zaznamy.filter(z => z.klientId === formData.klientId && z.datum && new Date(z.datum).getFullYear() === year).length + 1;
-      const klientskeCislo = `${year}-K${countClientInYear.toString().padStart(3, '0')}/${formData.typKontroly}`;
+      const zaznamyKlientaRok = zaznamyTentoRok.filter((z: any) => z.klientId === formData.klientId);
+      let maxKlient = 0;
+      zaznamyKlientaRok.forEach((z: any) => {
+        if (z.cisloKlientske) {
+          const match = z.cisloKlientske.match(/-K(\d+)\//);
+          if (match && match[1]) {
+            const cislo = parseInt(match[1], 10);
+            if (!isNaN(cislo) && cislo > maxKlient) maxKlient = cislo;
+          }
+        }
+      });
+      const nextKlient = maxKlient + 1;
+      const klientskeCislo = `${year}-K${nextKlient.toString().padStart(3, '0')}/${formData.typKontroly}`;
       
       const finalKontrolniBody: any[] = [];
       const aggregatedZavady: Zavada[] = [];
