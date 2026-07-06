@@ -310,7 +310,7 @@ export default function RecordDetailPage() {
           /* Zápis čísla reportu na každou vytisknutou stránku */
           @page {
             @top-right {
-              content: "Zpráva č.: ${record.cisloKlientske || record.cislo}";
+              content: "Report č.: ${record.cisloKlientske || record.cislo}";
               font-family: sans-serif;
               font-size: 9px;
               color: #64748b;
