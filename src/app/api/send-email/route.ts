@@ -9,7 +9,7 @@ export async function POST(request: Request) {
 
     const data = await resend.emails.send({
       from: 'AuditFlow | BPyes <onboarding@resend.dev>', // ZATÍM TESTOVACÍ ADRESA (později změníme na vaši)
-      to: [email],
+      to: email,
       subject: `Nový auditní report: ${cisloZpravy} | ${jmenoKlienta}`,
       html: `
         <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; border: 1px solid #e5e7eb; border-radius: 8px;">
