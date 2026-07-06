@@ -429,9 +429,11 @@ export default function RecordDetailPage() {
           </div>
 
           <h1 className="text-xl font-bold uppercase text-slate-900 mb-4 leading-tight">
-            {record.typKontroly === 'BOZPaPO' ? 'PROVĚRKA BOZP A PREVENTIVNÍ POŽÁRNÍ PROHLÍDKA, KONTROLA DOKUMENTACE POŽÁRNÍ OCHRANY' : 
-             record.typKontroly === 'PPP' ? 'PREVENTIVNÍ POŽÁRNÍ PROHLÍDKA' : 'PROVĚRKA BOZP PRACOVIŠTĚ'}
-          </h1>
+  {record.typKontroly === 'BOZPaPO' ? 'PROVĚRKA BOZP A PREVENTIVNÍ POŽÁRNÍ PROHLÍDKA, KONTROLA DOKUMENTACE POŽÁRNÍ OCHRANY' : 
+   record.typKontroly === 'PPP' ? 'PREVENTIVNÍ POŽÁRNÍ PROHLÍDKA' : 
+   record.typKontroly === 'PBOZP' ? 'PROVĚRKA BOZP PRACOVIŠTĚ' : 
+   'ZÁZNAM Z KONTROLY (VLASTNÍ ZAMĚŘENÍ)'}
+</h1>
           
           <div className="text-base font-bold mb-8 pb-4 border-b-2 border-slate-100">
             ČÍSLO ZPRÁVY: {record.cisloKlientske || record.cislo} | REVIZE: R{record.revize || 0}
