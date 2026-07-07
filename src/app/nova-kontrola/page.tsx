@@ -59,7 +59,7 @@ const compressImage = (file: File): Promise<string> => {
     reader.readAsDataURL(file);
   });
 };
-
+export const dynamic = 'force-dynamic';
 const GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTqBDqcv7REG4fkbLQHUqOQP13KzwB-wAAEaotZldSvZMvTpzfc8OlJvo8isBWkmQBpjYTm-I_X6Lls/pub?output=csv";
 function parseCSV(str: string) {
   const arr: string[][] = []; let quote = false; let row = 0, col = 0;
