@@ -1,6 +1,6 @@
 'use client';
 
-import { useData, db } from "@/components/data-provider";
+import { useData, db, auth } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useState, useEffect, useMemo } from "react";
@@ -236,9 +236,10 @@ export default function NewInspectionPage() {
     try {
       const odkaz = `${window.location.origin}/zaznamy/${justSavedRecordId}`;
       
+      const token = await auth.currentUser?.getIdToken();
       const response = await fetch('/api/send-email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           email: selectedKlient.email,
           jmenoKlienta: selectedKlient.nazev,
@@ -590,9 +591,10 @@ export default function NewInspectionPage() {
                   setIsSendingEmail(true);
                   try {
                     const odkaz = `${window.location.origin}/zaznamy/${justSavedRecordId}`;
+                    const token = await auth.currentUser?.getIdToken();
                     const response = await fetch('/api/send-email', { 
                       method: 'POST', 
-                      headers: { 'Content-Type': 'application/json' }, 
+                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, 
                       body: JSON.stringify({ 
                         email: emailRecipient.split(',').map((e: string) => e.trim()).filter((e: string) => e.includes('@')), 
                         jmenoKlienta: selectedKlient?.nazev || "Klient", 
