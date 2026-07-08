@@ -1,44 +1,93 @@
 import { Resend } from 'resend';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { verifyAdmin } from '@/lib/firebase-admin';
 
-// Validace vstupu. odkaz musí být https a z povolené domény (uprav si na svou doménu).
+const PROJECT_ID = 'studio-2327834732-8ec09';
+const FIREBASE_API_KEY = 'AIzaSyAJ2o8AlTOXKbIAtDYSNnDUvTLChAiGeoQ';
+
+// email může přijít jako jeden string, nebo jako pole adres (hromadné odeslání)
 const schema = z.object({
-  email: z.string().email(),
+  email: z.union([
+    z.string().email(),
+    z.array(z.string().email()).min(1),
+  ]),
   jmenoKlienta: z.string().min(1).max(200),
   cisloZpravy: z.string().min(1).max(50),
   odkaz: z.string().url().startsWith('https://'),
 });
 
-export async function POST(request: Request) {
-  // 1) Ověření, že požadavek poslal přihlášený admin (Firebase Admin SDK).
-  const adminUid = await verifyAdmin(request.headers.get('authorization'));
-  if (!adminUid) {
-    return NextResponse.json(
-      { success: false, error: 'Neautorizováno.' },
-      { status: 401 }
+/**
+ * Ověří Firebase ID token přes veřejné Identity Toolkit REST API.
+ * Nepotřebuje service account klíč. Vrací uid, nebo null.
+ */
+async function verifyToken(authHeader: string | null): Promise<string | null> {
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const idToken = authHeader.substring(7);
+
+  try {
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      }
     );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const uid = data?.users?.[0]?.localId;
+    return uid || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ověří, že uživatel má v kolekci 'uzivatele' roli 'admin'.
+ * Čte dokument přes Firestore REST API s ID tokenem uživatele
+ * (Firestore Rules to povolí, protože uživatel čte svůj vlastní profil).
+ */
+async function isAdmin(uid: string, idToken: string): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/uzivatele/${uid}`,
+      { headers: { Authorization: `Bearer ${idToken}` } }
+    );
+    if (!res.ok) return false;
+    const doc = await res.json();
+    return doc?.fields?.role?.stringValue === 'admin';
+  } catch {
+    return false;
+  }
+}
+
+export async function POST(request: Request) {
+  const authHeader = request.headers.get('authorization');
+
+  // 1) Ověření přihlášení
+  const uid = await verifyToken(authHeader);
+  if (!uid) {
+    return NextResponse.json({ success: false, error: 'Neautorizováno.' }, { status: 401 });
   }
 
-  // 2) Validace vstupu.
+  // 2) Ověření role admin
+  const idToken = authHeader!.substring(7);
+  if (!(await isAdmin(uid, idToken))) {
+    return NextResponse.json({ success: false, error: 'Přístup jen pro administrátora.' }, { status: 403 });
+  }
+
+  // 3) Validace vstupu
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) {
-    return NextResponse.json(
-      { success: false, error: 'Neplatný vstup.' },
-      { status: 400 }
-    );
+    return NextResponse.json({ success: false, error: 'Neplatný vstup.' }, { status: 400 });
   }
   const { email, jmenoKlienta, cisloZpravy, odkaz } = parsed.data;
 
-  // 3) Lazy inicializace Resend – až za běhu, ne při buildu.
+  // 4) Lazy inicializace Resend (až za běhu, ne při buildu)
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('Chybí RESEND_API_KEY v env proměnných.');
-    return NextResponse.json(
-      { success: false, error: 'E-mailová služba není nakonfigurována.' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: 'E-mailová služba není nakonfigurována.' }, { status: 500 });
   }
   const resend = new Resend(apiKey);
 
@@ -69,11 +118,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, data });
   } catch (error) {
-    // Chybu logujeme na server, klientovi vracíme obecnou hlášku (neúnik detailů).
     console.error('Chyba při odesílání e-mailu:', error);
-    return NextResponse.json(
-      { success: false, error: 'E-mail se nepodařilo odeslat.' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: 'E-mail se nepodařilo odeslat.' }, { status: 500 });
   }
 }
