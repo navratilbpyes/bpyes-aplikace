@@ -11,6 +11,10 @@ export interface ChecklistSection {
 }
 
 export const CHECKLIST_SECTIONS: ChecklistSection[] = [
+  // ==========================================
+// 1. KONTROLA: BOZP a PO
+// ==========================================
+export const CHECKLIST_BOZPaPO = [
   "  {
     id: 'SEC_1',
     title: 'PRACOVNĚPRÁVNÍ OBLAST',
@@ -597,6 +601,7 @@ export const CHECKLIST_SECTIONS: ChecklistSection[] = [
     title: 'ODPADOVÉ HOSPODÁŘSTVÍ',
     items: [
       { id: '186', text: 'Nakládání s odpady' },"
+
       { id: '187', text: 'Nebezpečné odpady' },
 
 "    ]
@@ -606,11 +611,18 @@ export const CHECKLIST_SECTIONS: ChecklistSection[] = [
     title: 'OSAMOCENÁ PRÁCE',
     items: [
       { id: '188', text: 'Režim osamocené práce' },"
+
       { id: '189', text: 'Rizikové práce zákazané osamoceně' },
+
     ]
   }
+]; // <-- ZDE KONČÍ BOZP
 
-export const CHECKLIST_PBOZP: ChecklistPoint[] = [
+
+// ==========================================
+// 2. KONTROLA: PPP
+// ==========================================
+export const CHECKLIST_PBOZP = [
   "    ]
   },
   {
@@ -700,9 +712,15 @@ export const CHECKLIST_PBOZP: ChecklistPoint[] = [
 
       { id: '222', text: 'Horké povrchy a tekutiny (opaření)' },
       { id: '223', text: 'Hygiena a HACCP vs. BOZP' },
-];
+    ]
+  }
+]; // <-- ZDE KONČÍ PPP
 
-export const CHECKLIST_PPP: ChecklistPoint[] = [
+
+// ==========================================
+// 3. KONTROLA: Třetí typ (např. ISO, ŽP, atd.)
+// ==========================================
+export const CHECKLIST_PPP = [
   "    ]
   },
   {
@@ -736,6 +754,6 @@ export const CHECKLIST_PPP: ChecklistPoint[] = [
       { id: '248', text: 'Revize plynu – spotřebiče a potrubí' },
       { id: '249', text: 'Provádění údržby strojů a zařízení' },
       { id: '250', text: 'Umístění a stav ostatního požárního značení' },
-      ]
-   }   
-];
+    ]
+  }
+]; // <-- ZDE KONČÍ TŘETÍ TYP
