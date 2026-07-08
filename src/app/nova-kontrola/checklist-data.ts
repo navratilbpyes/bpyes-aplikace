@@ -11,341 +11,730 @@ export interface ChecklistSection {
 }
 
 export const CHECKLIST_SECTIONS: ChecklistSection[] = [
-  {
-    id: "A",
-    title: "Pracovněprávní oblast",
-    points: [
-      { id: 1, text: "Pracovní řád", nText: "Zaměstnavatel nemá zpracován pracovní řád nebo není aktuální." },
-      { id: 2, text: "Všichni zaměstnanci mají vystaveny pracovní smlouvy nebo dohody i pracích konaných mimopracovní poměr" },
-      { id: 3, text: "Evidence pracovní doby a její dodržování" },
-      { id: 4, text: "Seznam druhů prací" },
-      { id: 5, text: "Popisy pracovního místa / pozice, náplň funkce" },
-      { id: 6, text: "Provedeno informování o rizicích a koordinace BOZP, plní-li na jednom pracovišti úkoly zaměstnanci dvou a více zaměstnavatelů" }
-    ]
+  "  {
+    id: 'SEC_1',
+    title: 'PRACOVNĚPRÁVNÍ OBLAST',
+    items: [
+      { id: '1', text: 'Pracovní řád' },"
+
+
+
+      { id: '2', text: 'Pracovní smlouvy a dohody' },
+
+
+
+
+      { id: '3', text: 'Evidence pracovní doby' },
+
+
+
+
+      { id: '4', text: 'Seznam druhů prací' },
+
+
+      { id: '5', text: 'Popisy pracovního místa / náplň funkce' },
+
+
+
+      { id: '6', text: 'Informování o rizicích a koordinace BOZP na společném pracovišti' },
+
+
+"    ]
   },
   {
-    id: "B",
-    title: "Vyhledávání a hodnocení rizik",
-    points: [
-      { id: 7, text: "Provedení vyhledávání a hodnocení rizik – směrnice, pokyny apod.", nText: "Zaměstnavatel nemá provedeno vyhledávání a hodnocení rizik nebo není aktuální." },
-      { id: 8, text: "Seznamování zaměstnanců s riziky a opatřeními proti jejich působení" }
-    ]
+    id: 'SEC_25',
+    title: 'VYHLEDÁVÁNÍ A HODNOCENÍ RIZIK',
+    items: [
+      { id: '7', text: 'Vyhledávání a hodnocení rizik' },"
+
+
+
+
+      { id: '8', text: 'Seznamování zaměstnanců s riziky' },
+
+
+
+"    ]
   },
   {
-    id: "C",
-    title: "Systém BOZP a odpovědnost",
-    points: [
-      { id: 9, text: "Organizační struktura – systém nadřízenosti a podřízenosti" },
-      { id: 10, text: "Dokumentace BOZP (směrnice, provozní řády, bezpečnostní pokyny apod., aktuálnost předpisů)", nText: "Dokumentace BOZP není kompletní nebo není aktuální." },
-      { id: 11, text: "Seznamování zaměstnanců s dokumentací BOZP" },
-      { id: 12, text: "Stanovení osob(y) odpovídající za BOZP ve společnosti" },
-      { id: 13, text: "Stanovení osob(y) odpovídající za vedení dokumentace BOZP a PO" },
-      { id: 14, text: "Stanovení odpovědné osoby za jednotlivé prostory, sklady apod." }
-    ]
+    id: 'SEC_34',
+    title: 'SYSTÉM BOZP A ODPOVĚDNOST',
+    items: [
+      { id: '9', text: 'Organizační struktura – nadřízenost a podřízenost' },"
+
+
+      { id: '10', text: 'Dokumentace BOZP (aktuálnost předpisů)' },
+
+
+
+      { id: '11', text: 'Seznamování zaměstnanců s dokumentací BOZP' },
+
+
+      { id: '12', text: 'Osoba odpovědná za BOZP' },
+
+
+      { id: '13', text: 'Osoba odpovědná za vedení dokumentace BOZP a PO' },
+
+
+      { id: '14', text: 'Odpovědná osoba za jednotlivé prostory / sklady' },
+
+
+"    ]
   },
   {
-    id: "D",
-    title: "Školení a odborná způsobilost",
-    points: [
-      { id: 15, text: "Směrnice o školení", nText: "Zaměstnavatel nemá zpracovánu směrnici o školení zaměstnanců." },
-      { id: 16, text: "Plán školení, sledování termínů" },
-      { id: 17, text: "Osnovy školení (aktuálnost, schválení zaměstnavatelem)" },
-      { id: 18, text: "Vstupní školení BOZP a PO (dokumentace, vedení dokumentace, náplň)", nText: "Vstupní školení BOZP a PO není prováděno nebo není řádně dokumentováno." },
-      { id: 19, text: "Periodická a mimořádní školení BOZP a PO" },
-      { id: 20, text: "Odborná školení (druhy, vstupní, periodická, plán, zácvik, náplň)" },
-      { id: 21, text: "Evidence odborných způsobilostí" }
-    ]
+    id: 'SEC_53',
+    title: 'ŠKOLENÍ A ODBORNÁ ZPŮSOBILOST',
+    items: [
+      { id: '15', text: 'Směrnice o školení' },"
+
+
+      { id: '16', text: 'Plán školení, sledování termínů' },
+
+
+      { id: '17', text: 'Osnovy školení (aktuálnost, schválení zaměstnavatelem)' },
+
+
+      { id: '18', text: 'Vstupní školení BOZP a PO' },
+
+
+
+      { id: '19', text: 'Periodická a mimořádná školení BOZP a PO' },
+
+
+      { id: '20', text: 'Odborná školení (druhy, plán, zácvik, náplň)' },
+
+
+
+      { id: '21', text: 'Evidence odborných způsobilostí' },
+
+
+"    ]
   },
   {
-    id: "E",
-    title: "Pracovnělékařská péče",
-    points: [
-      { id: 22, text: "Směrnice k poskytování pracovnělékařské péče" },
-      { id: 23, text: "Plán lékařských prohlídek a vyšetření" },
-      { id: 24, text: "Smlouva s poskytovatelem pracovnělékařské péče" },
-      { id: 25, text: "Vstupní lékařské prohlídky (provádění, vedení dokumentace), včetně mladistvých" },
-      { id: 26, text: "Periodické a mimořádné lékařské prohlídky (provádění, vedení dokumentace), včetně mladistvých" },
-      { id: 27, text: "Výstupní a následné lékařské prohlídky (provádění, vedení dokumentace)" },
-      { id: 28, text: "Školení zaměstnanců o poskytování první pomoci" },
-      { id: 29, text: "Provedení dohledu poskytovatelem pracovnělékařské péče" },
-      { id: 30, text: "Kategorizace prací (zatřídění, schválení od KHS apod.)" },
-      { id: 31, text: "Seznámení zaměstnanců se zařazením do kategorií" },
-      { id: 32, text: "Předání kopie rozhodnutí poskytovateli pracovnělékařské péče" },
-      { id: 33, text: "Vyhledávání a opakovaná hodnocení rizikových faktorů, měření" },
-      { id: 34, text: "Lékárničky (umístění na pracovišti, stanovený obsah, provádění kontrol obsahu)", nText: "Lékárnička není umístěna na dostupném místě nebo není prováděna kontrola obsahu." },
-      { id: 35, text: "Stanovení bezpečnostních přestávek" },
-      { id: 36, text: "Evidence rizikových prací (u kategorie 2R, 3 a 4)" }
-    ]
+    id: 'SEC_76',
+    title: 'PRACOVNĚLÉKAŘSKÁ PÉČE, ZDRAVOTNÍ ZPŮSOBILOST, OCHRANA ZDRAVÍ',
+    items: [
+      { id: '22', text: 'Směrnice k poskytování pracovnělékařské péče' },"
+
+
+      { id: '23', text: 'Plán lékařských prohlídek a vyšetření' },
+
+
+      { id: '24', text: 'Smlouva s poskytovatelem PLP' },
+
+
+      { id: '25', text: 'Vstupní lékařské prohlídky' },
+
+
+      { id: '26', text: 'Periodické a mimořádné lékařské prohlídky' },
+
+
+      { id: '27', text: 'Výstupní a následné lékařské prohlídky' },
+
+
+      { id: '28', text: 'Školení zaměstnanců o poskytování první pomoci' },
+
+
+      { id: '29', text: 'Dohled poskytovatelem PLP na pracovišti' },
+
+
+      { id: '30', text: 'Kategorizace prací' },
+
+
+      { id: '31', text: 'Seznámení zaměstnanců se zařazením do kategorií' },
+
+      { id: '32', text: 'Předání kopie rozhodnutí poskytovateli PLP' },
+
+      { id: '33', text: 'Vyhledávání a hodnocení rizikových faktorů, měření' },
+
+
+      { id: '34', text: 'Lékárničky' },
+
+
+
+      { id: '35', text: 'Stanovení bezpečnostních přestávek' },
+
+      { id: '36', text: 'Evidence rizikových prací (kat. 2R, 3, 4)' },
+
+
+"    ]
   },
   {
-    id: "F",
-    title: "Úrazy",
-    points: [
-      { id: 37, text: "Směrnice o postupu při úrazu, registrace na portálu SUIP" },
-      { id: 38, text: "Kniha úrazů (vedení, umístění)", nText: "Zaměstnavatel nevede knihu úrazů nebo není vedena v souladu s právními předpisy." },
-      { id: 39, text: "Stanovení opatření proti opakování úrazu a jeho kontrola" },
-      { id: 40, text: "Odškodnění pracovního úrazu" }
-    ]
+    id: 'SEC_119',
+    title: 'ÚRAZY',
+    items: [
+      { id: '37', text: 'Směrnice o postupu při úrazu, registrace na portálu SUIP' },"
+
+
+      { id: '38', text: 'Kniha úrazů (vedení, umístění)' },
+
+
+      { id: '39', text: 'Opatření proti opakování úrazu a jeho kontrola' },
+
+      { id: '40', text: 'Odškodnění pracovního úrazu' },
+
+"    ]
   },
   {
-    id: "G",
-    title: "Poskytování OOPP, MČDP a ON",
-    points: [
-      { id: 41, text: "Směrnice o poskytování OOPP, MČDP a ON" },
-      { id: 42, text: "Hodnocení rizik pro poskytnutí OOPP" },
-      { id: 43, text: "Stanovena kritéria pro výběr OOPP" },
-      { id: 44, text: "Výměna a skladování OOPP" },
-      { id: 45, text: "Kontroly používání OOPP" },
-      { id: 46, text: "Evidence poskytování OOPP" },
-      { id: 47, text: "Poskytování OOPP návštěvám, externím pracovníkům apod." },
-      { id: 48, text: "Údržba OOPP (praní, impregnace, opravy apod.)" },
-      { id: 49, text: "Poskytování MČDP" },
-      { id: 50, text: "Poskytování ON" }
-    ]
+    id: 'SEC_129',
+    title: 'POSKYTOVÁNÍ OOPP, MČDP A ON',
+    items: [
+      { id: '41', text: 'Směrnice o poskytování OOPP, MČDP a ON' },"
+
+      { id: '42', text: 'Hodnocení rizik pro poskytnutí OOPP' },
+
+      { id: '43', text: 'Kritéria pro výběr OOPP' },
+
+      { id: '44', text: 'Výměna a skladování OOPP' },
+
+      { id: '45', text: 'Kontroly používání OOPP' },
+
+      { id: '46', text: 'Evidence poskytování OOPP' },
+
+      { id: '47', text: 'Poskytování OOPP návštěvám a externím pracovníkům' },
+
+      { id: '48', text: 'Údržba OOPP' },
+
+      { id: '49', text: 'Poskytování MČDP' },
+
+      { id: '50', text: 'Poskytování ochranných nápojů (ON)' },
+
+"    ]
   },
   {
-    id: "H",
-    title: "Kontrolní činnost",
-    points: [
-      { id: 51, text: "Směrnice o kontrolní činnosti, či jiný předpis upravující kontroly BOZP, PO, revize, inspekce apod." },
-      { id: 52, text: "Provádění kontrol BOZP (perioda, prokazatelnost, vedení dokumentace, odstraňování zjištěných nedostatků apod.)" },
-      { id: 53, text: "Kontroly na alkohol a návykové látky" },
-      { id: 54, text: "Kontroly orgánů státní zprávy" }
-    ]
+    id: 'SEC_149',
+    title: 'KONTROLNÍ ČINNOST',
+    items: [
+      { id: '51', text: 'Směrnice o kontrolní činnosti' },"
+
+      { id: '52', text: 'Provádění kontrol BOZP (roční prověrka)' },
+
+
+
+      { id: '53', text: 'Kontroly na alkohol a návykové látky' },
+
+
+      { id: '54', text: 'Kontroly orgánů státní správy' },
+
+"    ]
   },
   {
-    id: "CH",
-    title: "Bezpečnostní značení",
-    points: [
-      { id: 55, text: "Bezpečnostní tabulky" },
-      { id: 56, text: "Značení dopravních cest" },
-      { id: 57, text: "Značení snížených / zúžených profilů" },
-      { id: 58, text: "Značení únikových cest" },
-      { id: 59, text: "Značení druhu a směru proudění médií v potrubí" },
-      { id: 60, text: "Značení prostředků první pomoci, věcných prostředků PO" },
-      { id: 61, text: "Zajištění pracoviště / areálu proti vstupu nepovolaných osob" }
-    ]
+    id: 'SEC_160',
+    title: 'BEZPEČNOSTNÍ ZNAČENÍ A ZAJIŠTĚNÍ PRACOVIŠTĚ PROTI VSTUPU NEPOVOLANÝCH OSOB',
+    items: [
+      { id: '55', text: 'Bezpečnostní tabulky' },"
+
+
+      { id: '56', text: 'Značení dopravních cest' },
+
+      { id: '57', text: 'Značení snížených / zúžených profilů' },
+
+      { id: '58', text: 'Značení únikových cest' },
+
+
+      { id: '59', text: 'Značení druhu a směru proudění médií v potrubí' },
+
+      { id: '60', text: 'Značení prostředků první pomoci a věcných prostředků PO' },
+
+      { id: '61', text: 'Zajištění pracoviště proti vstupu nepovolaných osob' },
+
+"    ]
   },
   {
-    id: "I",
-    title: "Provozování dopravy",
-    points: [
-      { id: 62, text: "Směrnice o provozování dopravy – dopravní řád" },
-      { id: 63, text: "Stanovení odpovědných osob" },
-      { id: 64, text: "Evidence dopravních prostředků" },
-      { id: 65, text: "Vedení knihy jízd (dodržování bezpečnostních přestávek)" },
-      { id: 66, text: "Provádění státní technické kontroly" },
-      { id: 67, text: "Stanovení maximální rychlosti v areálu a v budovách" }
-    ]
+    id: 'SEC_176',
+    title: 'PROVOZOVÁNÍ DOPRAVY',
+    items: [
+      { id: '62', text: 'Směrnice o provozování dopravy – dopravní řád' },"
+
+
+      { id: '63', text: 'Stanovení odpovědných osob za dopravu' },
+
+      { id: '64', text: 'Evidence dopravních prostředků' },
+
+      { id: '65', text: 'Vedení knihy jízd (bezpečnostní přestávky)' },
+
+      { id: '66', text: 'Provádění STK' },
+
+      { id: '67', text: 'Stanovení maximální rychlosti v areálu a v budovách' },
+
+"    ]
   },
   {
-    id: "J",
-    title: "Manipulační technika",
-    points: [
-      { id: 68, text: "Směrnice / pokyny pro provoz manipulační techniky" },
-      { id: 69, text: "Stanovení odpovědné osoby" },
-      { id: 70, text: "Provedení technické kontroly" },
-      { id: 71, text: "Vedení průvodní a provozní dokumentace" }
-    ]
+    id: 'SEC_189',
+    title: 'MANIPULAČNÍ TECHNIKA',
+    items: [
+      { id: '68', text: 'Směrnice / pokyny pro provoz manipulační techniky' },"
+
+
+      { id: '69', text: 'Stanovení odpovědné osoby za manipulační techniku' },
+
+      { id: '70', text: 'Provedení technické kontroly manipulační techniky' },
+
+
+      { id: '71', text: 'Vedení průvodní a provozní dokumentace' },
+
+
+"    ]
   },
   {
-    id: "K",
-    title: "Skladování",
-    points: [
-      { id: 72, text: "Místní řád skladu" },
-      { id: 73, text: "Vyznačení únosnosti podlah" },
-      { id: 74, text: "Vyznačení skladovacích prostor, komunikací" },
-      { id: 75, text: "Označení regálů" },
-      { id: 76, text: "Provádění kontrola skladovacího zařízení min. 1x ročně" },
-      { id: 77, text: "Způsoby skladování (materiál, tlakové lahve apod.)" }
-    ]
+    id: 'SEC_200',
+    title: 'SKLADOVÁNÍ',
+    items: [
+      { id: '72', text: 'Místní řád skladu' },"
+
+
+      { id: '73', text: 'Vyznačení únosnosti podlah' },
+
+      { id: '74', text: 'Vyznačení skladovacích prostor, komunikací' },
+
+      { id: '75', text: 'Označení regálů' },
+
+      { id: '76', text: 'Kontrola skladovacího zařízení min. 1x ročně' },
+
+
+      { id: '77', text: 'Způsoby skladování (materiál, tlakové lahve apod.)' },
+
+
+"    ]
   },
   {
-    id: "L",
-    title: "Vyhrazená technická elektrická zařízení",
-    points: [
-      { id: 78, text: "Řádu prohlídek, údržby a revizí" },
-      { id: 79, text: "Protokol o určení vnějších vlivů" },
-      { id: 80, text: "Pověření odpovědné osoby za provoz elektrických zařízení" },
-      { id: 81, text: "Harmonogram revizí a kontrol" },
-      { id: 82, text: "Provedení revizí a kontrol (instalace, hromosvody atd.)" },
-      { id: 83, text: "Vedení dokumentace (návody, technická dokumentace, revizní zprávy, karty spotřebičů, odstraňování nedostatků apod.)" }
-    ]
+    id: 'SEC_215',
+    title: 'VYHRAZENÁ TECHNICKÁ ELEKTRICKÁ ZAŘÍZENÍ',
+    items: [
+      { id: '78', text: 'Řád prohlídek, údržby a revizí' },"
+
+      { id: '79', text: 'Protokol o určení vnějších vlivů' },
+
+      { id: '80', text: 'Pověření odpovědné osoby za provoz el. zařízení' },
+
+      { id: '81', text: 'Harmonogram revizí a kontrol el. zařízení' },
+
+      { id: '82', text: 'Provedení revizí a kontrol (instalace, hromosvody)' },
+
+
+      { id: '83', text: 'Vedení dokumentace el. zařízení' },
+
+
+"    ]
   },
   {
-    id: "M",
-    title: "Vyhrazená technická tlaková zařízení",
-    points: [
-      { id: 84, text: "Směrnice / pokyny k provozu tlakových nádob stabilních" },
-      { id: 85, text: "Pověření odpovědné osoby za bezpečný a hospodárný provoz tlakových nádob stabilních" },
-      { id: 86, text: "Harmonogram revizí a kontrol" },
-      { id: 87, text: "Provedení revizí a kontrol" },
-      { id: 88, text: "Školení a zdravotní způsobilost obsluh" },
-      { id: 89, text: "Vedení dokumentace (návody, technická dokumentace, revizní zprávy, odstraňování nedostatků apod.)" }
-    ]
+    id: 'SEC_229',
+    title: 'VYHRAZENÁ TECHNICKÁ TLAKOVÁ ZAŘÍZENÍ',
+    items: [
+      { id: '84', text: 'Směrnice / pokyny k provozu TNS' },"
+
+      { id: '85', text: 'Pověření odpovědné osoby za provoz TNS' },
+
+      { id: '86', text: 'Harmonogram revizí a kontrol TNS' },
+
+      { id: '87', text: 'Provedení revizí a kontrol TNS' },
+
+      { id: '88', text: 'Školení a zdravotní způsobilost obsluh TNS' },
+
+      { id: '89', text: 'Vedení dokumentace TNS' },
+
+"    ]
   },
   {
-    id: "N",
-    title: "Vyhrazená technická zdvihací zařízení",
-    points: [
-      { id: 90, text: "Systém bezpečné práce zdvihacích zařízení / provozní předpis" },
-      { id: 91, text: "Pověření odpovědné osoby za provoz zdvihacích zařízení" },
-      { id: 92, text: "Harmonogram revizí, inspekcí a kontrol" },
-      { id: 93, text: "Provedení revizí a kontrol (zdvihací zařízení, příslušenství)" },
-      { id: 94, text: "Školení a zdravotní způsobilost jeřábníka a vazače" },
-      { id: 95, text: "Vedení dokumentace (návody, technická dokumentace, revizní zprávy, odstraňování nedostatků apod.)" }
-    ]
+    id: 'SEC_241',
+    title: 'VYHRAZENÁ TECHNICKÁ ZDVIHACÍ ZAŘÍZENÍ',
+    items: [
+      { id: '90', text: 'Systém bezpečné práce / provozní předpis ZZ' },"
+
+      { id: '91', text: 'Pověření odpovědné osoby za provoz ZZ' },
+
+      { id: '92', text: 'Harmonogram revizí, inspekcí a kontrol ZZ' },
+
+      { id: '93', text: 'Provedení revizí a kontrol ZZ a příslušenství' },
+
+
+      { id: '94', text: 'Školení a zdravotní způsobilost jeřábníka a vazače' },
+
+      { id: '95', text: 'Vedení dokumentace ZZ' },
+
+"    ]
   },
   {
-    id: "O",
-    title: "Vyhrazená technická plynová zařízení",
-    points: [
-      { id: 96, text: "Směrnice / pokyny k provozu plynových zařízení / spotřebičů" },
-      { id: 97, text: "Pověření odpovědné osoby za provoz plynových zařízení / spotřebičů" },
-      { id: 98, text: "Harmonogram revizí a kontrol" },
-      { id: 99, text: "Provedení revizí a kontrol" },
-      { id: 100, text: "Školení a zdravotní způsobilost obsluh" },
-      { id: 101, text: "Vedení dokumentace (návody, technická dokumentace, revizní zprávy, odstraňování nedostatků apod.)" }
-    ]
+    id: 'SEC_254',
+    title: 'VYHRAZENÁ TECHNICKÁ PLYNOVÁ ZAŘÍZENÍ',
+    items: [
+      { id: '96', text: 'Směrnice / pokyny k provozu plynových zařízení' },"
+
+      { id: '97', text: 'Pověření odpovědné osoby za plynová zařízení' },
+
+      { id: '98', text: 'Harmonogram revizí a kontrol plynových zařízení' },
+
+      { id: '99', text: 'Provedení revizí a kontrol plynových zařízení' },
+
+
+      { id: '100', text: 'Školení a zdravotní způsobilost obsluh plynových zařízení' },
+
+      { id: '101', text: 'Vedení dokumentace plynových zařízení' },
+
+"    ]
   },
   {
-    id: "P",
-    title: "Stroje a ostatní technická zařízení",
-    points: [
-      { id: 102, text: "Evidence strojů a ostatních technických zařízení (kovoobráběcí a tvářecí stroje, dřevozpracující stroje, žebříky a schůdky, sekční vrata apod.)" },
-      { id: 103, text: "Provádění kontrol technického stavu min. 1x ročně" },
-      { id: 104, text: "Vedení průvodní a provozní dokumentace", nText: "Zaměstnavatel nevede průvodní a provozní dokumentaci stroje nebo není vedena v celém rozsahu." },
-      { id: 105, text: "Dostupnost návodů ke strojům a technickým zařízením" },
-      { id: 106, text: "Seznámení zaměstnanců s návody, bezpečnostními pokyny, stanovení obsluh" }
-    ]
+    id: 'SEC_267',
+    title: 'STROJE A OSTATNÍ TECHNICKÁ ZAŘÍZENÍ',
+    items: [
+      { id: '102', text: 'Evidence strojů a technických zařízení' },"
+
+      { id: '103', text: 'Kontroly technického stavu min. 1x ročně' },
+
+      { id: '104', text: 'Vedení průvodní a provozní dokumentace strojů' },
+
+      { id: '105', text: 'Dostupnost návodů ke strojům' },
+
+      { id: '106', text: 'Seznámení zaměstnanců s návody, stanovení obsluh' },
+
+
+"    ]
   },
   {
-    id: "Q",
-    title: "Kotelna",
-    points: [
-      { id: 107, text: "Provozní řád kotelny" },
-      { id: 108, text: "Provozní dokumentace kotelny" },
-      { id: 109, text: "Pověření odpovědné osoby za provoz kotelny" },
-      { id: 110, text: "Školení a zdravotní způsobilosti obsluhy / topiče" },
-      { id: 111, text: "Větrání / přívod vzduchu, větrání neuzavíratelným otvorem u podlahy" },
-      { id: 112, text: "Úniková cesta (do volného prostoru u kotelny nad 150m2)" },
-      { id: 113, text: "Dveře z nehořlavého materiálu" },
-      { id: 114, text: "Vedení provozního deníku / dokumentace" },
-      { id: 115, text: "Zařízení pro zjišťování přítomnost oxidu uhelnatého" },
-      { id: 116, text: "Přenosné hasicí přístroje (počet, druh)" },
-      { id: 117, text: "Prostředky pro poskytnutí první pomoci" },
-      { id: 118, text: "Odborná prohlídka kotelny (min. 1x za 12 měsíců)" },
-      { id: 119, text: "Osvědčení a oprávnění osob k provádění revizí" }
-    ]
+    id: 'SEC_278',
+    title: 'KOTELNA',
+    items: [
+      { id: '107', text: 'Provozní řád kotelny' },"
+
+      { id: '108', text: 'Provozní dokumentace kotelny' },
+
+      { id: '109', text: 'Pověření odpovědné osoby za provoz kotelny' },
+      { id: '110', text: 'Školení a zdravotní způsobilost obsluhy / topiče' },
+
+      { id: '111', text: 'Větrání / přívod vzduchu kotelny' },
+
+      { id: '112', text: 'Úniková cesta z kotelny' },
+      { id: '113', text: 'Dveře z nehořlavého materiálu' },
+      { id: '114', text: 'Vedení provozního deníku kotelny' },
+
+      { id: '115', text: 'Zařízení pro zjišťování přítomnosti CO' },
+
+      { id: '116', text: 'Přenosné hasicí přístroje v kotelně' },
+
+      { id: '117', text: 'Prostředky pro poskytnutí první pomoci v kotelně' },
+      { id: '118', text: 'Odborná prohlídka kotelny (min. 1x za 12 měsíců)' },
+
+      { id: '119', text: 'Osvědčení a oprávnění osob k revizím' },
+"    ]
   },
   {
-    id: "R",
-    title: "Nebezpečné chemické látky a směsi",
-    points: [
-      { id: 120, text: "Evidence nebezpečných chemických látek a směsí" },
-      { id: 121, text: "Bezpečnostní listy (umístění, aktualizace apod.)" },
-      { id: 122, text: "Seznámení zaměstnanců s bezpečnostními listy" },
-      { id: 123, text: "Skladování a ukládání nebezpečných chemických látek (vyhrazené sklady, na pracovišti, bezpečné nádoby, označení apod.)" },
-      { id: 124, text: "OOPP pro práci s nebezpečnými chemickými látkami" },
-      { id: 125, text: "Prostředky pro zachycení úniku" }
-    ]
+    id: 'SEC_299',
+    title: 'NEBEZPEČNÉ CHEMICKÉ LÁTKY A SMĚSI',
+    items: [
+      { id: '120', text: 'Evidence NCHLaS' },"
+
+      { id: '121', text: 'Bezpečnostní listy' },
+
+
+      { id: '122', text: 'Seznámení zaměstnanců s bezpečnostními listy' },
+
+      { id: '123', text: 'Skladování a ukládání NCHLaS' },
+
+
+      { id: '124', text: 'OOPP pro práci s NCHLaS' },
+      { id: '125', text: 'Prostředky pro zachycení úniku' },
+"    ]
   },
   {
-    id: "S",
-    title: "Hygienické požadavky na pracovišti",
-    points: [
-      { id: 126, text: "Osvětlení pracoviště" },
-      { id: 127, text: "Větrání pracoviště / výměna vzduchu" },
-      { id: 128, text: "Teplota na pracovišti, vytápění" },
-      { id: 129, text: "Dostatečný pracovní prostor pro jednoho zaměstnance" },
-      { id: 130, text: "Výška pracovní desky stolu" },
-      { id: 131, text: "Umístění výpočetní techniky" },
-      { id: 132, text: "Prostory pro převlékání a osobní hygienu" },
-      { id: 133, text: "Místnost pro odpočinek (vybavení nábytkem, teplota min. 20°C, osvětlení, tekoucí teplá voda apod.)" }
-    ]
+    id: 'SEC_311',
+    title: 'HYGIENICKÉ POŽADAVKY NA PRACOVIŠTI',
+    items: [
+      { id: '126', text: 'Osvětlení pracoviště' },"
+
+      { id: '127', text: 'Větrání pracoviště' },
+      { id: '128', text: 'Teplota na pracovišti, vytápění' },
+      { id: '129', text: 'Pracovní prostor pro jednoho zaměstnance' },
+      { id: '130', text: 'Výška pracovní desky stolu' },
+      { id: '131', text: 'Umístění výpočetní techniky' },
+      { id: '132', text: 'Prostory pro převlékání a osobní hygienu' },
+
+      { id: '133', text: 'Místnost pro odpočinek' },
+
+"    ]
   },
   {
-    id: "T",
-    title: "Kontrola dokumentace PO",
-    points: [
-      { id: 134, text: "Kolaudační rozhodnutí a užívání stavby v souladu s rozhodnutím" },
-      { id: 135, text: "Požárně bezpečnostní řešení stavby" },
-      { id: 136, text: "Dokumentace o začlenění do kategorie činností podle požárního nebezpečí" },
-      { id: 136, text: "Stanovení organizace PO" }, // Ponecháno původní zdvojené ID 136 podle zadání
-      { id: 137, text: "Tematický plán a časový rozvrh školení PO vedoucích zaměstnanců" },
-      { id: 138, text: "Tematický plán a časový rozvrh školení PO zaměstnanců" },
-      { id: 139, text: "Tematický plán a časový rozvrh školení preventisty PO" },
-      { id: 140, text: "Tematický plán a časový rozvrh školení preventivních požárních hlídek" },
-      { id: 141, text: "Provedení školení o PO vedoucích zaměstnanců" },
-      { id: 142, text: "Provedení školení o PO zaměstnanců" },
-      { id: 143, text: "Provedení odborné přípravy a jmenování preventisty PO" },
-      { id: 144, text: "Provedení odborné přípravy a jmenování preventivní požární hlídky" },
-      { id: 145, text: "Požárně poplachová směrnice" },
-      { id: 146, text: "Požární řád(y)" },
-      { id: 147, text: "Pokyny pro činnost preventivní požární hlídky" },
-      { id: 148, text: "Řád ohlašovny požáru" },
-      { id: 149, text: "Požární evakuační plán" },
-      { id: 150, text: "Dokumentace o zdolávání požáru" },
-      { id: 151, text: "Požární kniha (umístění, vedení apod.)" },
-      { id: 152, text: "Provádění preventivních požárních prohlídek (dodržování termínu, dokumentace, odstraňování zjištěných nedostatků)" },
-      { id: 153, text: "Cvičný poplach (provedení, dokumentace apod.)" },
-      { id: 154, text: "Dokumentace PBZ (doklad o montáži, funkční zkoušce, kontrole provozuschopnosti, údržbě a opravách)" },
-      { id: 155, text: "Kontroly PBZ" },
-      { id: 156, text: "Přenosné hasicí přístroje" },
-      { id: 157, text: "Hydranty" },
-      { id: 158, text: "Požární nádrž (kontroly, provozní řád)" },
-      { id: 159, text: "Nouzové osvětlení (měsíční, roční)" },
-      { id: 160, text: "Požární dveře" },
-      { id: 161, text: "Požární nebo evakuační výtah" },
-      { id: 162, text: "Zařízení pro požární signalizaci" },
-      { id: 163, text: "Zařízení pro potlačení požáru nebo výbuchu" },
-      { id: 164, text: "Zařízení pro usměrňování pohybu kouře při požáru" },
-      { id: 165, text: "Zařízení pro omezení šíření požáru" },
-      { id: 167, text: "Náhradní zdroje a prostředky pro požárně bezpečnostní zařízení" },
-      { id: 168, text: "Zařízení zamezující iniciaci požáru nebo výbuchu" }
+    id: 'SEC_322',
+    title: 'KONTROLA DOKUMENTACE PO',
+    items: [
+      { id: '134', text: 'Kolaudační rozhodnutí a užívání stavby' },"
+
+      { id: '135', text: 'Požárně bezpečnostní řešení stavby' },
+
+      { id: '136', text: 'Dokumentace o začlenění do kategorie činností' },
+
+      { id: '137', text: 'Stanovení organizace zabezpečení PO' },
+
+      { id: '138', text: 'Tematický plán a rozvrh školení PO vedoucích zaměstnanců' },
+      { id: '139', text: 'Tematický plán a rozvrh školení PO zaměstnanců' },
+      { id: '140', text: 'Tematický plán a rozvrh školení preventisty PO' },
+      { id: '141', text: 'Tematický plán a rozvrh školení preventivních požárních hlídek' },
+      { id: '142', text: 'Provedení školení o PO vedoucích zaměstnanců' },
+
+      { id: '143', text: 'Provedení školení o PO zaměstnanců' },
+
+      { id: '144', text: 'Odborná příprava a jmenování preventisty PO' },
+
+      { id: '145', text: 'Odborná příprava a jmenování PPH' },
+
+      { id: '146', text: 'Požárně poplachová směrnice' },
+
+      { id: '147', text: 'Požární řád(y)' },
+
+      { id: '148', text: 'Pokyny pro činnost preventivní požární hlídky' },
+      { id: '149', text: 'Řád ohlašovny požáru' },
+      { id: '150', text: 'Požární evakuační plán' },
+
+      { id: '151', text: 'Dokumentace o zdolávání požáru' },
+      { id: '152', text: 'Požární kniha' },
+
+      { id: '153', text: 'Preventivní požární prohlídky' },
+
+
+      { id: '154', text: 'Cvičný požární poplach' },
+
+      { id: '155', text: 'Dokumentace PBZ' },
+
+      { id: '156', text: 'Kontroly provozuschopnosti PBZ' },
+
+      { id: '157', text: 'Přenosné hasicí přístroje' },
+
+
+      { id: '158', text: 'Hydranty' },
+
+      { id: '159', text: 'Požární nádrž' },
+
+      { id: '160', text: 'Nouzové osvětlení' },
+
+      { id: '161', text: 'Požární dveře' },
+
+      { id: '162', text: 'Požární / evakuační výtah' },
+      { id: '163', text: 'Zařízení pro požární signalizaci (EPS)' },
+
+      { id: '164', text: 'Zařízení pro potlačení požáru nebo výbuchu (SHZ)' },
+
+      { id: '165', text: 'Zařízení pro usměrňování pohybu kouře (ZOKT)' },
+
+      { id: '166', text: 'Zařízení pro omezení šíření požáru' },
+
+      { id: '167', text: 'Náhradní zdroje a zásoba hasebních látek' },
+
+      { id: '168', text: 'Zařízení zamezující iniciaci požáru nebo výbuchu' },
+"    ]
+  },
+  {
+    id: 'SEC_385',
+    title: 'PRÁCE Z DOMOVA / HOME OFFICE',
+    items: [
+      { id: '169', text: 'Dohoda o práci na dálku' },"
+
+      { id: '170', text: 'Náhrada nákladů při práci na dálku' },
+      { id: '171', text: 'BOZP při práci na dálku' },
+
+
+"    ]
+  },
+  {
+    id: 'SEC_391',
+    title: 'MLADISTVÍ A OSOBY SE ZDRAVOTNÍM POSTIŽENÍM',
+    items: [
+      { id: '172', text: 'Zakázané práce mladistvým' },"
+
+      { id: '173', text: 'Zdravotní způsobilost mladistvých' },
+
+      { id: '174', text: 'Úprava pracovišť pro osoby se ZP' },
+
+"    ]
+  },
+  {
+    id: 'SEC_397',
+    title: 'NOČNÍ PRÁCE A OCHRANA TĚHOTNÝCH A MATEK',
+    items: [
+      { id: '175', text: 'Zvláštní režim noční práce' },"
+
+      { id: '176', text: 'Zakázané práce těhotným a kojícím' },
+
+      { id: '177', text: 'Úprava podmínek pro matky a těhotné' },
+
+"    ]
+  },
+  {
+    id: 'SEC_403',
+    title: 'RUČNÍ MANIPULACE S BŘEMENY A ERGONOMIE',
+    items: [
+      { id: '178', text: 'Hodnocení rizik ruční manipulace' },"
+
+      { id: '179', text: 'Organizace manipulace a pomůcky' },
+
+      { id: '180', text: 'Ergonomie pracovního místa' },
+
+"    ]
+  },
+  {
+    id: 'SEC_409',
+    title: 'PRÁCE VE VÝŠKÁCH A NAD VOLNOU HLOUBKOU',
+    items: [
+      { id: '181', text: 'Systém / pokyny pro práci ve výškách' },"
+
+      { id: '182', text: 'Kolektivní a osobní ochrana proti pádu' },
+
+      { id: '183', text: 'Žebříky a schůdky' },
+
+
+"    ]
+  },
+  {
+    id: 'SEC_416',
+    title: 'AZBEST A NEBEZPEČNÉ STAVEBNÍ MATERIÁLY',
+    items: [
+      { id: '184', text: 'Evidence a identifikace azbestu' },"
+
+      { id: '185', text: 'Práce s rizikem uvolnění azbestu' },
+
+"    ]
+  },
+  {
+    id: 'SEC_420',
+    title: 'ODPADOVÉ HOSPODÁŘSTVÍ',
+    items: [
+      { id: '186', text: 'Nakládání s odpady' },"
+      { id: '187', text: 'Nebezpečné odpady' },
+
+"    ]
+  },
+  {
+    id: 'SEC_424',
+    title: 'OSAMOCENÁ PRÁCE',
+    items: [
+      { id: '188', text: 'Režim osamocené práce' },"
+      { id: '189', text: 'Rizikové práce zákazané osamoceně' },
     ]
   }
 ];
 
-export const CHECKLIST_PPP: ChecklistPoint[] = [
-  { id: 1, text: "Požární poplachové směrnice – umístění, počet, aktuálnost a stav", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 2, text: "Požární řád – umístění, aktuálnost a stav", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 3, text: "Únikové komunikace – přístup, značení", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 4, text: "Únikové východy – přístup, značení", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 5, text: "Přenosné hasicí přístroje – stav, přístup, kontrola, umístění", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 6, text: "Hydranty – stav, přístup, kontrola, umístění", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 7, text: "Suchovody – stav, přístup, kontrola", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 8, text: "Požární žebříky – stav, přístup", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 9, text: "Nouzové osvětlení – stav, funkčnost", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 10, text: "Tlačítka požárního poplachu – značení, stav, funkce", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 11, text: "Požární klapky – stav, funkčnost", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 12, text: "Funkce požární poplachové sirény", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 13, text: "Úklid a čistota pracoviště, vrstvy prachu", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 14, text: "Uložení a skladování tlakových lahví – stav lahví, počet, umístění na pracovišti, zajištění proti pádu, označení prostoru uložení, bezpečnostní listy na pracovišti", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 15, text: "Uložení a skladování NCHLaS – stav nádob, umístění v záchytných prostředích, dovolené množství, bezpečnostní listy na pracovišti", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 16, text: "Skladování hořlavého materiálu – množství (dovolené množství dle požárního řádu)", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 17, text: "Umístění prostředků pro únik kapalin – sorbenty, havarijní souprava", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 18, text: "Přístup a označení hlavního uzávěru plynu", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 19, text: "Přístup a označení hlavního vypínače elektrické energie", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 20, text: "Skladování hořlavého materiálu v blízkosti rozvaděčů – min. vzdálenost 80 cm + značení rozvaděče", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 21, text: "Značení potrubí – zejména technické plyny, zemní plyn", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 22, text: "Evidence a revize / kontroly elektro spotřebičů a prodlužovacích přívodů (namátkový výběr)", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 23, text: "Revize elektro instalací", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 24, text: "Revize hromosvodu", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 25, text: "Revize plynu – spotřebiče a potrubí", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 26, text: "Provádění údržby strojů a zařízení (namátková kontrola údržbových plánů, provozní dokumentace a fyzický stav)", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 27, text: "Umístění a stav ostatního požárního značení – elektro rozvaděče, hlavního uzávěru, značení na vstupu do objektu", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." }
+export const CHECKLIST_PBOZP: ChecklistPoint[] = [
+  "    ]
+  },
+  {
+    id: 'SEC_428',
+    title: 'Společné',
+    items: [
+      { id: '190', text: 'Volný přístup / komunikace k pracovišti' },"
+
+
+      { id: '191', text: 'Používání OOPP' },
+
+
+      { id: '192', text: 'Uklizený pracovní prostor' },
+
+      { id: '193', text: 'Stav pracovních prostředků / nářadí / strojů' },
+
+
+      { id: '194', text: 'Dostatek světla na pracovišti' },
+
+      { id: '195', text: 'Bezpečnostní značení' },
+
+      { id: '196', text: 'Skladování materiálu dle zásad' },
+
+      { id: '197', text: 'Manipulace a ukládání NCHLaS' },
+
+      { id: '198', text: 'Lékárničky' },
+
+      { id: '199', text: 'Volné únikové komunikace a východy' },
+      { id: '200', text: 'Volné únikové komunikace a východy' },
+"    ]
+  },
+  {
+    id: 'SEC_451',
+    title: 'Sklad',
+    items: [
+      { id: '201', text: 'Místní řád skladu' },"
+      { id: '202', text: 'Únosnost podlah a regálů' },
+
+      { id: '203', text: 'Stav a kontrola regálů' },
+
+      { id: '204', text: 'Manipulace a dopravní cesty' },
+
+      { id: '205', text: 'Stohování a ukládání' },
+"    ]
+  },
+  {
+    id: 'SEC_459',
+    title: 'Sklad NCHLaS',
+    items: [
+      { id: '206', text: 'Skladování dle bezpečnostních listů' },"
+
+      { id: '207', text: 'Záchytné prostředky (jímky, vany)' },
+
+      { id: '208', text: 'Větrání skladu' },
+      { id: '209', text: 'Havarijní prostředky a značení' },
+
+      { id: '210', text: 'Písemná pravidla nakládání s NCHLaS' },
+      { id: '211', text: 'Dovolené množství' },
+"    ]
+  },
+  {
+    id: 'SEC_468',
+    title: 'Lakovna',
+    items: [
+      { id: '212', text: 'Prostředí s nebezpečím výbuchu (ATEX)' },"
+
+      { id: '213', text: 'Odsávání a větrání' },
+
+      { id: '214', text: 'Elektrická zařízení v nevýbušném provedení' },
+      { id: '215', text: 'Zdroje iniciace a antistatika' },
+
+      { id: '216', text: 'Skladování barev a ředidel' },
+
+      { id: '217', text: 'OOPP proti chemickému riziku' },
+"    ]
+  },
+  {
+    id: 'SEC_478',
+    title: 'Kuchyně',
+    items: [
+      { id: '218', text: 'Odsávání a vzduchotechnika' },"
+
+      { id: '219', text: 'Plynové spotřebiče' },
+
+      { id: '220', text: 'Kluzké podlahy' },
+      { id: '221', text: 'Práce s noži a stroji' },
+
+      { id: '222', text: 'Horké povrchy a tekutiny (opaření)' },
+      { id: '223', text: 'Hygiena a HACCP vs. BOZP' },
 ];
 
-export const CHECKLIST_PBOZP: ChecklistPoint[] = [
-  { id: 1, text: "Je volný přístup / komunikace k pracovišti?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 2, text: "Používá zaměstnanec osobní ochranné pracovní prostředky?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 3, text: "Je pracovní prostor zaměstnance uklizený / nezasahují žádné předměty / materiál?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 4, text: "Jsou používané pracovní prostředky / nářadí / stroje vizuálně bez vadné?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 5, text: "Je na pracovišti dostatek světla?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 6, text: "Je pracoviště vybaveno bezpečnostním značením a je bez závad?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 7, text: "Je skladování materiálu na pracovišti prováděno dle bezpečnostních zásad?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 8, text: "Jsou-li používány NCHLaS, je s nimi bezpečně manipulováno a ukládány?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 9, text: "Jsou na pracovišti lékárničky, obsah je kompletní a bez závad?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." },
-  { id: 10, text: "Jsou volné únikové komunikace a východy?", nText: "Zjištěn nedostatek. Je nutné zjednat nápravu." }
+export const CHECKLIST_PPP: ChecklistPoint[] = [
+  "    ]
+  },
+  {
+    id: 'SEC_487',
+    title: 'Společné',
+    items: [
+      { id: '224', text: 'Požární poplachové směrnice / čísla na tísňové linky – umístění, počet, aktuálnost' },"
+      { id: '225', text: 'Požární řád – umístění, aktuálnost, stav' },
+      { id: '226', text: 'Únikové komunikace – přístup, značení' },
+      { id: '227', text: 'Únikové východy – přístup, značení' },
+      { id: '228', text: 'Přenosné hasicí přístroje – stav, přístup, kontrola, umístění' },
+      { id: '229', text: 'Hydranty – stav, přístup, kontrola, umístění' },
+      { id: '230', text: 'Suchovody – stav, přístup, kontrola' },
+      { id: '231', text: 'Požární žebříky – stav, přístup' },
+      { id: '232', text: 'Nouzové osvětlení – stav, funkčnost' },
+      { id: '233', text: 'Tlačítka požárního poplachu – značení, stav, funkce' },
+      { id: '234', text: 'Požární klapky – stav, funkčnost' },
+      { id: '235', text: 'Funkce požární poplachové sirény' },
+      { id: '236', text: 'Úklid a čistota pracoviště, vrstvy prachu' },
+      { id: '237', text: 'Uložení a skladování tlakových lahví' },
+      { id: '238', text: 'Uložení a skladování NCHLaS' },
+      { id: '239', text: 'Skladování hořlavého materiálu – dovolené množství' },
+      { id: '240', text: 'Umístění prostředků pro únik kapalin – sorbenty, havarijní souprava' },
+      { id: '241', text: 'Přístup a označení hlavního uzávěru plynu' },
+      { id: '242', text: 'Přístup a označení hlavního vypínače elektrické energie' },
+      { id: '243', text: 'Skladování hořlavého materiálu v blízkosti rozvaděčů' },
+      { id: '244', text: 'Značení potrubí – technické plyny, zemní plyn' },
+      { id: '245', text: 'Evidence a revize / kontroly elektro spotřebičů a přívodů' },
+      { id: '246', text: 'Revize elektro instalací' },
+      { id: '247', text: 'Revize hromosvodu' },
+      { id: '248', text: 'Revize plynu – spotřebiče a potrubí' },
+      { id: '249', text: 'Provádění údržby strojů a zařízení' },
+      { id: '250', text: 'Umístění a stav ostatního požárního značení' },
 ];
