@@ -1,12 +1,21 @@
 'use client';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, onSnapshot, doc, setDoc, getDoc } from 'firebase/firestore';
-import { 
-  getAuth, 
-  onAuthStateChanged, 
-  signOut, 
-  User 
+import {
+  getFirestore,
+  collection,
+  query,
+  where,
+  onSnapshot,
+  doc,
+  setDoc,
+  getDoc,
+} from 'firebase/firestore';
+import {
+  getAuth,
+  onAuthStateChanged,
+  signOut,
+  User,
 } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -44,24 +53,31 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  
+
   const [klienti, setKlientiState] = useState<any[]>([]);
   const [zaznamy, setZaznamyState] = useState<any[]>([]);
 
+  // 1. Sledování přihlášení + načtení profilu (role, klientId)
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
-      
+
       if (firebaseUser) {
-        const userDocRef = doc(db, 'uzivatele', firebaseUser.uid);
-        const userDoc = await getDoc(userDocRef);
-        
-        if (userDoc.exists()) {
-          setUserProfile(userDoc.data() as UserProfile);
-        } else {
-          const defaultClientProfile: UserProfile = { role: 'client' };
-          await setDoc(userDocRef, defaultClientProfile);
-          setUserProfile(defaultClientProfile);
+        try {
+          const userDocRef = doc(db, 'uzivatele', firebaseUser.uid);
+          const userDoc = await getDoc(userDocRef);
+
+          if (userDoc.exists()) {
+            setUserProfile(userDoc.data() as UserProfile);
+          } else {
+            // Profil zakládá výhradně admin serverově (Admin SDK).
+            // Klient bez profilu nedostane žádná data – to je záměr.
+            console.warn('Uživatel nemá profil v kolekci "uzivatele". Přiřaďte roli/klientId serverově.');
+            setUserProfile(null);
+          }
+        } catch (e) {
+          console.error('Nepodařilo se načíst profil uživatele:', e);
+          setUserProfile(null);
         }
       } else {
         setUserProfile(null);
@@ -72,67 +88,69 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribeAuth();
   }, []);
 
-  // 2. Načítání klientů (Admin vidí vše, klient vidí JEN svou firmu)
+  // 2. Načítání klientů – admin vidí vše, klient jen svou firmu (cílený dotaz)
   useEffect(() => {
     if (!user || !userProfile) {
       setKlientiState([]);
       return;
     }
 
-    const unsubscribe = onSnapshot(collection(db, 'klienti'), (snapshot) => {
-      let docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      // Bezpečnostní filtr pro klienta
-      if (userProfile.role === 'client') {
-        docs = docs.filter(k => k.id === userProfile.klientId);
-      }
-      
-      if (docs.length === 0 && userProfile.role === 'admin') {
-        const defaultClients = [
-          {
-            id: "kovarna-novak",
-            nazev: "Kovárna Novák s.r.o.",
-            ico: "24681357",
-            pracoviste: [
-              { id: "p1", text: "Provozovna Hlavní", nazev: "Kovárna - hlavní dílna", adresa: "Průmyslová 12, Ostravská hala" },
-              { id: "p2", text: "Sklad", nazev: "Sklad materiálu", adresa: "Průmyslová 14, Ostrava" }
-            ],
-            odpovedneOsoby: [
-              { jmeno: "Josef Novák", pozice: "Vedoucí provozu" },
-              { jmeno: "Jan Kovář", pozice: "Mistr směny" }
-            ]
-          }
-        ];
-        defaultClients.forEach(async (c) => {
-          await setDoc(doc(db, 'klienti', c.id), c);
-        });
-      } else {
+    if (userProfile.role === 'client' && !userProfile.klientId) {
+      setKlientiState([]);
+      return;
+    }
+
+    const klientiRef = collection(db, 'klienti');
+    const q =
+      userProfile.role === 'admin'
+        ? klientiRef
+        : query(klientiRef, where('__name__', '==', userProfile.klientId));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
         setKlientiState(docs);
+      },
+      (error) => {
+        console.error('Chyba načítání klientů:', error);
+        setKlientiState([]);
       }
-    });
+    );
+
     return () => unsubscribe();
   }, [user, userProfile]);
 
+  // 3. Načítání záznamů – admin vše, klient jen záznamy své firmy (cílený dotaz)
   useEffect(() => {
     if (!user || !userProfile) {
       setZaznamyState([]);
       return;
     }
 
-    const unsubscribe = onSnapshot(collection(db, 'zaznamy'), (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      if (userProfile.role === 'admin') {
+    if (userProfile.role === 'client' && !userProfile.klientId) {
+      setZaznamyState([]);
+      return;
+    }
+
+    const zaznamyRef = collection(db, 'zaznamy');
+    const q =
+      userProfile.role === 'admin'
+        ? zaznamyRef
+        : query(zaznamyRef, where('klientId', '==', userProfile.klientId));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
         setZaznamyState(docs);
-      } else {
-        if (!userProfile.klientId) {
-            setZaznamyState([]);
-        } else {
-            const klientskeZaznamy = docs.filter((z: any) => z.klientId === userProfile.klientId);
-            setZaznamyState(klientskeZaznamy);
-        }
+      },
+      (error) => {
+        console.error('Chyba načítání záznamů:', error);
+        setZaznamyState([]);
       }
-    });
+    );
+
     return () => unsubscribe();
   }, [user, userProfile]);
 
@@ -140,28 +158,49 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     await signOut(auth);
   };
 
+  // Zápis záznamů do Firestore. Zápis smí provést pouze admin (viz Firestore Rules).
+  // Ukládají se jen skutečně změněné záznamy, sériově, s odchycením chyb.
   const setZaznamy: React.Dispatch<React.SetStateAction<any[]>> = (value) => {
     setZaznamyState((prev) => {
       const next = typeof value === 'function' ? value(prev) : value;
-      
-      next.forEach(async (record: any) => {
-        if (!record.id) return;
-        const existing = prev.find(p => p.id === record.id);
-        if (!existing || JSON.stringify(existing) !== JSON.stringify(record)) {
-          try {
-            await setDoc(doc(db, 'zaznamy', record.id), record);
-          } catch (e) {
-            console.error("Chyba zápisu do Firebase:", e);
-          }
-        }
+
+      // Side-effect (zápis do DB) řešíme mimo synchronní tělo setState,
+      // aby se ve Strict Mode nespouštěl dvakrát.
+      const changed = next.filter((record: any) => {
+        if (!record.id) return false;
+        const existing = prev.find((p) => p.id === record.id);
+        return !existing || JSON.stringify(existing) !== JSON.stringify(record);
       });
-      
+
+      if (changed.length > 0) {
+        (async () => {
+          for (const record of changed) {
+            try {
+              await setDoc(doc(db, 'zaznamy', record.id), record);
+            } catch (e) {
+              console.error('Chyba zápisu záznamu do Firebase:', record.id, e);
+            }
+          }
+        })();
+      }
+
       return next;
     });
   };
 
   return (
-    <DataContext.Provider value={{ klienti, zaznamy, user, userProfile, authLoading, logout, setZaznamy, setKlienti: setKlientiState }}>
+    <DataContext.Provider
+      value={{
+        klienti,
+        zaznamy,
+        user,
+        userProfile,
+        authLoading,
+        logout,
+        setZaznamy,
+        setKlienti: setKlientiState,
+      }}
+    >
       {children}
     </DataContext.Provider>
   );
@@ -169,6 +208,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
 export function useData() {
   const context = useContext(DataContext);
-  if (!context) { throw new Error('useData musí být použit uvnitř DataProvideru'); }
+  if (!context) {
+    throw new Error('useData musí být použit uvnitř DataProvideru');
+  }
   return context;
 }
