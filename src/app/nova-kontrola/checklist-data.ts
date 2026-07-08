@@ -10,7 +10,6 @@ export interface ChecklistSection {
   points: ChecklistPoint[];
 }
 
-export const CHECKLIST_SECTIONS: ChecklistSection[] = [
   // ==========================================
 // 1. KONTROLA: BOZP a PO
 // ==========================================
