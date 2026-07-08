@@ -609,7 +609,6 @@ export const CHECKLIST_SECTIONS: ChecklistSection[] = [
       { id: '189', text: 'Rizikové práce zákazané osamoceně' },
     ]
   }
-];
 
 export const CHECKLIST_PBOZP: ChecklistPoint[] = [
   "    ]
@@ -737,4 +736,6 @@ export const CHECKLIST_PPP: ChecklistPoint[] = [
       { id: '248', text: 'Revize plynu – spotřebiče a potrubí' },
       { id: '249', text: 'Provádění údržby strojů a zařízení' },
       { id: '250', text: 'Umístění a stav ostatního požárního značení' },
+      ]
+   }   
 ];
