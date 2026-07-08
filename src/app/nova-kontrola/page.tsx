@@ -105,9 +105,9 @@ export default function NewInspectionPage() {
     datum: new Date().toISOString().split('T')[0], ucastnici: [{ jmeno: '', pozice: '' }], poznamka: ''
   });
 
-  const [checklist, setChecklist] = useState<Record<number, any>>({});
-  const [pointDefects, setPointDefects] = useState<Record<number, DefectFormState[]>>({});
-  const [googleZavady, setGoogleZavady] = useState<Record<string, Record<number, TypickaZavada[]>>>({});
+  const [checklist, setChecklist] = useState<Record<string, any>>({});
+  const [pointDefects, setPointDefects] = useState<Record<string, DefectFormState[]>>({});
+  const [googleZavady, setGoogleZavady] = useState<Record<string, Record<string, TypickaZavada[]>>>({});
   const [customPoints, setCustomPoints] = useState<ChecklistPoint[]>([]);
   const [disabledSections, setDisabledSections] = useState<string[]>([]);
   const [filterPosition, setFilterPosition] = useState<string>("all");
@@ -149,7 +149,7 @@ export default function NewInspectionPage() {
         if (iKratky === -1) iKratky = headers.findIndex(h => h.includes('nedostatek'));
         const iPopis = headers.findIndex(h => h === 'popis' || (h.includes('popis') && !h.includes('zkr')));
         const iOpatreni = headers.findIndex(h => h.includes('opatřen') || h.includes('opatren'));
-        const parsedDefects: Record<string, Record<number, TypickaZavada[]>> = {};
+        const parsedDefects: Record<string, Record<string, TypickaZavada[]>> = {};
         for (let i = 1; i < rows.length; i++) {
           const r = rows[i]; if (!r || r.length < 3) continue;
           const typ = iTyp >= 0 ? r[iTyp]?.trim() : r[0]?.trim();
@@ -158,9 +158,10 @@ export default function NewInspectionPage() {
           const popis = (iPopis >= 0 ? r[iPopis] : r[4])?.trim();
           const opatreni = (iOpatreni >= 0 ? r[iOpatreni] : r[5])?.trim();
           if (typ && !isNaN(id) && nazev) {
+            const idKey = String(id);
             if (!parsedDefects[typ]) parsedDefects[typ] = {};
-            if (!parsedDefects[typ][id]) parsedDefects[typ][id] = [];
-            parsedDefects[typ][id].push({ nazev, popis: popis || "", opatreni: opatreni || "" });
+            if (!parsedDefects[typ][idKey]) parsedDefects[typ][idKey] = [];
+            parsedDefects[typ][idKey].push({ nazev, popis: popis || "", opatreni: opatreni || "" });
           }
         }
         setGoogleZavady(parsedDefects);
@@ -205,7 +206,7 @@ export default function NewInspectionPage() {
     setChecklist(prev => ({ ...prev, [point.id]: { ...(prev[point.id] || {}), bod: point.id, hodnoceni: rating, textHodnoceni: text } }));
   };
 
-  const updateDefect = (pointId: number, index: number, field: keyof DefectFormState, value: any) => {
+  const updateDefect = (pointId: string, index: number, field: keyof DefectFormState, value: any) => {
     setPointDefects(prev => {
       const arr = [...(prev[pointId] || [])];
       arr[index] = { ...arr[index], [field]: value };
@@ -383,11 +384,11 @@ export default function NewInspectionPage() {
     }
   };
 
-  const renderDefectForm = (def: DefectFormState, idx: number, pointId: number) => {
+  const renderDefectForm = (def: DefectFormState, idx: number, pointId: string) => {
     const dostupneZavady = pointId ? (googleZavady[formData.typKontroly]?.[pointId] || []) : [];
     const updateFn = (f: keyof DefectFormState, v: any) => updateDefect(pointId, idx, f, v);
     const removeFn = () => setPointDefects(p => ({ ...p, [pointId]: p[pointId].filter((_, i) => i !== idx) }));
-    const ukazatSablony = !!pointId && pointId < 90000;
+    const ukazatSablony = !!pointId && Number(pointId) < 90000;
 
     return (
       <div key={def.uid} className="p-4 bg-white rounded-lg border border-amber-200/60 shadow-sm space-y-5 relative">
@@ -436,7 +437,7 @@ export default function NewInspectionPage() {
             <Button variant="outline" size="sm" className="text-muted-foreground cursor-pointer"><Camera className="h-4 w-4 mr-2" /> Přidat fotodokumentaci</Button>
             <Input type="file" accept="image/*" multiple className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
               onChange={async (e) => {
-                const files = Array.from(e.target.files || []); if (files.length === 0) return;
+                const files = Array.from(e.target.files || []) as File[]; if (files.length === 0) return;
                 const newPhotos: string[] = [];
                 for (const file of files) { const compressed = await compressImage(file); newPhotos.push(compressed); }
                 updateFn('foto', [...(def.foto || []), ...newPhotos]);
@@ -509,7 +510,7 @@ export default function NewInspectionPage() {
   };
 
   const filteredPointDefects = useMemo(() => {
-    return Object.entries(pointDefects).filter(([id]) => checklist[Number(id)]?.hodnoceni === 'N').map(([id, defects]) => {
+    return (Object.entries(pointDefects) as [string, DefectFormState[]][]).filter(([id]) => checklist[id]?.hodnoceni === 'N').map(([id, defects]) => {
       const filtered = defects.filter(def => {
         if (filterPosition !== 'all') { const actualPosition = def.odpovednaOsoba === 'manual' ? def.odpovednaOsobaManualni : def.odpovednaOsoba; if (actualPosition !== filterPosition) return false; }
         return true;
@@ -630,7 +631,7 @@ export default function NewInspectionPage() {
           {formData.typKontroly === 'BOZPaPO' && <Accordion type="multiple" className="space-y-4" defaultValue={["A"]}>{CHECKLIST_SECTIONS.map((section) => { const sectionName = `ODDÍL ${section.id}: ${section.title}`; const isSectionDisabled = disabledSections.includes(sectionName); return (<div key={section.id} className={cn("border rounded-lg bg-white shadow-sm relative", isSectionDisabled && "opacity-50")}><div className="absolute top-4 right-10 z-10 flex items-center gap-2 bg-white/90 px-3 py-1.5 rounded-full shadow-sm border"><Checkbox id={`disable-${section.id}`} checked={!isSectionDisabled} onCheckedChange={(c) => setDisabledSections(prev => c ? prev.filter(s => s !== sectionName) : [...prev, sectionName])} /><label htmlFor={`disable-${section.id}`} className="text-xs font-bold cursor-pointer select-none">Zahrnout do prověrky</label></div><AccordionItem value={section.id} className={cn("border-none", isSectionDisabled && "pointer-events-none")}><AccordionTrigger className="px-6 py-4"><div className="flex flex-col items-start gap-1"><span className="text-xs font-bold uppercase text-muted-foreground">Oddíl {section.id}</span><span className="text-base font-bold">{section.title}</span></div></AccordionTrigger><AccordionContent className="px-6 pb-6 space-y-8 pt-4 divide-y">{section.points.map(p => renderPoint(p, false))}</AccordionContent></AccordionItem></div>) })}</Accordion>}
           {formData.typKontroly === 'PPP' && <div className="border rounded-lg bg-white overflow-hidden shadow-sm"><div className="px-6 py-4 bg-muted/10 border-b"><span className="text-base font-bold">Preventivní požární prohlídka</span></div><div className="px-6 pb-6 space-y-8 pt-4 divide-y">{CHECKLIST_PPP.map(p => renderPoint(p, false))}</div></div>}
           {formData.typKontroly === 'PBOZP' && <div className="border rounded-lg bg-white overflow-hidden shadow-sm"><div className="px-6 py-4 bg-muted/10 border-b"><span className="text-base font-bold">Prověrka BOZP pracoviště</span></div><div className="px-6 pb-6 space-y-8 pt-4 divide-y">{CHECKLIST_PBOZP.map(p => renderPoint(p, false))}</div></div>}
-          <div className="border rounded-lg bg-white overflow-hidden shadow-sm border-blue-200 mt-6"><div className="px-6 py-4 bg-blue-50 border-b flex justify-between items-center"><span className="text-base font-bold text-blue-900">Vlastní zjištění (Volné body)</span><Button size="sm" onClick={() => setCustomPoints(prev => [...prev, { id: 99000 + prev.length, text: "" }])}><Plus className="h-4 w-4 mr-2" /> Přidat vlastní bod</Button></div>{customPoints.length > 0 ? <div className="px-6 pb-6 space-y-8 pt-4 divide-y">{customPoints.map(p => renderPoint(p, true))}</div> : <div className="p-8 text-center text-muted-foreground text-sm italic">Zatím nebyly přidány žádné volné body.</div>}</div>
+          <div className="border rounded-lg bg-white overflow-hidden shadow-sm border-blue-200 mt-6"><div className="px-6 py-4 bg-blue-50 border-b flex justify-between items-center"><span className="text-base font-bold text-blue-900">Vlastní zjištění (Volné body)</span><Button size="sm" onClick={() => setCustomPoints(prev => [...prev, { id: String(99000 + prev.length), text: "" }])}><Plus className="h-4 w-4 mr-2" /> Přidat vlastní bod</Button></div>{customPoints.length > 0 ? <div className="px-6 pb-6 space-y-8 pt-4 divide-y">{customPoints.map(p => renderPoint(p, true))}</div> : <div className="p-8 text-center text-muted-foreground text-sm italic">Zatím nebyly přidány žádné volné body.</div>}</div>
         </div>
       )}
 
