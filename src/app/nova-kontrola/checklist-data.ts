@@ -13,7 +13,7 @@ export interface ChecklistSection {
   // ==========================================
 // 1. KONTROLA: BOZP a PO
 // ==========================================
-export const CHECKLIST_BOZPaPO = [
+export const CHECKLIST_SECTION = [
   "  {
     id: 'SEC_1',
     title: 'PRACOVNĚPRÁVNÍ OBLAST',
