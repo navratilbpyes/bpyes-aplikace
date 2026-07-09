@@ -1,5 +1,6 @@
 'use client';
 
+import { cn } from "@/app/lib/utils";
 import { useData } from "@/components/data-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -117,8 +118,8 @@ export default function Dashboard() {
                 <tbody className="divide-y divide-slate-100">
                   {serazeneZaznamy.length > 0 ? (
                     serazeneZaznamy.slice(0, 8).map(z => (
-                      <tr key={z.id} className="hover:bg-blue-50/50 cursor-pointer transition-colors" onClick={() => router.push(`/zaznamy/${z.id}`)}>
-                        <td className="px-6 py-4 font-bold text-blue-700">
+                      <tr key={z.id} className="hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => router.push(`/zaznamy/${z.id}`)}>
+                        <td className={cn("px-6 py-4 font-bold text-foreground font-mono", z.stav === 'uzavreny' ? 'paska paska-V' : 'paska paska-N')}>
                           {z.cislo} <span className="text-muted-foreground font-normal text-xs ml-1">R{z.revize || 0}</span>
                         </td>
                         {isAdmin && (
@@ -127,9 +128,9 @@ export default function Dashboard() {
                           </td>
                         )}
                         <td className="px-6 py-4 text-slate-600 font-medium">{z.typKontroly}</td>
-                        <td className="px-6 py-4 text-slate-600">{z.datum ? new Date(z.datum).toLocaleDateString('cs-CZ') : '-'}</td>
+                        <td className="px-6 py-4 text-slate-600 font-mono text-sm">{z.datum ? new Date(z.datum).toLocaleDateString('cs-CZ') : '-'}</td>
                         <td className="px-6 py-4">
-                          <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide border ${z.stav === 'uzavreny' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                          <span className={cn("text-xs font-medium", z.stav === 'uzavreny' ? 'text-[hsl(var(--stav-vyhovuje))]' : 'text-[hsl(var(--stav-zavada))]')}>
                             {z.stav === 'uzavreny' ? 'Uzavřeno' : 'V řešení'}
                           </span>
                         </td>
