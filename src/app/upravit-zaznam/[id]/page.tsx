@@ -292,11 +292,38 @@ export default function EditInspectionPage() {
       const hasUnresolvedDefects = finalKontrolniBody.some(kb => kb.hodnoceni === 'N');
       const finalStav = (isDraft || hasUnresolvedDefects) ? 'otevreny' : 'uzavreny';
 
+      // Snímek klienta je pořízen při vytvoření protokolu (dokument k datu).
+      // Při editaci ho zachováváme; přepočítáme jen když admin změnil klienta
+      // nebo výběr pracovišť – jinak by protokol nesouhlasil se svým obsahem.
+      const klientZmenen = recordToEdit.klientId !== formData.klientId;
+      const pracovisteZmenena =
+        JSON.stringify([...(recordToEdit.pracovisteIds || [])].sort()) !==
+        JSON.stringify([...(formData.pracovisteIds || [])].sort());
+
+      let klientSnapshot = recordToEdit.klientSnapshot;
+      if (!klientSnapshot || klientZmenen || pracovisteZmenena) {
+        const vybranaPracoviste = (selectedKlient?.pracoviste || [])
+          .filter((p: any) => formData.pracovisteIds.includes(p.id));
+        klientSnapshot = {
+          nazev: selectedKlient?.nazev || '',
+          ico: selectedKlient?.ico || '',
+          mesto: selectedKlient?.mesto || '',
+          pracoviste: vybranaPracoviste.map((p: any) => ({
+            id: p.id,
+            nazev: p.nazev || '',
+            adresa: p.adresa || '',
+          })),
+        };
+      }
+
       const updatedRecord = {
         id: recordToEdit.id,
         cislo: recordToEdit.cislo,
+        cisloKlientske: recordToEdit.cisloKlientske,
         revize: parseInt(revisionNumber) || 0,
         ...formData,
+        klientNazev: klientSnapshot?.nazev || recordToEdit.klientNazev || '',
+        klientSnapshot,
         kontrolniBody: finalKontrolniBody,
         zavady: aggregatedZavady,
         stav: finalStav,
