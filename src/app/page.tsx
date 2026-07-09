@@ -33,7 +33,7 @@ export default function Dashboard() {
               zaznamId: z.id,
               cisloZpravy: z.cislo,
               revize: z.revize || 0,
-              klientNazev: klienti.find(k => k.id === z.klientId)?.nazev || 'Neznámý klient',
+              klientNazev: z.klientNazev || klienti.find(k => k.id === z.klientId)?.nazev || 'Neznámý klient',
               bod: kb.bod,
               otazka: kb.otazka || kb.popis,
               datum: kb.datumVyreseniKlientem,
@@ -123,7 +123,7 @@ export default function Dashboard() {
                         </td>
                         {isAdmin && (
                           <td className="px-6 py-4 font-medium text-slate-900 truncate max-w-[150px]">
-                            {klienti.find(k => k.id === z.klientId)?.nazev || 'Neznámý klient'}
+                            {z.klientNazev || klienti.find(k => k.id === z.klientId)?.nazev || 'Neznámý klient'}
                           </td>
                         )}
                         <td className="px-6 py-4 text-slate-600 font-medium">{z.typKontroly}</td>
