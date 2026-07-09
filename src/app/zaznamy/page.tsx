@@ -1,10 +1,13 @@
 'use client';
 
-import { useData } from "@/components/data-provider";
+import { useData, db } from "@/components/data-provider";
+import { doc, deleteDoc } from "firebase/firestore";
+import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FileText, Search, Plus, Filter, Loader2, ArrowUpDown } from "lucide-react";
+import { FileText, Search, Plus, Filter, Loader2, ArrowUpDown, Pencil, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, Suspense, useMemo, useEffect } from "react";
@@ -12,12 +15,33 @@ import Link from "next/link";
 import { cn } from "@/app/lib/utils";
 
 function ZaznamyList() {
-  const { zaznamy, klienti, userProfile } = useData();
+  const { zaznamy, klienti, userProfile, setZaznamy } = useData();
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialFilter = searchParams.get('filter') || 'all';
 
   const isAdmin = userProfile?.role === 'admin';
+
+  // Mazání záznamu ze seznamu (jen admin, s potvrzením)
+  const [mazanyZaznam, setMazanyZaznam] = useState<any | null>(null);
+  const [maze, setMaze] = useState(false);
+  const { toast } = useToast();
+
+  const potvrditSmazani = async () => {
+    if (!mazanyZaznam) return;
+    setMaze(true);
+    try {
+      await deleteDoc(doc(db, 'zaznamy', mazanyZaznam.id));
+      setZaznamy((prev: any[]) => prev.filter(z => z.id !== mazanyZaznam.id));
+      toast({ title: "Protokol smazán", description: `Záznam ${mazanyZaznam.cislo} byl odstraněn.` });
+      setMazanyZaznam(null);
+    } catch (e) {
+      console.error('Chyba mazání záznamu:', e);
+      toast({ variant: "destructive", title: "Smazání se nezdařilo", description: "Zkuste to znovu, nebo protokol smažte z jeho detailu." });
+    } finally {
+      setMaze(false);
+    }
+  };
 
   // Stavy pro řazení a fitry sloupců
   const [search, setSearch] = useState("");
@@ -145,6 +169,7 @@ function ZaznamyList() {
                   <th className="px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors select-none group" onClick={() => handleSort('stav')}>
                     <div className="flex items-center gap-1">Stav řešení <ArrowUpDown className={cn("h-3 w-3", sort.key === 'stav' ? "text-blue-600" : "text-slate-300 group-hover:text-slate-500")}/></div>
                   </th>
+                  {isAdmin && <th className="px-4 py-3 text-right">Akce</th>}
                 </tr>
                 
                 {/* 2. ŘÁDEK: ROLETKOVÉ FILTRY */}
@@ -193,25 +218,50 @@ function ZaznamyList() {
                       </SelectContent>
                     </Select>
                   </th>
+                  {isAdmin && <th className="px-2 py-2" />}
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-100">
                 {processed.length > 0 ? (
                   processed.map(z => (
-                    <tr key={z.id} className="hover:bg-blue-50/50 cursor-pointer transition-colors bg-white group" onClick={() => router.push(`/zaznamy/${z.id}`)}>
-                      <td className="px-4 py-3 font-bold text-blue-700 flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-blue-400 group-hover:text-blue-600 transition-colors" /> {z.cislo} 
+                    <tr key={z.id} className="hover:bg-slate-50 cursor-pointer transition-colors bg-white group" onClick={() => router.push(`/zaznamy/${z.id}`)}>
+                      <td className={cn("px-4 py-3 font-bold text-foreground font-mono flex items-center gap-2", z.stav === 'uzavreny' ? 'paska paska-V' : 'paska paska-N')}>
+                        <FileText className="h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-colors" /> {z.cislo} 
                         <span className="text-muted-foreground font-normal text-[10px] ml-1 bg-slate-100 px-1.5 py-0.5 rounded border">R{z.revize || 0}</span>
                       </td>
                       {isAdmin && <td className="px-4 py-3 font-medium text-slate-900">{z.klientNazev || klienti.find(k => k.id === z.klientId)?.nazev || 'Neznámý klient'}</td>}
                       <td className="px-4 py-3 text-slate-600 font-medium">{z.typKontroly}</td>
-                      <td className="px-4 py-3 text-slate-600">{z.datum ? new Date(z.datum).toLocaleDateString('cs-CZ') : '-'}</td>
+                      <td className="px-4 py-3 text-slate-600 font-mono text-sm">{z.datum ? new Date(z.datum).toLocaleDateString('cs-CZ') : '-'}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide border ${z.stav === 'uzavreny' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                        <span className={cn("text-xs font-medium", z.stav === 'uzavreny' ? 'text-[hsl(var(--stav-vyhovuje))]' : 'text-[hsl(var(--stav-zavada))]')}>
                           {z.stav === 'uzavreny' ? 'Uzavřeno' : 'V řešení'}
                         </span>
                       </td>
+                      {isAdmin && (
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0"
+                              aria-label={`Upravit protokol ${z.cislo}`}
+                              onClick={(e) => { e.stopPropagation(); router.push(`/upravit-zaznam/${z.id}`); }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-[hsl(var(--stav-zavada))] hover:bg-[hsl(var(--stav-zavada))]/10"
+                              aria-label={`Smazat protokol ${z.cislo}`}
+                              onClick={(e) => { e.stopPropagation(); setMazanyZaznam(z); }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))
                 ) : (
@@ -232,6 +282,26 @@ function ZaznamyList() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={!!mazanyZaznam} onOpenChange={(o) => !o && setMazanyZaznam(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Smazat protokol {mazanyZaznam?.cislo}?</DialogTitle>
+            <DialogDescription>
+              {mazanyZaznam?.klientNazev ? `Klient: ${mazanyZaznam.klientNazev}. ` : ''}
+              Protokol se smaže natrvalo, včetně všech zjištěných nedostatků a fotografií. Tuto akci nelze vzít zpět.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMazanyZaznam(null)} disabled={maze}>
+              Zrušit
+            </Button>
+            <Button variant="destructive" onClick={potvrditSmazani} disabled={maze}>
+              {maze ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Maže se…</> : 'Smazat protokol'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
