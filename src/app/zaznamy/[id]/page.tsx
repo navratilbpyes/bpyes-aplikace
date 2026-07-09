@@ -137,11 +137,26 @@ export default function RecordDetailPage() {
   }, []);
 
   const record = useMemo(() => zaznamy.find((z: any) => z.id === params.id), [zaznamy, params.id]);
-  const klient = useMemo(() => klienti.find((k: any) => k.id === record?.klientId), [klienti, record]);
-  
+
+  // Protokol je dokument k datu: přednostně čteme snímek klienta uložený při vytvoření
+  // záznamu. Pozdější změna názvu/adresy klienta nesmí zpětně měnit vydaný protokol.
+  // Fallback na aktuálního klienta jen pro záznamy bez snímku.
+  const aktualniKlient = useMemo(() => klienti.find((k: any) => k.id === record?.klientId), [klienti, record]);
+  const klient = useMemo(() => record?.klientSnapshot || aktualniKlient, [record, aktualniKlient]);
+
   const pracovisteList = useMemo(() => {
-    if (!klient || !record) return [];
-    const prac = klient.pracoviste || [];
+    if (!record) return [];
+
+    // Snímek už obsahuje jen pracoviště zvolená při kontrole – nefiltrujeme znovu.
+    if (record.klientSnapshot?.pracoviste) {
+      return record.klientSnapshot.pracoviste.map((p: any) => ({
+        ...p,
+        fullDisplay: `${p.nazev}${p.adresa ? ', ' + p.adresa : ''}${p.mesto ? ', ' + p.mesto : ''}`
+      }));
+    }
+
+    if (!aktualniKlient) return [];
+    const prac = aktualniKlient.pracoviste || [];
     let filtered = [];
     if (record.pracovisteIds && Array.isArray(record.pracovisteIds)) filtered = prac.filter((p: any) => record.pracovisteIds.includes(p.id));
     else if (record.pracovisteId) filtered = prac.filter((p: any) => p.id === record.pracovisteId);
@@ -150,7 +165,7 @@ export default function RecordDetailPage() {
       ...p,
       fullDisplay: `${p.nazev}${p.adresa ? ', ' + p.adresa : ''}${p.mesto ? ', ' + p.mesto : ''}`
     }));
-  }, [klient, record]);
+  }, [aktualniKlient, record]);
 
   // ADRESNÝ VYHLEDÁVAČ VŠECH E-MAILŮ (NEPRŮSTŘELNÝ MULTI-EMAIL)
   const extractEmail = (klientObj: any): string => {
@@ -455,12 +470,14 @@ export default function RecordDetailPage() {
               <p className="font-bold text-sm">{klient?.nazev}</p>
               
               <p>Sídlo: {(() => {
+                // Klient dnes nese pouze 'mesto'. 'adresa'/'psc' zůstávají volitelné
+                // pro případ pozdějšího rozšíření formuláře klienta.
                 const adresa = klient?.adresa || '';
                 const mestoPSC = klient?.mesto ? `${klient.psc || ''} ${klient.mesto}`.trim() : '';
                 const plnaAdresa = [adresa, mestoPSC].filter(Boolean).join(', ');
                 return plnaAdresa || 'Neuvedeno';
               })()}</p>
-              <p>IČO: {klient?.ico}</p>
+              <p>IČO: {klient?.ico || 'Neuvedeno'}</p>
               
               <div className="mt-2">
                 <span className="font-bold">Místo prověrky:</span><br/>
