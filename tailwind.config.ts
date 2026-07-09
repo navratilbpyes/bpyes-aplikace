@@ -1,4 +1,3 @@
-
 import type {Config} from 'tailwindcss';
 
 export default {
@@ -11,9 +10,11 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        body: ['IBM Plex Sans', 'sans-serif'],
-        headline: ['IBM Plex Sans', 'sans-serif'],
-        code: ['monospace'],
+        sans: ['Chivo', 'system-ui', 'sans-serif'],
+        body: ['Chivo', 'system-ui', 'sans-serif'],
+        headline: ['Chivo', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+        code: ['JetBrains Mono', 'ui-monospace', 'monospace'],
       },
       colors: {
         background: 'hsl(var(--background))',
