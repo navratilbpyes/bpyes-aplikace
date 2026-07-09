@@ -1,51 +1,85 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 4%;
+    --background: 60 17% 98%;
+    --foreground: 223 14% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 4%;
+    --card-foreground: 223 14% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 4%;
-    --primary: 0 0% 4%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 4%;
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
-    --accent: 142 71% 36%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 84% 50%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 0 0% 4%;
-    --radius: 0.3rem;
+    --popover-foreground: 223 14% 10%;
+    --primary: 223 14% 10%;
+    --primary-foreground: 60 17% 98%;
+    --secondary: 45 24% 93%;
+    --secondary-foreground: 223 14% 10%;
+    --muted: 45 24% 93%;
+    --muted-foreground: 217 6% 45%;
+    --accent: 68 71% 52%;
+    --accent-foreground: 223 14% 10%;
+    --destructive: 0 68% 54%;
+    --destructive-foreground: 60 17% 98%;
+    --border: 50 9% 87%;
+    --input: 50 9% 87%;
+    --ring: 68 71% 52%;
+    --radius: 0.5rem;
+
+    --stav-vyhovuje: 151 54% 40%;
+    --stav-zavada: 0 68% 54%;
+    --stav-doporuceni: 218 74% 53%;
+    --stav-neutral: 219 6% 57%;
+    --stav-vystraha: 46 68% 47%;
   }
+
   .dark {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 4%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 4%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 4%;
-    --secondary: 0 0% 15%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 64%;
-    --accent: 142 71% 36%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 84% 50%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 15%;
-    --input: 0 0% 15%;
-    --ring: 0 0% 83%;
+    --background: 223 14% 10%;
+    --foreground: 60 17% 98%;
+    --card: 222 15% 13%;
+    --card-foreground: 60 17% 98%;
+    --popover: 222 15% 13%;
+    --popover-foreground: 60 17% 98%;
+    --primary: 60 17% 98%;
+    --primary-foreground: 223 14% 10%;
+    --secondary: 224 12% 19%;
+    --secondary-foreground: 60 17% 98%;
+    --muted: 224 12% 19%;
+    --muted-foreground: 219 6% 57%;
+    --accent: 68 71% 52%;
+    --accent-foreground: 223 14% 10%;
+    --destructive: 0 68% 54%;
+    --destructive-foreground: 60 17% 98%;
+    --border: 224 12% 19%;
+    --input: 224 12% 19%;
+    --ring: 68 71% 52%;
+
+    --stav-vyhovuje: 151 54% 45%;
+    --stav-zavada: 0 68% 58%;
+    --stav-doporuceni: 218 74% 60%;
+    --stav-neutral: 219 6% 57%;
+    --stav-vystraha: 46 68% 55%;
+  }
+  .dark .light {
+    --background: 60 17% 98%;
+    --foreground: 223 14% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 223 14% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 223 14% 10%;
+    --primary: 223 14% 10%;
+    --primary-foreground: 60 17% 98%;
+    --secondary: 45 24% 93%;
+    --secondary-foreground: 223 14% 10%;
+    --muted: 45 24% 93%;
+    --muted-foreground: 217 6% 45%;
+    --border: 50 9% 87%;
+    --input: 50 9% 87%;
+
+    --stav-vyhovuje: 151 54% 40%;
+    --stav-zavada: 0 68% 54%;
+    --stav-doporuceni: 218 74% 53%;
+    --stav-neutral: 219 6% 57%;
+    --stav-vystraha: 46 68% 47%;
   }
 }
 
@@ -55,6 +89,35 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'IBM Plex Sans', sans-serif;
+    font-family: var(--font-chivo), system-ui, sans-serif;
+    font-feature-settings: "ss01", "cv01";
+  }
+  code, kbd, samp, pre, .font-mono, .tabular {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  .paska {
+    border-left-width: 3px;
+    border-left-style: solid;
+    border-radius: 0;
+  }
+  .paska-V  { border-left-color: hsl(var(--stav-vyhovuje)); }
+  .paska-N  { border-left-color: hsl(var(--stav-zavada)); }
+  .paska-D  { border-left-color: hsl(var(--stav-doporuceni)); }
+  .paska-NA { border-left-color: hsl(var(--stav-neutral)); }
+  .paska-NK {
+    border-left-color: hsl(var(--stav-neutral));
+    border-left-style: dashed;
+  }
+}
+
+@media print {
+  .paska {
+    border-left-width: 3px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }
