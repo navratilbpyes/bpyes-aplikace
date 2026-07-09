@@ -72,8 +72,8 @@ function ZaznamyList() {
       let valA = '', valB = '';
       if (sort.key === 'cislo') { valA = a.cislo; valB = b.cislo; }
       else if (sort.key === 'klient') {
-          valA = klienti.find(k => k.id === a.klientId)?.nazev || '';
-          valB = klienti.find(k => k.id === b.klientId)?.nazev || '';
+          valA = a.klientNazev || klienti.find(k => k.id === a.klientId)?.nazev || '';
+          valB = b.klientNazev || klienti.find(k => k.id === b.klientId)?.nazev || '';
       }
       else if (sort.key === 'typ') { valA = a.typKontroly || ''; valB = b.typKontroly || ''; }
       else if (sort.key === 'datum') { valA = a.datum || ''; valB = b.datum || ''; }
@@ -204,7 +204,7 @@ function ZaznamyList() {
                         <FileText className="h-4 w-4 text-blue-400 group-hover:text-blue-600 transition-colors" /> {z.cislo} 
                         <span className="text-muted-foreground font-normal text-[10px] ml-1 bg-slate-100 px-1.5 py-0.5 rounded border">R{z.revize || 0}</span>
                       </td>
-                      {isAdmin && <td className="px-4 py-3 font-medium text-slate-900">{klienti.find(k => k.id === z.klientId)?.nazev || 'Neznámý klient'}</td>}
+                      {isAdmin && <td className="px-4 py-3 font-medium text-slate-900">{z.klientNazev || klienti.find(k => k.id === z.klientId)?.nazev || 'Neznámý klient'}</td>}
                       <td className="px-4 py-3 text-slate-600 font-medium">{z.typKontroly}</td>
                       <td className="px-4 py-3 text-slate-600">{z.datum ? new Date(z.datum).toLocaleDateString('cs-CZ') : '-'}</td>
                       <td className="px-4 py-3">
