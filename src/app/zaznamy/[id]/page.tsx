@@ -300,7 +300,7 @@ export default function RecordDetailPage() {
   if (!record) return isLoading ? <div className="min-h-[50vh] flex justify-center items-center"><Loader2 className="animate-spin text-blue-600 h-8 w-8" /></div> : <div className="p-8 text-center">Záznam nenalezen.</div>;
 
   return (
-    <div className="light p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative overflow-hidden print:p-0 print:m-0 print:space-y-0 bg-slate-50 min-h-screen print:bg-white">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative overflow-hidden print:p-0 print:m-0 print:space-y-0 bg-slate-50 min-h-screen print:bg-white">
       
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
