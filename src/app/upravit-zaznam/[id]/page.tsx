@@ -1,5 +1,6 @@
 'use client';
 
+import { STAVY, POradi_TLACITEK, paskaPro } from "@/lib/stavy";
 import { useData, db } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -455,10 +456,10 @@ export default function EditInspectionPage() {
         <div className="flex flex-col md:flex-row justify-between items-start gap-4">
           <div className="flex gap-3 flex-1 w-full"><span className="font-mono text-muted-foreground font-bold">{isCustom ? '*' : point.id}.</span>{isCustom ? <Input value={point.text} onChange={(e) => setCustomPoints(prev => prev.map((p: any) => p.id === point.id ? { ...p, text: e.target.value } : p))} className="font-medium text-[15px] h-8" /> : <p className="font-medium text-[15px]">{point.text}</p>}</div>
           <div className="grid grid-cols-5 gap-1 w-full md:w-auto">
-            {[ { label: 'V', rating: 'V', color: 'bg-green-100 text-green-700 data-[state=active]:bg-green-600 data-[state=active]:text-white' }, { label: 'N', rating: 'N', color: 'bg-red-100 text-red-700 data-[state=active]:bg-red-600 data-[state=active]:text-white' }, { label: 'NA', rating: 'NA', color: 'bg-gray-100 text-gray-700 data-[state=active]:bg-gray-600 data-[state=active]:text-white' }, { label: 'NK', rating: 'NK', color: 'bg-gray-100 text-gray-700 data-[state=active]:bg-gray-600 data-[state=active]:text-white' } ].map((btn) => (
-              <Button key={btn.label} variant="outline" data-state={state?.hodnoceni === btn.rating ? 'active' : 'inactive'} className={cn("h-12 min-w-[50px] font-bold shadow-none transition-all", btn.color)} onClick={() => handleRatingChange(point, btn.rating as any)}>{btn.label}</Button>
+            {POradi_TLACITEK.map((kod) => (
+              <Button key={kod} variant="outline" data-state={state?.hodnoceni === kod ? 'active' : 'inactive'} className={cn("h-12 min-w-[50px] font-bold shadow-none transition-all", STAVY[kod].tlacitko)} onClick={() => handleRatingChange(point, kod as any)}>{kod}</Button>
             ))}
-            <Button key="D" variant="outline" data-state={state?.showDoporuceni ? 'active' : 'inactive'} className={cn("h-12 min-w-[50px] font-bold shadow-none transition-all", "bg-blue-100 text-blue-700 data-[state=active]:bg-blue-600 data-[state=active]:text-white")} onClick={() => setChecklist(prev => ({ ...prev, [point.id]: { ...(prev[point.id] || { bod: point.id, hodnoceni: '' }), showDoporuceni: !prev[point.id]?.showDoporuceni } }))}>D</Button>
+            <Button key="D" variant="outline" data-state={state?.showDoporuceni ? 'active' : 'inactive'} className={cn("h-12 min-w-[50px] font-bold shadow-none transition-all", STAVY.D.tlacitko)} onClick={() => setChecklist(prev => ({ ...prev, [point.id]: { ...(prev[point.id] || { bod: point.id, hodnoceni: '' }), showDoporuceni: !prev[point.id]?.showDoporuceni } }))}>D</Button>
           </div>
         </div>
         
