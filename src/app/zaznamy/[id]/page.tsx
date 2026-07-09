@@ -1,5 +1,6 @@
 'use client';
 
+import { stav, paskaPro, STAVY } from "@/lib/stavy";
 import { useData, db, auth } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -299,7 +300,7 @@ export default function RecordDetailPage() {
   if (!record) return isLoading ? <div className="min-h-[50vh] flex justify-center items-center"><Loader2 className="animate-spin text-blue-600 h-8 w-8" /></div> : <div className="p-8 text-center">Záznam nenalezen.</div>;
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative overflow-hidden print:p-0 print:m-0 print:space-y-0 bg-slate-50 min-h-screen print:bg-white">
+    <div className="light p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative overflow-hidden print:p-0 print:m-0 print:space-y-0 bg-slate-50 min-h-screen print:bg-white">
       
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
@@ -558,11 +559,12 @@ export default function RecordDetailPage() {
             {groupedKontrolniBody.map((group) => (
                group.items.map((kb: any) => {
                  const isDefect = kb.hodnoceni === 'N';
+                 const def = stav(kb.hodnoceni);
                  return (
-                   <div key={kb.id || kb.bod} className="avoid-break border-b pb-6 mb-6">
+                   <div key={kb.id || kb.bod} className={cn("avoid-break border-b pb-6 mb-6 pl-3", paskaPro(kb.hodnoceni))}>
                      <div className="flex justify-between items-start mb-2">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">[{kb.bod}] KAPITOLA: {group.sekce}</div>
-                        <div className={cn("text-[9px] font-bold px-2 py-0.5 border rounded uppercase", isDefect ? "text-red-700 border-red-200 bg-red-50" : "text-green-700 border-green-200 bg-green-50")}>{isDefect ? 'Neshoda' : 'Vyhovuje'}</div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter font-mono">[{kb.bod}] KAPITOLA: {group.sekce}</div>
+                        <div className={cn("text-[9px] font-bold px-2 py-0.5 border rounded uppercase", def?.odznak)}>{def?.popis ?? '—'}</div>
                      </div>
                      <div className="font-bold text-slate-900 mb-3">{kb.otazka || kb.popis}</div>
                      {isDefect && (
