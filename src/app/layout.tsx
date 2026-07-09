@@ -1,7 +1,7 @@
 'use client';
 
 import { DataProvider, useData, auth } from "@/components/data-provider";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { 
   LayoutDashboard, 
@@ -14,7 +14,9 @@ import {
   Lock,
   User as UserIcon,
   Menu,
-  X
+  X,
+  Sun,
+  Moon
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -25,6 +27,35 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/app/lib/utils";
 import "@/app/globals.css";
+
+function PrepinacRezimu() {
+  const [tmavy, setTmavy] = useState(false);
+
+  useEffect(() => {
+    setTmavy(document.documentElement.classList.contains('dark'));
+  }, []);
+
+  const prepnout = () => {
+    const novy = !tmavy;
+    setTmavy(novy);
+    document.documentElement.classList.toggle('dark', novy);
+    try {
+      localStorage.setItem('rezim', novy ? 'tmavy' : 'svetly');
+    } catch (e) {}
+  };
+
+  return (
+    <Button
+      variant="ghost"
+      className="w-full justify-start text-slate-400 hover:text-slate-100 hover:bg-white/5 h-10 text-xs font-bold"
+      onClick={prepnout}
+      aria-label={tmavy ? 'Přepnout na světlý režim' : 'Přepnout na tmavý režim'}
+    >
+      {tmavy ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
+      {tmavy ? 'Světlý režim' : 'Tmavý režim'}
+    </Button>
+  );
+}
 
 function AppLayoutContent({ children }: { children: React.ReactNode }) {
   const { user, userProfile, authLoading, logout } = useData();
@@ -193,6 +224,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
               <p className="text-[10px] text-slate-500 truncate">ID: {userProfile.klientId || "Interní"}</p>
             </div>
           </div>
+          <PrepinacRezimu />
           <Button variant="ghost" className="w-full justify-start text-slate-400 hover:text-red-400 hover:bg-red-500/10 h-10 text-xs font-bold" onClick={logout}>
             <LogOut className="mr-2 h-4 w-4" /> Odhlásit se z cloudu
           </Button>
@@ -214,7 +246,36 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="cs">
+    <html lang="cs" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Chivo:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+          rel="stylesheet"
+        />
+        <style>{`
+          :root {
+            --font-chivo: 'Chivo';
+            --font-mono: 'JetBrains Mono';
+          }
+        `}</style>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var ulozeny = localStorage.getItem('rezim');
+                  var tmavy = ulozeny
+                    ? ulozeny === 'tmavy'
+                    : window.matchMedia('(prefers-color-scheme: dark)').matches;
+                  if (tmavy) document.documentElement.classList.add('dark');
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
       <body>
         <DataProvider>
           <AppLayoutContent>{children}</AppLayoutContent>
