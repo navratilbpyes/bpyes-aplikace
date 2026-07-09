@@ -347,12 +347,31 @@ export default function NewInspectionPage() {
       const finalStav = (isDraft || hasUnresolvedDefects) ? 'otevreny' : 'uzavreny';
 
       const newRecordRef = doc(collection(db, 'zaznamy'));
+
+      // Snímek klienta k datu kontroly. Protokol je dokument k datu –
+      // pozdější změna názvu/adresy klienta nesmí zpětně měnit vydaný protokol.
+      const vybranaPracoviste = (selectedKlient?.pracoviste || [])
+        .filter((p: any) => formData.pracovisteIds.includes(p.id));
+
+      const klientSnapshot = {
+        nazev: selectedKlient?.nazev || '',
+        ico: selectedKlient?.ico || '',
+        mesto: selectedKlient?.mesto || '',
+        pracoviste: vybranaPracoviste.map((p: any) => ({
+          id: p.id,
+          nazev: p.nazev || '',
+          adresa: p.adresa || '',
+        })),
+      };
+
       const newRecord = {
         id: newRecordRef.id,
         cislo: globalCislo,             
         cisloKlientske: klientskeCislo, 
         revize: parseInt(revisionNumber) || 0,
         ...formData,
+        klientNazev: klientSnapshot.nazev,
+        klientSnapshot,
         kontrolniBody: finalKontrolniBody,
         zavady: aggregatedZavady,
         stav: finalStav,
