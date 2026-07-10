@@ -1,6 +1,9 @@
 'use client';
 
 import { useData } from "@/components/data-provider";
+import { db } from "@/components/data-provider";
+import { doc, setDoc } from "firebase/firestore";
+import { adresaZAres } from "@/lib/kontroly";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -16,7 +19,8 @@ import {
   MoreVertical,
   ClipboardList,
   Eye,
-  Briefcase
+  Briefcase,
+  Edit2
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -41,15 +45,40 @@ export default function ClientDetailPage() {
     return <div className="p-8">Klient nenalezen.</div>;
   }
 
-  const handleAresMock = () => {
+  const handleNacistZAres = async () => {
+    const cleanIco = (klient.ico || '').replace(/\s/g, '');
+    if (!cleanIco) {
+      toast({ title: "Chybí IČO", description: "Bez IČO nelze data z registru načíst.", variant: "destructive" });
+      return;
+    }
+
     setIsAresLoading(true);
-    setTimeout(() => {
+    try {
+      const response = await fetch(`https://ares.gov.cz/ekonomicke-subjekty-v-be/rest/ekonomicke-subjekty/${cleanIco}`);
+      if (!response.ok) throw new Error("Subjekt nenalezen");
+
+      const data = await response.json();
+      const adresa = adresaZAres(data);
+
+      const aktualizovano = {
+        ...klient,
+        nazev: data.obchodniJmeno || klient.nazev,
+        dic: data.dic || klient.dic || '',
+        sidlo: adresa.sidlo || klient.sidlo || '',
+        psc: adresa.psc || klient.psc || '',
+        mesto: adresa.mesto || klient.mesto,
+      };
+
+      await setDoc(doc(db, 'klienti', klient.id), aktualizovano);
+      if (setKlienti) setKlienti((prev: any[]) => prev.map(k => k.id === klient.id ? aktualizovano : k));
+
+      toast({ title: "Načteno z ARES", description: "Údaje klienta byly aktualizovány ze státního registru." });
+    } catch (err) {
+      console.error('ARES:', err);
+      toast({ title: "Načtení se nezdařilo", description: "Subjekt s tímto IČO nebyl v registru ARES nalezen.", variant: "destructive" });
+    } finally {
       setIsAresLoading(false);
-      toast({
-        title: "Načteno z ARES",
-        description: "Data klienta byla úspěšně aktualizována ze státního registru.",
-      });
-    }, 1500);
+    }
   };
 
   return (
@@ -65,9 +94,15 @@ export default function ClientDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleAresMock} disabled={isAresLoading}>
+          <Button variant="outline" onClick={handleNacistZAres} disabled={isAresLoading}>
             <RefreshCw className={cn("mr-2 h-4 w-4", isAresLoading && "animate-spin")} />
             Načíst z ARES
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href={`/klienti/${klient.id}/edit`}>
+              <Edit2 className="mr-2 h-4 w-4" />
+              Upravit
+            </Link>
           </Button>
           <Button asChild>
             <Link href={`/nova-kontrola?klient=${klient.id}`}>
@@ -103,12 +138,17 @@ export default function ClientDetailPage() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-muted-foreground text-xs uppercase">Hlavní kontakt</Label>
+                  <Label className="text-muted-foreground text-xs uppercase">
+                    Hlavní kontakt
+                  </Label>
                   {(() => {
-                    // Kontakty jsou v poli klient.kontakty. Pole kontaktOsoba/email/telefon
-                    // na klientovi neexistují – zůstala jen ve starých typech.
-                    const kontakt = klient.kontakty?.find((k: any) => k.jmeno?.trim());
-                    if (!kontakt) {
+                    const vsechny = (klient.kontakty || []).filter((k: any) => k.jmeno?.trim());
+                    // Hlavních kontaktů může být víc (např. dva jednatelé).
+                    // Když žádný není označen, ukážeme první zadaný.
+                    const oznaceni = vsechny.filter((k: any) => k.hlavni);
+                    const hlavni = oznaceni.length > 0 ? oznaceni : vsechny.slice(0, 1);
+
+                    if (hlavni.length === 0) {
                       return (
                         <div className="flex items-center gap-2">
                           <User className="h-4 w-4 text-muted-foreground" />
@@ -116,30 +156,37 @@ export default function ClientDetailPage() {
                         </div>
                       );
                     }
+
+                    const ostatnich = vsechny.length - hlavni.length;
+
                     return (
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-muted-foreground shrink-0" />
-                          <span>
-                            {kontakt.jmeno}
-                            {kontakt.funkce && <span className="text-muted-foreground"> · {kontakt.funkce}</span>}
-                          </span>
-                        </div>
-                        {kontakt.email && (
-                          <div className="flex items-center gap-2">
-                            <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-                            <a href={`mailto:${kontakt.email}`} className="text-blue-600 hover:underline break-all">{kontakt.email}</a>
+                      <div className="space-y-3">
+                        {hlavni.map((kontakt: any, i: number) => (
+                          <div key={kontakt.id || i} className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <span>
+                                {kontakt.jmeno}
+                                {kontakt.funkce && <span className="text-muted-foreground"> · {kontakt.funkce}</span>}
+                              </span>
+                            </div>
+                            {kontakt.email && (
+                              <div className="flex items-center gap-2">
+                                <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <a href={`mailto:${kontakt.email}`} className="text-blue-600 hover:underline break-all">{kontakt.email}</a>
+                              </div>
+                            )}
+                            {kontakt.telefon && (
+                              <div className="flex items-center gap-2">
+                                <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <a href={`tel:${kontakt.telefon.replace(/\s/g, '')}`} className="hover:underline">{kontakt.telefon}</a>
+                              </div>
+                            )}
                           </div>
-                        )}
-                        {kontakt.telefon && (
-                          <div className="flex items-center gap-2">
-                            <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
-                            <a href={`tel:${kontakt.telefon.replace(/\s/g, '')}`} className="hover:underline">{kontakt.telefon}</a>
-                          </div>
-                        )}
-                        {klient.kontakty.filter((k: any) => k.jmeno?.trim()).length > 1 && (
-                          <span className="text-[11px] text-muted-foreground mt-1">
-                            + {klient.kontakty.filter((k: any) => k.jmeno?.trim()).length - 1} další kontakt(y)
+                        ))}
+                        {ostatnich > 0 && (
+                          <span className="text-[11px] text-muted-foreground block">
+                            + {ostatnich} další kontakt{ostatnich === 1 ? '' : ostatnich < 5 ? 'y' : 'ů'}
                           </span>
                         )}
                       </div>
@@ -223,7 +270,14 @@ export default function ClientDetailPage() {
                                   <User className="h-5 w-5 text-primary" />
                                 </div>
                                 <div>
-                                  <p className="font-bold">{o.jmeno}</p>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="font-bold">{o.jmeno}</p>
+                                    {o.hlavni && (
+                                      <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded bg-[hsl(var(--stav-vyhovuje))]/10 text-[hsl(var(--stav-vyhovuje))]">
+                                        Hlavní
+                                      </span>
+                                    )}
+                                  </div>
                                   <p className="text-sm text-muted-foreground">{o.funkce}</p>
                                 </div>
                               </div>
