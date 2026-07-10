@@ -1,5 +1,6 @@
 'use client';
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { adresaZAres } from "@/lib/kontroly";
 import { useData, db } from "@/components/data-provider";
 import { cn } from "@/app/lib/utils";
@@ -42,7 +43,7 @@ export default function ClientsPage() {
     nazev: "", ico: "", dic: "", sidlo: "", psc: "", mesto: "",
     pracoviste: [{ id: "p1", nazev: "", adresa: "" }],
     pozice: [{ id: "fix1", nazev: "Zaměstnavatel / provozovatel", isFixed: true }],
-    kontakty: [{ id: "k1", jmeno: "", funkce: "", email: "", telefon: "" }]
+    kontakty: [{ id: "k1", jmeno: "", funkce: "", email: "", telefon: "", hlavni: false }]
   });
 
   // Filtrování a Řazení dat
@@ -130,10 +131,10 @@ export default function ClientsPage() {
     setNewClient(p => { const arr = [...p.pozice]; arr[idx].nazev = val; return { ...p, pozice: arr }; });
   };
 
-  const handleAddKontakt = () => setNewClient(p => ({...p, kontakty: [...p.kontakty, { id: Math.random().toString(36).substring(7), jmeno: "", funkce: "", email: "", telefon: "" }]}));
+  const handleAddKontakt = () => setNewClient(p => ({...p, kontakty: [...p.kontakty, { id: Math.random().toString(36).substring(7), jmeno: "", funkce: "", email: "", telefon: "", hlavni: false }]}));
   const handleRemoveKontakt = (idx: number) => setNewClient(p => ({...p, kontakty: p.kontakty.filter((_, i) => i !== idx)}));
-  const handleKontaktChange = (idx: number, field: 'jmeno'|'funkce'|'email'|'telefon', val: string) => {
-    setNewClient(p => { const arr = [...p.kontakty]; arr[idx][field] = val; return { ...p, kontakty: arr }; });
+  const handleKontaktChange = (idx: number, field: 'jmeno'|'funkce'|'email'|'telefon'|'hlavni', val: string | boolean) => {
+    setNewClient(p => { const arr = [...p.kontakty]; (arr[idx] as any)[field] = val; return { ...p, kontakty: arr }; });
   };
 
   // --- ULOŽENÍ NOVÉHO KLIENTA ---
@@ -165,7 +166,7 @@ export default function ClientsPage() {
         nazev: "", ico: "", dic: "", sidlo: "", psc: "", mesto: "",
         pracoviste: [{ id: "p1", nazev: "", adresa: "" }],
         pozice: [{ id: "fix1", nazev: "Zaměstnavatel / provozovatel", isFixed: true }],
-        kontakty: [{ id: "k1", jmeno: "", funkce: "", email: "", telefon: "" }]
+        kontakty: [{ id: "k1", jmeno: "", funkce: "", email: "", telefon: "", hlavni: false }]
       });
       toast({ title: "Klient přidán", description: "Nový subjekt a všechny jeho vazby byly úspěšně uloženy." });
     } catch (err) {
@@ -314,11 +315,20 @@ export default function ClientsPage() {
                   <div className="space-y-3">
                     {newClient.kontakty.map((kont, idx) => (
                       <div key={kont.id} className="flex gap-2 items-start bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 flex-1">
-                          <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Jméno a příjmení</Label><Input value={kont.jmeno} onChange={(e) => handleKontaktChange(idx, 'jmeno', e.target.value)} /></div>
-                          <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Funkce</Label><Input value={kont.funkce} onChange={(e) => handleKontaktChange(idx, 'funkce', e.target.value)} /></div>
-                          <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">E-mail</Label><Input type="email" value={kont.email} onChange={(e) => handleKontaktChange(idx, 'email', e.target.value)} /></div>
-                          <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Telefon</Label><Input value={kont.telefon} onChange={(e) => handleKontaktChange(idx, 'telefon', e.target.value)} /></div>
+                        <div className="flex-1 space-y-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+                            <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Jméno a příjmení</Label><Input value={kont.jmeno} onChange={(e) => handleKontaktChange(idx, 'jmeno', e.target.value)} /></div>
+                            <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Funkce</Label><Input value={kont.funkce} onChange={(e) => handleKontaktChange(idx, 'funkce', e.target.value)} /></div>
+                            <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">E-mail</Label><Input type="email" value={kont.email} onChange={(e) => handleKontaktChange(idx, 'email', e.target.value)} /></div>
+                            <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Telefon</Label><Input value={kont.telefon} onChange={(e) => handleKontaktChange(idx, 'telefon', e.target.value)} /></div>
+                          </div>
+                          <label className="flex items-center gap-2 cursor-pointer w-fit">
+                            <Checkbox
+                              checked={(kont as any).hlavni || false}
+                              onCheckedChange={(v) => handleKontaktChange(idx, 'hlavni', v === true)}
+                            />
+                            <span className="text-xs text-muted-foreground">Hlavní kontakt</span>
+                          </label>
                         </div>
                         {newClient.kontakty.length > 1 && (<Button type="button" variant="ghost" size="icon" className="text-red-500 shrink-0 mt-5" onClick={() => handleRemoveKontakt(idx)}><X className="h-4 w-4" /></Button>)}
                       </div>
