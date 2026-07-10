@@ -36,8 +36,8 @@ export default function EditClientPage() {
         setEditClient({
           ...client,
           pracoviste: client.pracoviste?.length > 0 ? client.pracoviste : [{ id: "p1", nazev: "", adresa: "" }],
-          pozice: client.pozice?.length > 0 ? client.pozice : [{ id: "fix1", nazev: "Zaměstnavatel / provozovatel", isFixed: true }],
-          kontakty: client.kontakty?.length > 0 ? client.kontakty : [{ id: "k1", jmeno: "", funkce: "", email: "", telefon: "", hlavni: false }]
+          pozice: (client.pozice?.length ?? 0) > 0 ? client.pozice : [{ id: "fix1", nazev: "Zaměstnavatel / provozovatel", isFixed: true }],
+          kontakty: (client.kontakty?.length ?? 0) > 0 ? client.kontakty : [{ id: "k1", jmeno: "", funkce: "", email: "", telefon: "", hlavni: false }]
         });
       }
     }
