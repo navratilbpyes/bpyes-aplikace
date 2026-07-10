@@ -2,6 +2,8 @@ export interface Klient {
   id: string;
   nazev: string;
   ico: string;
+  /** DIČ. Doplňováno z ARES. */
+  dic?: string;
   /** Ulice a číslo popisné. Doplňováno z ARES. */
   sidlo?: string;
   /** Poštovní směrovací číslo. Doplňováno z ARES. */
@@ -10,6 +12,12 @@ export interface Klient {
   pracoviste: Pracoviste[];
   /** Pozice odpovědných osob (v UI „pozice“). */
   pozice?: Pozice[];
+  /**
+   * Starší pole s konkrétními osobami. Formulář do něj už nezapisuje
+   * (ukládá se prázdné), ale u dříve založených klientů může nést data.
+   * Slouží jen jako fallback při čtení pozic.
+   */
+  odpovedneOsoby?: { id?: string; jmeno?: string; pozice?: string; funkce?: string; email?: string; telefon?: string }[];
   kontakty?: Kontakt[];
   createdAt?: string;
 }
@@ -63,9 +71,10 @@ export interface Zaznam {
   klientNazev?: string;
   klientSnapshot?: KlientSnapshot;
   pracovisteIds: string[];
-  typKontroly: 'BOZPaPO' | 'PPP' | 'PBOZP';
+  typKontroly: 'BOZPaPO' | 'PPP' | 'PBOZP' | 'KONTROLA';
   datum: string;
   ucastnici?: { jmeno: string; pozice: string }[];
+  poznamka?: string;
   kontrolniBody: KontrolniBod[];
   zavady: Zavada[];
   stav: 'otevreny' | 'uzavreny' | 'archivovany';
@@ -88,6 +97,17 @@ export interface KontrolniBod {
   foto?: string[];
   /** Zobrazit formulář doporučení u tohoto bodu. */
   showDoporuceni?: boolean;
+  /** Text doporučení auditora (bod není v rozporu s předpisem, lze jej zlepšit). */
+  doporuceni?: string;
+  doporuceniFoto?: string[];
+
+  // --- Odstranění závady nahlášené klientem ---
+  /** Klient nahlásil, že závadu odstranil. Čeká na ověření OZO. */
+  vyresenoKlientem?: boolean;
+  datumVyreseniKlientem?: string;
+  jmenoVyresitele?: string;
+  poznamkaKlienta?: string;
+  fotoVyreseni?: string[];
 }
 
 export interface Zavada {
