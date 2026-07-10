@@ -1,5 +1,6 @@
 'use client';
 
+import { compressImage, RAZITKO_PODPIS } from "@/lib/obrazky";
 import { db } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,44 +16,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/app/lib/utils";
 
 // NEPRŮSTŘELNÁ KOMPRESE S BÍLÝM POZADÍM
-const compressImage = (file: File): Promise<string> => {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 600; 
-        const MAX_HEIGHT = 600;
-        let width = img.width;
-        let height = img.height;
 
-        if (width > height) {
-          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-        } else {
-          if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        
-        if (ctx) {
-          // 1. KROK: Natvrdo vyplníme plátno čistě bílou barvou
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, width, height);
-          
-          // 2. KROK: Až na bílou barvu vykreslíme váš obrázek
-          ctx.drawImage(img, 0, 0, width, height);
-        }
-        
-        // 3. KROK: Uložíme jako JPEG (bez průhlednosti, ale garantovaně bílé)
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
-      };
-      img.src = e.target?.result as string;
-    };
-    reader.readAsDataURL(file);
-  });
-};
 
 export default function NastaveniAuditoraPage() {
   const { toast } = useToast();
@@ -230,7 +194,7 @@ export default function NastaveniAuditoraPage() {
                     <Input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" 
                       onChange={async (e) => {
                         const file = e.target.files?.[0]; if (!file) return;
-                        const res = await compressImage(file); setAuditorData(p => ({ ...p, razitkoBase64: res }));
+                        const res = await compressImage(file, RAZITKO_PODPIS); setAuditorData(p => ({ ...p, razitkoBase64: res }));
                       }} 
                     />
                   </div>
@@ -259,7 +223,7 @@ export default function NastaveniAuditoraPage() {
                     <Input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" 
                       onChange={async (e) => {
                         const file = e.target.files?.[0]; if (!file) return;
-                        const res = await compressImage(file); setAuditorData(p => ({ ...p, podpisBase64: res }));
+                        const res = await compressImage(file, RAZITKO_PODPIS); setAuditorData(p => ({ ...p, podpisBase64: res }));
                       }} 
                     />
                   </div>
