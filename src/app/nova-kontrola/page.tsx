@@ -1,6 +1,6 @@
 'use client';
 
-import { createEmptyDefect, extractEmail, parsujTypoveZavady } from "@/lib/kontroly";
+import { createEmptyDefect, prijemciKlienta, parsujTypoveZavady } from "@/lib/kontroly";
 import { nactiCsv, stariZalohy } from "@/lib/csv-cache";
 import type { DefectFormState, TypickaZavada } from "@/lib/kontroly";
 import { compressImage, FOTO_NEDOSTATKU } from "@/lib/obrazky";
@@ -70,7 +70,8 @@ export default function NewInspectionPage() {
   const [justSavedRecordId, setJustSavedRecordId] = useState<string | null>(null);
   const [justSavedRecordCislo, setJustSavedRecordCislo] = useState<string | null>(null);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
-  const [emailRecipient, setEmailRecipient] = useState("");
+  const [vybraniPrijemci, setVybraniPrijemci] = useState<Record<string, boolean>>({});
+  const [dalsiEmail, setDalsiEmail] = useState("");
 
   const [revisionNumber, setRevisionNumber] = useState("0");
   const [isSaving, setIsSaving] = useState(false);
@@ -103,6 +104,16 @@ export default function NewInspectionPage() {
 
     return () => controller.abort();
   }, []);
+
+  // Výsledný seznam adres: zaškrtnuté kontakty + ručně dopsaná adresa.
+  const finalniPrijemci = useMemo(() => {
+    const adresy = Object.entries(vybraniPrijemci)
+      .filter(([, vybrano]) => vybrano)
+      .map(([email]) => email);
+    const rucni = dalsiEmail.trim();
+    if (rucni.includes('@') && !adresy.includes(rucni)) adresy.push(rucni);
+    return adresy;
+  }, [vybraniPrijemci, dalsiEmail]);
 
   const currentChecklistFlat = useMemo(() => {
     let base: any[] = [];
@@ -155,48 +166,6 @@ export default function NewInspectionPage() {
       return;
     }
     setStep(s => s + 1); window.scrollTo(0, 0);
-  };
-
-  // --------------------------------------------------------------------------
-  // NOVÁ FUNKCE PRO ODESLÁNÍ E-MAILU
-  // --------------------------------------------------------------------------
-  const sendEmailToClient = async () => {
-    if (!selectedKlient?.email) {
-      toast({ title: "Chyba", description: "Klient nemá vyplněný e-mail ve své vizitce.", variant: "destructive" });
-      router.push(`/zaznamy/${justSavedRecordId}`);
-      return;
-    }
-
-    setIsSendingEmail(true);
-    try {
-      const odkaz = `${window.location.origin}/zaznamy/${justSavedRecordId}`;
-      
-      const token = await auth.currentUser?.getIdToken();
-      const response = await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          email: selectedKlient.email,
-          jmenoKlienta: selectedKlient.nazev,
-          cisloZpravy: justSavedRecordCislo,
-          odkaz: odkaz
-        })
-      });
-
-      const result = await response.json();
-      
-      if (result.success) {
-        toast({ title: "E-mail úspěšně odeslán", description: `Potvrzení bylo zasláno na: ${selectedKlient.email}` });
-      } else {
-        toast({ title: "Chyba při odesílání e-mailu", description: "E-mail se nepodařilo odeslat. Report je ale v pořádku uložen.", variant: "destructive" });
-      }
-    } catch (err) {
-      console.error(err);
-      toast({ title: "Kritická chyba sítě", description: "Nepodařilo se připojit k poštovnímu serveru.", variant: "destructive" });
-    } finally {
-      setIsSendingEmail(false);
-      router.push(`/zaznamy/${justSavedRecordId}`);
-    }
   };
 
   const executeSave = async (isDraft: boolean = false) => {
@@ -335,7 +304,12 @@ export default function NewInspectionPage() {
       // ZDE JE ZMĚNA: Uložíme ID reportu do stavu a ukážeme modal pro odeslání e-mailu
       setJustSavedRecordId(sanitizedRecord.id);
       setJustSavedRecordCislo(klientskeCislo);
-      setEmailRecipient(extractEmail(selectedKlient));
+      const prijemci = prijemciKlienta(selectedKlient);
+      const maHlavni = prijemci.some(p => p.hlavni);
+      const vychozi: Record<string, boolean> = {};
+      prijemci.forEach(p => { vychozi[p.email] = maHlavni ? p.hlavni : true; });
+      setVybraniPrijemci(vychozi);
+      setDalsiEmail("");
       setShowEmailPrompt(true);
       setShowSaveModal(false);
       setIsSaving(false);
@@ -586,15 +560,46 @@ export default function NewInspectionPage() {
               <p>Přejete si nyní odeslat e-mail s upozorněním a odkazem na klientský dispečink reportu?</p>
               
               <div className="space-y-2 pt-2">
-                <Label>E-mail příjemce (můžete upravit):</Label>
-                <div className="flex items-center gap-2">
-                  <Input 
-                    value={emailRecipient} 
-                    onChange={(e) => setEmailRecipient(e.target.value)}
-                    placeholder="Zadejte e-mail..."
-                    className="bg-white"
-                  />
-                </div>
+                <Label className="text-xs font-bold">Příjemci:</Label>
+                {prijemciKlienta(selectedKlient).length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-2">
+                    Klient nemá u kontaktů vyplněný e-mail. Zadejte adresu ručně níže.
+                  </p>
+                ) : (
+                  <div className="space-y-1 max-h-40 overflow-y-auto rounded-md border p-2 bg-white">
+                    {prijemciKlienta(selectedKlient).map((p) => (
+                      <label key={p.id} className="flex items-start gap-2 p-2 rounded hover:bg-slate-50 cursor-pointer">
+                        <Checkbox
+                          className="mt-0.5"
+                          checked={vybraniPrijemci[p.email] || false}
+                          onCheckedChange={(v) => setVybraniPrijemci(prev => ({ ...prev, [p.email]: v === true }))}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium">{p.jmeno}</span>
+                            {p.funkce && <span className="text-xs text-muted-foreground">· {p.funkce}</span>}
+                            {p.hlavni && (
+                              <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded bg-[hsl(var(--stav-vyhovuje))]/10 text-[hsl(var(--stav-vyhovuje))]">
+                                Hlavní
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground break-all">{p.email}</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-bold">Další adresa (nepovinné):</Label>
+                <Input 
+                  value={dalsiEmail} 
+                  onChange={(e) => setDalsiEmail(e.target.value)}
+                  placeholder="jan.novak@firma.cz"
+                  className="bg-white"
+                />
               </div>
             </CardContent>
             <div className="p-4 border-t flex justify-end gap-2 bg-muted/20 rounded-b-xl">
@@ -609,19 +614,19 @@ export default function NewInspectionPage() {
                       method: 'POST', 
                       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, 
                       body: JSON.stringify({ 
-                        email: emailRecipient.split(',').map((e: string) => e.trim()).filter((e: string) => e.includes('@')), 
+                        email: finalniPrijemci, 
                         jmenoKlienta: selectedKlient?.nazev || "Klient", 
                         cisloZpravy: justSavedRecordCislo, 
                         odkaz: odkaz 
                       }) 
                     });
                     const result = await response.json();
-                    if (result.success) toast({ title: "Odesláno", description: `E-mail odeslán na: ${emailRecipient}` });
+                    if (result.success) toast({ title: "Odesláno", description: finalniPrijemci.length === 1 ? `E-mail odeslán na: ${finalniPrijemci[0]}` : `E-mail odeslán na ${finalniPrijemci.length} adres.` });
                     else toast({ title: "Chyba", description: "Nepodařilo se odeslat.", variant: "destructive" });
                   } catch (err) { toast({ title: "Kritická chyba", description: "Chyba sítě.", variant: "destructive" }); } 
                   finally { setIsSendingEmail(false); router.push(`/zaznamy/${justSavedRecordId}`); }
                 }} 
-                disabled={isSendingEmail || emailRecipient.trim() === ""} 
+                disabled={isSendingEmail || finalniPrijemci.length === 0} 
                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold"
               >
                 {isSendingEmail ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />} Odeslat
