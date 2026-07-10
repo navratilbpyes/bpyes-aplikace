@@ -135,10 +135,10 @@ export default function RecordDetailPage() {
 
     if (!aktualniKlient) return [];
     const prac = aktualniKlient.pracoviste || [];
-    let filtered = [];
-    if (record.pracovisteIds && Array.isArray(record.pracovisteIds)) filtered = prac.filter((p: any) => record.pracovisteIds.includes(p.id));
-    else if (record.pracovisteId) filtered = prac.filter((p: any) => p.id === record.pracovisteId);
-    
+    // Záznamy nesou pouze pracovisteIds (množné). Starší jednotné pole neexistuje.
+    const filtered = Array.isArray(record.pracovisteIds)
+      ? prac.filter((p: any) => record.pracovisteIds.includes(p.id))
+      : [];
     return filtered.map((p: any) => ({
       ...p,
       fullDisplay: `${p.nazev}${p.adresa ? ', ' + p.adresa : ''}${p.mesto ? ', ' + p.mesto : ''}`
