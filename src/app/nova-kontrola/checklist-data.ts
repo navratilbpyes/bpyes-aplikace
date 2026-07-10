@@ -487,23 +487,222 @@ export const CHECKLIST_PPP: ChecklistSection[] = [
     ],
   },
 ];
-
 // ==========================================
 // 4) PROVĚRKA BOZP NA STAVENIŠTI (PBOZPS) – číslování od 1
 //
 // Kontrola staveniště z pozice OZO / koordinátora BOZP.
-// Vychází z NV č. 591/2006 Sb. (požadavky na staveniště),
-// NV č. 362/2005 Sb. (práce ve výškách) a zák. č. 309/2006 Sb.
+// NV č. 591/2006 Sb., NV č. 362/2005 Sb., zák. č. 309/2006 Sb.
 //
-// Body doplní Martin. Struktura je připravena – stačí vyplnit
-// oddíly a jednotlivé body. Číslování v rámci typu začíná od 1.
+// Práce ve výškách jsou rozděleny do samostatných oddílů (G–L),
+// protože každý má vlastní režim kontrol a předpisů.
 // ==========================================
 export const CHECKLIST_PBOZPS: ChecklistSection[] = [
   {
     id: 'A',
-    title: 'Zatím nevyplněno',
+    title: 'DOKUMENTACE A ORGANIZACE STAVENIŠTĚ',
     points: [
-      { id: '1', text: 'Doplňte první kontrolní bod.' },
+      { id: '1', text: 'Oznámení o zahájení prací na OIP' },
+      { id: '2', text: 'Určení koordinátora BOZP' },
+      { id: '3', text: 'Plán BOZP na staveništi' },
+      { id: '4', text: 'Stavební deník' },
+      { id: '5', text: 'Zápisy koordinátora a kontrolní dny' },
+      { id: '6', text: 'Technologické a pracovní postupy rizikových prací' },
+      { id: '7', text: 'Evidence osob na staveništi' },
+    ],
+  },
+  {
+    id: 'B',
+    title: 'ZAJIŠTĚNÍ A OPLOCENÍ STAVENIŠTĚ',
+    points: [
+      { id: '8', text: 'Oplocení / ohrazení staveniště' },
+      { id: '9', text: 'Vstupy a brány na staveniště' },
+      { id: '10', text: 'Zajištění staveniště mimo pracovní dobu' },
+      { id: '11', text: 'Zábory veřejného prostranství a dopravní opatření' },
+    ],
+  },
+  {
+    id: 'C',
+    title: 'BEZPEČNOSTNÍ ZNAČENÍ NA STAVENIŠTI',
+    points: [
+      { id: '12', text: 'Informační tabule staveniště' },
+      { id: '13', text: 'Výstražné a zákazové značení' },
+      { id: '14', text: 'Značení nebezpečných míst a prostorů' },
+      { id: '15', text: 'Dopravní značení na staveništi' },
+      { id: '16', text: 'Únikové cesty a shromaždiště' },
+    ],
+  },
+  {
+    id: 'D',
+    title: 'ZAŘÍZENÍ STAVENIŠTĚ A HYGIENICKÉ ZÁZEMÍ',
+    points: [
+      { id: '17', text: 'Šatny a prostory pro převlékání' },
+      { id: '18', text: 'Umývárny, WC a pitná voda' },
+      { id: '19', text: 'Prostor pro odpočinek a stravování' },
+      { id: '20', text: 'Osvětlení staveniště' },
+      { id: '21', text: 'Vnitrostaveništní komunikace a přístupy' },
+      { id: '22', text: 'Prostředky první pomoci' },
+      { id: '23', text: 'Požární zabezpečení staveniště' },
+    ],
+  },
+  {
+    id: 'E',
+    title: 'SKLÁDKY A SKLADOVÁNÍ MATERIÁLU',
+    points: [
+      { id: '24', text: 'Vymezení a únosnost skládek' },
+      { id: '25', text: 'Způsob ukládání a stohování materiálu' },
+      { id: '26', text: 'Manipulační prostor a přístup ke skládce' },
+      { id: '27', text: 'Skladování sypkých materiálů' },
+      { id: '28', text: 'Skladování hořlavin a tlakových lahví' },
+    ],
+  },
+  {
+    id: 'F',
+    title: 'ZEMNÍ PRÁCE A VÝKOPY',
+    points: [
+      { id: '29', text: 'Vytyčení inženýrských sítí' },
+      { id: '30', text: 'Zajištění stěn výkopu proti sesutí' },
+      { id: '31', text: 'Zajištění okrajů výkopu a zábradlí' },
+      { id: '32', text: 'Sestupy a výstupy do výkopu' },
+      { id: '33', text: 'Práce ve výkopu a osamocená práce' },
+      { id: '34', text: 'Provoz strojů při zemních pracích' },
+    ],
+  },
+  {
+    id: 'G',
+    title: 'OCHRANA PROTI PÁDU Z VÝŠKY',
+    points: [
+      { id: '35', text: 'Zajištění proti pádu z výšky nad 1,5 m' },
+      { id: '36', text: 'Zábradlí a záchytné konstrukce' },
+      { id: '37', text: 'Zajištění otvorů a prostupů v podlaze' },
+      { id: '38', text: 'Zajištění prostoru pod místem práce ve výšce' },
+      { id: '39', text: 'Přerušení práce za nepříznivých podmínek' },
+    ],
+  },
+  {
+    id: 'H',
+    title: 'OSOBNÍ OCHRANA PROTI PÁDU (POSTROJE A KOTVENÍ)',
+    points: [
+      { id: '40', text: 'Přidělení a používání OOPP proti pádu' },
+      { id: '41', text: 'Kotvicí body a jejich únosnost' },
+      { id: '42', text: 'Kontroly a revize OOPP proti pádu' },
+      { id: '43', text: 'Školení a zdravotní způsobilost pro práci ve výškách' },
+      { id: '44', text: 'Záchrana pracovníka po zachycení pádu' },
+    ],
+  },
+  {
+    id: 'I',
+    title: 'LEŠENÍ',
+    points: [
+      { id: '45', text: 'Montáž a odborná způsobilost montážní čety' },
+      { id: '46', text: 'Předání lešení a dokumentace' },
+      { id: '47', text: 'Konstrukce, kotvení a stabilita lešení' },
+      { id: '48', text: 'Podlahy, zábradlí a výstupy na lešení' },
+      { id: '49', text: 'Pravidelné kontroly a záznamy' },
+    ],
+  },
+  {
+    id: 'J',
+    title: 'ŽEBŘÍKY A SCHŮDKY',
+    points: [
+      { id: '50', text: 'Technický stav žebříků' },
+      { id: '51', text: 'Kontroly a evidence žebříků' },
+      { id: '52', text: 'Postavení a zajištění žebříku' },
+      { id: '53', text: 'Používání žebříku a jeho omezení' },
+    ],
+  },
+  {
+    id: 'K',
+    title: 'POJÍZDNÉ A ZDVIHACÍ PRACOVNÍ PLOŠINY',
+    points: [
+      { id: '54', text: 'Pojízdné lešení (věže)' },
+      { id: '55', text: 'Zdvihací pracovní plošiny (MEWP)' },
+      { id: '56', text: 'Stabilita a postavení plošiny' },
+      { id: '57', text: 'Provoz plošiny a nebezpečný prostor' },
+    ],
+  },
+  {
+    id: 'L',
+    title: 'PRÁCE NA STŘECHÁCH',
+    points: [
+      { id: '58', text: 'Posouzení únosnosti střešní konstrukce' },
+      { id: '59', text: 'Zajištění okraje střechy' },
+      { id: '60', text: 'Křehké a nepochozí krytiny' },
+      { id: '61', text: 'Šikmé střechy a zajištění proti sklouznutí' },
+      { id: '62', text: 'Zajištění prostoru pod střechou' },
+    ],
+  },
+  {
+    id: 'M',
+    title: 'BOURACÍ A DEMOLIČNÍ PRÁCE',
+    points: [
+      { id: '63', text: 'Průzkum a dokumentace před bouráním' },
+      { id: '64', text: 'Odpojení a zajištění inženýrských sítí' },
+      { id: '65', text: 'Zajištění ohroženého prostoru při bourání' },
+      { id: '66', text: 'Nakládání s bouranou sutí' },
+    ],
+  },
+  {
+    id: 'N',
+    title: 'AZBEST A NEBEZPEČNÉ STAVEBNÍ MATERIÁLY',
+    points: [
+      { id: '67', text: 'Zjištění výskytu azbestu' },
+      { id: '68', text: 'Ohlášení prací s azbestem' },
+      { id: '69', text: 'Opatření při odstraňování azbestu' },
+      { id: '70', text: 'Zdravotní dohled u prací s azbestem' },
+    ],
+  },
+  {
+    id: 'O',
+    title: 'OSOBNÍ OCHRANNÉ PRACOVNÍ PROSTŘEDKY',
+    points: [
+      { id: '71', text: 'Přidělení a používání OOPP' },
+      { id: '72', text: 'Ochranná přilba, obuv a reflexní vesta' },
+      { id: '73', text: 'Speciální OOPP dle rizik' },
+      { id: '74', text: 'Evidence a kontroly OOPP' },
+    ],
+  },
+  {
+    id: 'P',
+    title: 'SUBDODAVATELÉ A SPOLEČNÉ PRACOVIŠTĚ',
+    points: [
+      { id: '75', text: 'Vzájemné informování o rizicích' },
+      { id: '76', text: 'Evidence a prověření subdodavatelů' },
+      { id: '77', text: 'Vstupní školení a seznámení se staveništěm' },
+      { id: '78', text: 'Koordinace prací a předávání pracovišť' },
+    ],
+  },
+  {
+    id: 'Q',
+    title: 'ELEKTRICKÁ ZAŘÍZENÍ NA STAVENIŠTI',
+    points: [
+      { id: '79', text: 'Staveništní rozvaděče' },
+      { id: '80', text: 'Kabely, přívody a prodlužovací šňůry' },
+      { id: '81', text: 'Revize elektrických zařízení a spotřebičů' },
+      { id: '82', text: 'Ochranná pásma nadzemního vedení' },
+      { id: '83', text: 'Odborná způsobilost pro elektro práce' },
+    ],
+  },
+  {
+    id: 'R',
+    title: 'ZDVIHACÍ ZAŘÍZENÍ A VÝTAHY',
+    points: [
+      { id: '84', text: 'Systém bezpečné práce zdvihacího zařízení' },
+      { id: '85', text: 'Revize, inspekce a kontroly zdvihacích zařízení' },
+      { id: '86', text: 'Jeřábník, vazač a signalista' },
+      { id: '87', text: 'Vázací a závěsné prostředky' },
+      { id: '88', text: 'Zakázané manipulace a ohrožený prostor' },
+      { id: '89', text: 'Stavební výtahy' },
+    ],
+  },
+  {
+    id: 'S',
+    title: 'STAVEBNÍ STROJE A NÁŘADÍ',
+    points: [
+      { id: '90', text: 'Technický stav strojů' },
+      { id: '91', text: 'Průvodní a provozní dokumentace strojů' },
+      { id: '92', text: 'Obsluha strojů a oprávnění' },
+      { id: '93', text: 'Ruční nářadí a elektrické nářadí' },
+      { id: '94', text: 'Provoz techniky na staveništi' },
     ],
   },
 ];
