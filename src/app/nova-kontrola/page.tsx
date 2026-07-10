@@ -1,5 +1,8 @@
 'use client';
 
+import { parseCSV, createEmptyDefect, extractEmail } from "@/lib/kontroly";
+import type { DefectFormState, TypickaZavada } from "@/lib/kontroly";
+import { compressImage, FOTO_NEDOSTATKU } from "@/lib/obrazky";
 import { STAVY, POradi_TLACITEK, paskaPro } from "@/lib/stavy";
 import { useData, db, auth } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
@@ -24,76 +27,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Zavada } from "@/app/lib/types";
 import { doc, collection, setDoc } from "firebase/firestore";
 
-interface TypickaZavada { nazev: string; popis: string; opatreni: string; }
-interface DefectFormState {
-  uid: string; popis: string; navrhOpatreni: string; terminOdstraneni: string;
-  odpovednaOsoba: string; odpovednaOsobaManualni: string; lokalizace: string;
-  zavaznost: string; odstraneno: boolean; datumOdstraneni: string;
-  zaznamProvedl: string; zaznamProvedlManualni: string; foto?: string[];
-}
 
-const createEmptyDefect = (): DefectFormState => ({
-  uid: Math.random().toString(36).substring(7), popis: "", navrhOpatreni: "",
-  terminOdstraneni: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-  odpovednaOsoba: "", odpovednaOsobaManualni: "", lokalizace: "", zavaznost: "none",
-  odstraneno: false, datumOdstraneni: "", zaznamProvedl: "", zaznamProvedlManualni: "", foto: []
-});
 
-const compressImage = (file: File): Promise<string> => {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1024; const MAX_HEIGHT = 1024;
-        let width = img.width; let height = img.height;
-        if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
-        else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
-        canvas.width = width; canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.7));
-      };
-      img.src = e.target?.result as string;
-    };
-    reader.readAsDataURL(file);
-  });
-};
+
+
+
 export const dynamic = 'force-dynamic';
 const GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTqBDqcv7REG4fkbLQHUqOQP13KzwB-wAAEaotZldSvZMvTpzfc8OlJvo8isBWkmQBpjYTm-I_X6Lls/pub?output=csv";
-function parseCSV(str: string) {
-  const arr: string[][] = []; let quote = false; let row = 0, col = 0;
-  for (let c = 0; c < str.length; c++) {
-    let cc = str[c], nc = str[c+1];
-    arr[row] = arr[row] || []; arr[row][col] = arr[row][col] || '';
-    if (cc == '"' && quote && nc == '"') { arr[row][col] += cc; ++c; continue; }
-    if (cc == '"') { quote = !quote; continue; }
-    if (cc == ',' && !quote) { ++col; continue; }
-    if (cc == '\r' && nc == '\n' && !quote) { ++row; col = 0; ++c; continue; }
-    if (cc == '\n' && !quote) { ++row; col = 0; continue; }
-    if (cc == '\r' && !quote) { ++row; col = 0; continue; }
-    arr[row][col] += cc;
-  }
-  return arr;
-}
+
 
 // ADRESNÝ VYHLEDÁVAČ VŠECH E-MAILŮ
-const extractEmail = (klientObj: any): string => {
-  if (!klientObj) return "";
-  const emaily = new Set<string>();
-  const pridejEmail = (val: any) => {
-    if (typeof val === 'string' && val.includes('@') && val.includes('.')) emaily.add(val.trim());
-  };
-  pridejEmail(klientObj.email);
-  pridejEmail(klientObj.kontaktniOsoba?.email);
-  ['odpovedneOsoby', 'kontakty', 'pozice'].forEach(nazevPole => {
-    if (Array.isArray(klientObj[nazevPole])) {
-      klientObj[nazevPole].forEach((polozka: any) => pridejEmail(polozka?.email));
-    }
-  });
-  return Array.from(emaily).join(', ');
-};
+
 
 export default function NewInspectionPage() {
   const { klienti, zaznamy, setZaznamy } = useData();
@@ -357,6 +301,8 @@ export default function NewInspectionPage() {
       const klientSnapshot = {
         nazev: selectedKlient?.nazev || '',
         ico: selectedKlient?.ico || '',
+        sidlo: selectedKlient?.sidlo || '',
+        psc: selectedKlient?.psc || '',
         mesto: selectedKlient?.mesto || '',
         pracoviste: vybranaPracoviste.map((p: any) => ({
           id: p.id,
@@ -460,7 +406,7 @@ export default function NewInspectionPage() {
               onChange={async (e) => {
                 const files = Array.from(e.target.files || []) as File[]; if (files.length === 0) return;
                 const newPhotos: string[] = [];
-                for (const file of files) { const compressed = await compressImage(file); newPhotos.push(compressed); }
+                for (const file of files) { const compressed = await compressImage(file, FOTO_NEDOSTATKU); newPhotos.push(compressed); }
                 updateFn('foto', [...(def.foto || []), ...newPhotos]);
               }}
             />
