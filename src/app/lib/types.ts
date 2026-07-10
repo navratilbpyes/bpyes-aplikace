@@ -1,47 +1,69 @@
-
 export interface Klient {
   id: string;
   nazev: string;
   ico: string;
-  dic?: string;
-  sidlo: string;
+  /** Ulice a číslo popisné. Doplňováno z ARES. */
+  sidlo?: string;
+  /** Poštovní směrovací číslo. Doplňováno z ARES. */
+  psc?: string;
   mesto: string;
-  psc: string;
-  kontaktOsoba: string;
-  email: string;
-  telefon: string;
-  poznamka?: string;
   pracoviste: Pracoviste[];
-  odpovedneOsoby: OdpovednaOsoba[];
-  createdAt: string;
+  /** Pozice odpovědných osob (v UI „pozice“). */
+  pozice?: Pozice[];
+  kontakty?: Kontakt[];
+  createdAt?: string;
 }
 
 export interface Pracoviste {
   id: string;
   nazev: string;
   adresa: string;
-  mesto: string;
-  kontaktOsoba?: string;
-  prostory: string[];
+  mesto?: string;
+  prostory?: string[];
 }
 
-export interface OdpovednaOsoba {
+export interface Pozice {
+  id: string;
+  nazev: string;
+  /** Pevná pozice, kterou nelze přejmenovat ani odebrat. */
+  isFixed?: boolean;
+}
+
+export interface Kontakt {
   id: string;
   jmeno: string;
-  prijmeni: string;
-  pozice: string;
+  funkce: string;
   email?: string;
   telefon?: string;
+}
+
+/**
+ * Snímek klienta pořízený při vytvoření protokolu.
+ * Protokol je dokument k datu – pozdější změna údajů klienta
+ * nesmí zpětně měnit už vydaný protokol.
+ */
+export interface KlientSnapshot {
+  nazev: string;
+  ico: string;
+  sidlo?: string;
+  psc?: string;
+  mesto: string;
+  pracoviste: { id: string; nazev: string; adresa: string }[];
 }
 
 export interface Zaznam {
   id: string;
   cislo: string;
+  cisloKlientske?: string;
+  revize?: number;
   klientId: string;
-  pracovisteId: string;
+  /** Název klienta v době kontroly (pro orientaci a řazení). */
+  klientNazev?: string;
+  klientSnapshot?: KlientSnapshot;
+  pracovisteIds: string[];
   typKontroly: 'BOZPaPO' | 'PPP' | 'PBOZP';
   datum: string;
-  ucastnici: { jmeno: string; pozice: string }[];
+  ucastnici?: { jmeno: string; pozice: string }[];
   kontrolniBody: KontrolniBod[];
   zavady: Zavada[];
   stav: 'otevreny' | 'uzavreny' | 'archivovany';
@@ -50,28 +72,46 @@ export interface Zaznam {
 }
 
 export interface KontrolniBod {
-  bod: number;
-  hodnoceni: 'V' | 'N' | 'NA' | 'NK' | null;
+  /** ID kontrolního bodu. Řetězec, protože zdrojová data jsou textová. */
+  bod: string;
+  hodnoceni: 'V' | 'N' | 'D' | 'NA' | 'NK' | null;
   textHodnoceni: string;
+  sekce?: string;
+  otazka?: string;
   poznamka?: string;
+  navrhOpatreni?: string;
+  lokalizace?: string;
+  terminOdstraneni?: string;
+  odpovednaOsoba?: string;
+  foto?: string[];
+  /** Zobrazit formulář doporučení u tohoto bodu. */
+  showDoporuceni?: boolean;
 }
 
 export interface Zavada {
   id: string;
   cislo: number;
-  bodKontroly?: number;
+  bodKontroly?: string;
+  sekce?: string;
   popis: string;
   navrhOpatreni: string;
   terminOdstraneni: string;
   odpovednaOsoba: string;
-  stavOdstraneni: 'otevrena' | 'v_reseni' | 'odstranena';
-  zaznamOdstraneni?: string;
+  lokalizace?: string;
+  zavaznost?: string;
+  odstraneno?: boolean;
+  datumOdstraneni?: string;
+  foto?: string[];
 }
 
-export interface Nastaveni {
+export interface AuditorConfig {
   nazev: string;
   ico: string;
   adresa: string;
   auditor: string;
-  certifikace: string[];
+  email?: string;
+  telefon?: string;
+  certifikace?: { nazev: string; cislo?: string }[];
+  razitkoBase64?: string;
+  podpisBase64?: string;
 }
