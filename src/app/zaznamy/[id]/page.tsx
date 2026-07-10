@@ -6,7 +6,7 @@ import { compressImage, FOTO_NEDOSTATKU } from "@/lib/obrazky";
 import { stav, paskaPro, STAVY } from "@/lib/stavy";
 import { useData, db, auth } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { 
@@ -219,9 +219,27 @@ export default function RecordDetailPage() {
     return Array.from(new Set(positions)) as string[];
   }, [record]);
 
+  // Doporučení auditora – body, kde nejde o neshodu, ale o návrh na zlepšení.
+  // Nedrží protokol otevřený, proto stojí ve vlastní sekci za nedostatky.
+  const doporuceniList = useMemo(() => {
+    if (!record?.kontrolniBody) return [];
+    return record.kontrolniBody
+      .filter((kb: any) => kb.showDoporuceni && kb.doporuceni?.trim())
+      .map((kb: any) => ({
+        bod: kb.bod,
+        sekce: kb.sekce,
+        otazka: kb.otazka,
+        text: kb.doporuceni.trim(),
+        foto: kb.doporuceniFoto || [],
+      }));
+  }, [record]);
+
   const filteredKontrolniBody = useMemo(() => {
     if (!record?.kontrolniBody) return [];
     return record.kontrolniBody.filter((kb: any) => {
+      // Bod nesoucí pouze doporučení (bez hodnocení) patří do vlastní
+      // sekce doporučení, ne do seznamu hodnocených bodů.
+      if (!kb.hodnoceni) return false;
       const sec = kb.sekce || "Ostatní";
       if (visibleSections[sec] === false) return false;
       if (onlyDefects && kb.hodnoceni !== 'N') return false;
@@ -534,6 +552,40 @@ export default function RecordDetailPage() {
                })
             ))}
           </div>
+
+          {doporuceniList.length > 0 && (
+            <div className="mt-10">
+              <h2 className="text-base font-bold mb-6 uppercase border-b pb-2">3. DOPORUČENÍ AUDITORA</h2>
+              <p className="text-[11px] text-slate-500 mb-6 leading-relaxed">
+                Následující body nejsou v rozporu s právními předpisy. Jde o návrhy nad rámec povinností,
+                jejichž realizace není podmínkou uzavření protokolu.
+              </p>
+
+              {doporuceniList.map((dop: any, idx: number) => (
+                <div key={dop.bod} className="avoid-break mb-6 pb-6 border-b last:border-b-0 pl-3 paska paska-D">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter font-mono">
+                      [{dop.bod}] {dop.sekce ? `KAPITOLA: ${dop.sekce}` : ''}
+                    </div>
+                    <div className="text-[9px] font-bold px-2 py-0.5 border rounded uppercase text-[hsl(var(--stav-doporuceni))] border-[hsl(var(--stav-doporuceni))]/30">
+                      Doporučení {idx + 1}
+                    </div>
+                  </div>
+
+                  {dop.otazka && <p className="font-bold text-[13px] mb-2">{dop.otazka}</p>}
+                  <p className="text-[12px] leading-relaxed whitespace-pre-wrap">{dop.text}</p>
+
+                  {dop.foto.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {dop.foto.map((f: string, i: number) => (
+                        <img key={i} src={f} alt={`Doporučení ${idx + 1}`} className="h-32 w-auto object-cover rounded border border-slate-200" />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -815,6 +867,47 @@ export default function RecordDetailPage() {
           </div>
 
         </div>
+
+        {doporuceniList.length > 0 && (
+          <Card className="border-[hsl(var(--stav-doporuceni))]/20 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                Doporučení auditora
+                <span className="text-slate-400 font-normal">({doporuceniList.length})</span>
+              </CardTitle>
+              <CardDescription>
+                Tyto body nejsou v rozporu s předpisy. Jde o návrhy nad rámec povinností —
+                jejich realizace není podmínkou uzavření protokolu.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {doporuceniList.map((dop: any, idx: number) => (
+                <div key={dop.bod} className="pl-4 py-3 paska paska-D bg-[hsl(var(--stav-doporuceni))]/5 rounded-r-lg">
+                  <div className="flex items-baseline gap-2 mb-1">
+                    <span className="font-mono text-xs font-bold text-[hsl(var(--stav-doporuceni))]">
+                      {String(idx + 1).padStart(2, '0')}
+                    </span>
+                    {dop.otazka && <span className="font-semibold text-sm text-slate-800">{dop.otazka}</span>}
+                  </div>
+                  {dop.sekce && (
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-2 font-mono">
+                      [{dop.bod}] {dop.sekce}
+                    </div>
+                  )}
+                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{dop.text}</p>
+
+                  {dop.foto.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {dop.foto.map((f: string, i: number) => (
+                        <img key={i} src={f} alt={`Doporučení ${idx + 1}`} className="h-28 w-auto object-cover rounded border border-slate-200 shadow-sm" />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
