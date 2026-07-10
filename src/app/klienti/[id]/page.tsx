@@ -15,7 +15,8 @@ import {
   RefreshCw,
   MoreVertical,
   ClipboardList,
-  Eye
+  Eye,
+  Briefcase
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -103,24 +104,47 @@ export default function ClientDetailPage() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-muted-foreground text-xs uppercase">Hlavní kontakt</Label>
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-muted-foreground" />
-                      <span>{klient.kontaktOsoba || 'Neuvedeno'}</span>
-                    </div>
-                    {klient.email && (
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4 text-muted-foreground" />
-                        <a href={`mailto:${klient.email}`} className="text-blue-600 hover:underline">{klient.email}</a>
+                  {(() => {
+                    // Kontakty jsou v poli klient.kontakty. Pole kontaktOsoba/email/telefon
+                    // na klientovi neexistují – zůstala jen ve starých typech.
+                    const kontakt = klient.kontakty?.find((k: any) => k.jmeno?.trim());
+                    if (!kontakt) {
+                      return (
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-muted-foreground">Neuvedeno</span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span>
+                            {kontakt.jmeno}
+                            {kontakt.funkce && <span className="text-muted-foreground"> · {kontakt.funkce}</span>}
+                          </span>
+                        </div>
+                        {kontakt.email && (
+                          <div className="flex items-center gap-2">
+                            <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <a href={`mailto:${kontakt.email}`} className="text-blue-600 hover:underline break-all">{kontakt.email}</a>
+                          </div>
+                        )}
+                        {kontakt.telefon && (
+                          <div className="flex items-center gap-2">
+                            <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <a href={`tel:${kontakt.telefon.replace(/\s/g, '')}`} className="hover:underline">{kontakt.telefon}</a>
+                          </div>
+                        )}
+                        {klient.kontakty.filter((k: any) => k.jmeno?.trim()).length > 1 && (
+                          <span className="text-[11px] text-muted-foreground mt-1">
+                            + {klient.kontakty.filter((k: any) => k.jmeno?.trim()).length - 1} další kontakt(y)
+                          </span>
+                        )}
                       </div>
-                    )}
-                    {klient.telefon && (
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-muted-foreground" />
-                        <span>{klient.telefon}</span>
-                      </div>
-                    )}
-                  </div>
+                    );
+                  })()}
                 </div>
               </div>
             </CardContent>
@@ -132,7 +156,8 @@ export default function ClientDetailPage() {
           <Tabs defaultValue="pracoviste" className="space-y-6">
             <TabsList className="w-full justify-start h-auto p-1 bg-secondary">
               <TabsTrigger value="pracoviste" className="px-6 py-2">Pracoviště</TabsTrigger>
-              <TabsTrigger value="osoby" className="px-6 py-2">Odpovědné osoby</TabsTrigger>
+              <TabsTrigger value="osoby" className="px-6 py-2">Kontaktní osoby</TabsTrigger>
+              <TabsTrigger value="pozice" className="px-6 py-2">Odpovědné osoby</TabsTrigger>
               <TabsTrigger value="zaznamy" className="px-6 py-2">Záznamy kontrol</TabsTrigger>
             </TabsList>
 
@@ -172,46 +197,105 @@ export default function ClientDetailPage() {
             </TabsContent>
 
             <TabsContent value="osoby" className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="font-bold">Odpovědné osoby ({klient.odpovedneOsoby?.length || 0})</h3>
-                <Button size="sm" variant="outline">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Přidat osobu
-                </Button>
-              </div>
+              {(() => {
+                const osoby = (klient.kontakty || []).filter((k: any) => k.jmeno?.trim());
+                return (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-bold">Kontaktní osoby ({osoby.length})</h3>
+                      <Button size="sm" variant="outline" onClick={() => router.push(`/klienti/${klient.id}/edit`)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Přidat osobu
+                      </Button>
+                    </div>
 
-              <div className="grid grid-cols-1 gap-4">
-                {/* Bezpečný přístup přes || [] k poli osob */}
-                {(klient.odpovedneOsoby || []).map((o: any) => (
-                  <Card key={o.id || Math.random()} className="border-none shadow-sm">
-                    <CardContent className="flex items-center justify-between p-6">
-                      <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 rounded-full bg-primary/5 flex items-center justify-center">
-                          <User className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <p className="font-bold">{o.jmeno} {o.prijmeni}</p>
-                          <p className="text-sm text-muted-foreground">{o.pozice || o.funkce}</p>
-                        </div>
+                    {osoby.length === 0 ? (
+                      <div className="text-center py-12 text-muted-foreground text-sm border border-dashed rounded-lg">
+                        Zatím nejsou zadány žádné kontaktní osoby.
                       </div>
-                      <div className="flex gap-8">
-                        {o.email && (
-                          <div className="hidden md:flex flex-col">
-                            <span className="text-[10px] uppercase text-muted-foreground font-bold">Email</span>
-                            <span className="text-sm">{o.email}</span>
-                          </div>
-                        )}
-                        {o.telefon && (
-                          <div className="hidden md:flex flex-col">
-                            <span className="text-[10px] uppercase text-muted-foreground font-bold">Telefon</span>
-                            <span className="text-sm">{o.telefon}</span>
-                          </div>
-                        )}
+                    ) : (
+                      <div className="grid grid-cols-1 gap-4">
+                        {osoby.map((o: any) => (
+                          <Card key={o.id || o.jmeno} className="border-none shadow-sm">
+                            <CardContent className="flex items-center justify-between p-6">
+                              <div className="flex items-center gap-4">
+                                <div className="h-10 w-10 rounded-full bg-primary/5 flex items-center justify-center shrink-0">
+                                  <User className="h-5 w-5 text-primary" />
+                                </div>
+                                <div>
+                                  <p className="font-bold">{o.jmeno}</p>
+                                  <p className="text-sm text-muted-foreground">{o.funkce}</p>
+                                </div>
+                              </div>
+                              <div className="flex gap-8">
+                                {o.email && (
+                                  <div className="hidden md:flex flex-col">
+                                    <span className="text-[10px] uppercase text-muted-foreground font-bold">Email</span>
+                                    <a href={`mailto:${o.email}`} className="text-sm text-blue-600 hover:underline">{o.email}</a>
+                                  </div>
+                                )}
+                                {o.telefon && (
+                                  <div className="hidden md:flex flex-col">
+                                    <span className="text-[10px] uppercase text-muted-foreground font-bold">Telefon</span>
+                                    <a href={`tel:${o.telefon.replace(/\s/g, '')}`} className="text-sm hover:underline">{o.telefon}</a>
+                                  </div>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                    )}
+                  </>
+                );
+              })()}
+            </TabsContent>
+
+            <TabsContent value="pozice" className="space-y-4">
+              {(() => {
+                // Odpovědné osoby jsou pracovní pozice, ne konkrétní lidé.
+                // Slouží k přiřazení, kdo má odstranit zjištěný nedostatek.
+                const pozice = (klient.pozice || []).filter((p: any) => p.nazev?.trim());
+                return (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h3 className="font-bold">Odpovědné osoby ({pozice.length})</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Pracovní pozice, kterým lze přiřadit odstranění nedostatku.
+                        </p>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => router.push(`/klienti/${klient.id}/edit`)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Přidat pozici
+                      </Button>
+                    </div>
+
+                    {pozice.length === 0 ? (
+                      <div className="text-center py-12 text-muted-foreground text-sm border border-dashed rounded-lg">
+                        Zatím nejsou zadány žádné odpovědné osoby.
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {pozice.map((p: any) => (
+                          <div
+                            key={p.id || p.nazev}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-white text-sm"
+                          >
+                            <Briefcase className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <span className="font-medium">{p.nazev}</span>
+                            {p.isFixed && (
+                              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                                pevná
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </TabsContent>
 
             <TabsContent value="zaznamy" className="space-y-4">
