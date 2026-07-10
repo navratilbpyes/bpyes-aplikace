@@ -18,46 +18,41 @@ export const STAVY: Record<Hodnoceni, StavDefinice> = {
     kod: 'V',
     popis: 'Vyhovuje',
     paska: 'paska paska-V',
-    text: 'text-[hsl(var(--stav-vyhovuje))]',
-    odznak: 'bg-[hsl(var(--stav-vyhovuje))]/10 text-[hsl(var(--stav-vyhovuje))]',
-    tlacitko:
-      'bg-[hsl(var(--stav-vyhovuje))]/10 text-[hsl(var(--stav-vyhovuje))] hover:bg-[hsl(var(--stav-vyhovuje))]/20 data-[state=active]:bg-[hsl(var(--stav-vyhovuje))] data-[state=active]:text-white',
+    text: 'txt-stav-V',
+    odznak: 'odznak-stav-V',
+    tlacitko: 'btn-stav btn-stav-V',
   },
   N: {
     kod: 'N',
     popis: 'Nevyhovuje',
     paska: 'paska paska-N',
-    text: 'text-[hsl(var(--stav-zavada))]',
-    odznak: 'bg-[hsl(var(--stav-zavada))]/10 text-[hsl(var(--stav-zavada))]',
-    tlacitko:
-      'bg-[hsl(var(--stav-zavada))]/10 text-[hsl(var(--stav-zavada))] hover:bg-[hsl(var(--stav-zavada))]/20 data-[state=active]:bg-[hsl(var(--stav-zavada))] data-[state=active]:text-white',
+    text: 'txt-stav-N',
+    odznak: 'odznak-stav-N',
+    tlacitko: 'btn-stav btn-stav-N',
   },
   D: {
     kod: 'D',
     popis: 'Doporučeno',
     paska: 'paska paska-D',
-    text: 'text-[hsl(var(--stav-doporuceni))]',
-    odznak: 'bg-[hsl(var(--stav-doporuceni))]/10 text-[hsl(var(--stav-doporuceni))]',
-    tlacitko:
-      'bg-[hsl(var(--stav-doporuceni))]/10 text-[hsl(var(--stav-doporuceni))] hover:bg-[hsl(var(--stav-doporuceni))]/20 data-[state=active]:bg-[hsl(var(--stav-doporuceni))] data-[state=active]:text-white',
+    text: 'txt-stav-D',
+    odznak: 'odznak-stav-D',
+    tlacitko: 'btn-stav btn-stav-D',
   },
   NA: {
     kod: 'NA',
     popis: 'Neaplikováno',
     paska: 'paska paska-NA',
-    text: 'text-[hsl(var(--stav-neutral))]',
-    odznak: 'bg-[hsl(var(--stav-neutral))]/10 text-[hsl(var(--stav-neutral))]',
-    tlacitko:
-      'bg-[hsl(var(--stav-neutral))]/10 text-[hsl(var(--stav-neutral))] hover:bg-[hsl(var(--stav-neutral))]/20 data-[state=active]:bg-[hsl(var(--stav-neutral))] data-[state=active]:text-white',
+    text: 'txt-stav-NA',
+    odznak: 'odznak-stav-NA',
+    tlacitko: 'btn-stav btn-stav-NA',
   },
   NK: {
     kod: 'NK',
     popis: 'Nekontrolováno',
     paska: 'paska paska-NK',
-    text: 'text-[hsl(var(--stav-neutral))]',
-    odznak: 'bg-[hsl(var(--stav-neutral))]/10 text-[hsl(var(--stav-neutral))]',
-    tlacitko:
-      'bg-[hsl(var(--stav-neutral))]/10 text-[hsl(var(--stav-neutral))] hover:bg-[hsl(var(--stav-neutral))]/20 data-[state=active]:bg-[hsl(var(--stav-neutral))] data-[state=active]:text-white',
+    text: 'txt-stav-NK',
+    odznak: 'odznak-stav-NK',
+    tlacitko: 'btn-stav btn-stav-NK',
   },
 };
 
