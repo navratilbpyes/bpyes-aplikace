@@ -106,7 +106,15 @@ export default function EditInspectionPage() {
   const selectedKlient = klienti.find(k => k.id === formData.klientId);
   const uniquePositions = useMemo(() => {
     if (!selectedKlient) return [];
-    return Array.from(new Set((selectedKlient.odpovedneOsoby || []).map((o: any) => o.pozice || o.funkce).filter(Boolean)));
+    // Odpovědné osoby jsou pracovní pozice (klient.pozice).
+    // Fallback na starší pole odpovedneOsoby kvůli zpětné kompatibilitě.
+    let positions: string[] = [];
+    if (selectedKlient.pozice && selectedKlient.pozice.length > 0) {
+      positions = selectedKlient.pozice.map((p: any) => p.nazev);
+    } else if (selectedKlient.odpovedneOsoby && selectedKlient.odpovedneOsoby.length > 0) {
+      positions = selectedKlient.odpovedneOsoby.map((o: any) => o.pozice || o.funkce);
+    }
+    return Array.from(new Set(positions.filter(Boolean)));
   }, [selectedKlient]);
 
   useEffect(() => {
