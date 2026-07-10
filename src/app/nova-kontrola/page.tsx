@@ -240,7 +240,12 @@ export default function NewInspectionPage() {
 
       activeChecklistFlat.forEach(basePoint => {
         const pointState = checklist[basePoint.id];
-        if (!pointState || !pointState.hodnoceni || pointState.hodnoceni === 'NK') return;
+        if (!pointState) return;
+
+        // Doporučení je nezávislé na hodnocení – bod s doporučením
+        // se uloží, i když není ohodnocen nebo je nekontrolován.
+        const maDoporuceni = pointState.showDoporuceni && pointState.doporuceni?.trim();
+        if (!maDoporuceni && (!pointState.hodnoceni || pointState.hodnoceni === 'NK')) return;
 
         const isDefect = pointState.hodnoceni === 'N';
         const defectsForThisPoint = pointDefects[basePoint.id] || [];
@@ -252,6 +257,7 @@ export default function NewInspectionPage() {
           sekce: basePoint.sekce,
           hodnoceni: pointState.hodnoceni,
           doporuceni: pointState.doporuceni || "",
+          doporuceniFoto: pointState.doporuceniFoto || [],
           showDoporuceni: pointState.showDoporuceni || false,
           poznamka: pointState.poznamka || "",
           popis: primaryDefect?.popis || "",
@@ -450,7 +456,44 @@ export default function NewInspectionPage() {
             <Button key="D" variant="outline" data-state={state?.showDoporuceni ? 'active' : 'inactive'} className={cn("h-12 min-w-[50px] font-bold shadow-none transition-all", STAVY.D.tlacitko)} onClick={() => setChecklist(prev => ({ ...prev, [point.id]: { ...(prev[point.id] || { bod: point.id, hodnoceni: '' }), showDoporuceni: !prev[point.id]?.showDoporuceni } }))}>D</Button>
           </div>
         </div>
-        {state?.showDoporuceni && <div className="space-y-2 mt-4 ml-8"><Label className="text-xs text-blue-700 font-semibold">Doporučení auditora k tomuto bodu</Label><Textarea value={state.doporuceni || ""} onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], doporuceni: e.target.value }}))} className="bg-blue-50/50 border-blue-200" /></div>}
+        {state?.showDoporuceni && (
+          <div className="space-y-3 mt-4 ml-8 p-4 rounded-md bg-[hsl(var(--stav-doporuceni))]/5 border border-[hsl(var(--stav-doporuceni))]/20">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-[hsl(var(--stav-doporuceni))]">Doporučení auditora k tomuto bodu</Label>
+              <Textarea
+                value={state.doporuceni || ""}
+                onChange={(e) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], doporuceni: e.target.value }}))}
+                placeholder="Bod není v rozporu s předpisem, ale lze jej zlepšit…"
+                className="bg-white border-[hsl(var(--stav-doporuceni))]/30"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-3 items-center">
+              <Button asChild variant="outline" size="sm" className="cursor-pointer h-8">
+                <label>
+                  <Camera className="h-3.5 w-3.5 mr-2" /> Přidat foto
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={async (e) => {
+                    const files = Array.from(e.target.files || []) as File[];
+                    if (files.length === 0) return;
+                    const nove: string[] = [];
+                    for (const f of files) nove.push(await compressImage(f, FOTO_NEDOSTATKU));
+                    setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], doporuceniFoto: [...(prev[point.id]?.doporuceniFoto || []), ...nove] }}));
+                    e.target.value = '';
+                  }} />
+                </label>
+              </Button>
+
+              {(state.doporuceniFoto || []).map((photoStr: string, idx: number) => (
+                <div key={idx} className="relative inline-block">
+                  <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow z-10" onClick={() => {
+                    setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], doporuceniFoto: (prev[point.id]?.doporuceniFoto || []).filter((_: string, i: number) => i !== idx) }}));
+                  }}><X className="h-3 w-3" /></Button>
+                  <img src={photoStr} alt="Doporučení" className="h-24 w-auto object-cover rounded shadow-sm border border-slate-200" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {state?.hodnoceni && state.hodnoceni !== 'NA' && (
           <div className="space-y-4 ml-8">
             {state.hodnoceni === 'N' && (
