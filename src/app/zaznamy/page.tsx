@@ -114,7 +114,7 @@ function ZaznamyList() {
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Databáze reportů</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Reporty</h1>
           <p className="text-muted-foreground">Kompletní přehled provedených auditů a kontrol s možnostmi filtrování.</p>
         </div>
         {isAdmin && (
@@ -240,7 +240,7 @@ function ZaznamyList() {
                       </td>
                       {isAdmin && (
                         <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                          <div className="flex items-center justify-end gap-1">
                             <Button
                               size="sm"
                               variant="ghost"
