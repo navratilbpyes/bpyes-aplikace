@@ -480,6 +480,7 @@ export default function RecordDetailPage() {
   {record.typKontroly === 'BOZPaPO' ? 'PROVĚRKA BOZP A PREVENTIVNÍ POŽÁRNÍ PROHLÍDKA, KONTROLA DOKUMENTACE POŽÁRNÍ OCHRANY' : 
    record.typKontroly === 'PPP' ? 'PREVENTIVNÍ POŽÁRNÍ PROHLÍDKA' : 
    record.typKontroly === 'PBOZP' ? 'PROVĚRKA BOZP PRACOVIŠTĚ' : 
+   record.typKontroly === 'PBOZPS' ? 'PROVĚRKA BOZP NA STAVENIŠTI' : 
    'ZÁZNAM Z KONTROLY (VLASTNÍ ZAMĚŘENÍ)'}
 </h1>
           
