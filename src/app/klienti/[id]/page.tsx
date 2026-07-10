@@ -1,7 +1,8 @@
 'use client';
 
 import { useData } from "@/components/data-provider";
-import { db } from "@/components/data-provider";
+import { db, auth } from "@/components/data-provider";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { doc, setDoc } from "firebase/firestore";
 import { adresaZAres } from "@/lib/kontroly";
 import { useParams, useRouter } from "next/navigation";
@@ -20,7 +21,9 @@ import {
   ClipboardList,
   Eye,
   Briefcase,
-  Edit2
+  Edit2,
+  KeyRound,
+  Loader2
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -37,6 +40,52 @@ export default function ClientDetailPage() {
   const { klienti, zaznamy, setKlienti } = useData();
   const { toast } = useToast();
   const [isAresLoading, setIsAresLoading] = useState(false);
+
+  // Vytvoření klientského přístupu
+  const [showPristupModal, setShowPristupModal] = useState(false);
+  const [pristupEmail, setPristupEmail] = useState('');
+  const [vytvarimPristup, setVytvarimPristup] = useState(false);
+
+  const otevritPristup = () => {
+    if (!klient) return;
+    // Předvyplníme hlavní kontakt, jinak první s e-mailem.
+    const kontakty = (klient.kontakty || []).filter((k: any) => k.email?.includes('@'));
+    const hlavni = kontakty.find((k: any) => k.hlavni) || kontakty[0];
+    setPristupEmail(hlavni?.email || '');
+    setShowPristupModal(true);
+  };
+
+  const vytvoritPristup = async () => {
+    if (!klient) return;
+    const email = pristupEmail.trim();
+    if (!email.includes('@')) {
+      toast({ title: 'Neplatný e-mail', description: 'Zadejte platnou e-mailovou adresu.', variant: 'destructive' });
+      return;
+    }
+
+    setVytvarimPristup(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/vytvorit-klienta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email, klientId: klient.id, klientNazev: klient.nazev }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        toast({ title: 'Přístup vytvořen', description: data.zprava });
+        setShowPristupModal(false);
+      } else {
+        toast({ title: 'Nepodařilo se vytvořit přístup', description: data.error, variant: 'destructive' });
+      }
+    } catch (e) {
+      console.error('Vytvoření přístupu:', e);
+      toast({ title: 'Chyba sítě', description: 'Nepodařilo se spojit se serverem.', variant: 'destructive' });
+    } finally {
+      setVytvarimPristup(false);
+    }
+  };
 
   const klient = klienti.find(k => k.id === id);
   const clientRecords = zaznamy.filter(z => z.klientId === id);
@@ -103,6 +152,10 @@ export default function ClientDetailPage() {
               <Edit2 className="mr-2 h-4 w-4" />
               Upravit
             </Link>
+          </Button>
+          <Button variant="outline" onClick={otevritPristup}>
+            <KeyRound className="mr-2 h-4 w-4" />
+            Vytvořit přístup
           </Button>
           <Button asChild>
             <Link href={`/nova-kontrola?klient=${klient.id}`}>
@@ -411,6 +464,45 @@ export default function ClientDetailPage() {
           </Tabs>
         </div>
       </div>
+
+      <Dialog open={showPristupModal} onOpenChange={(o) => !o && setShowPristupModal(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Vytvořit přístup pro {klient.nazev}</DialogTitle>
+            <DialogDescription>
+              Klientovi vznikne účet a přijde mu e-mail s odkazem pro nastavení hesla.
+              Heslo neuvidíte vy ani nikdo jiný.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 py-2">
+            <Label className="text-xs font-bold">E-mail klienta</Label>
+            <Input
+              type="email"
+              value={pristupEmail}
+              onChange={(e) => setPristupEmail(e.target.value)}
+              placeholder="jan.novak@firma.cz"
+              disabled={vytvarimPristup}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Na tuto adresu se klient bude přihlašovat. Uvidí pouze záznamy této firmy.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPristupModal(false)} disabled={vytvarimPristup}>
+              Zrušit
+            </Button>
+            <Button onClick={vytvoritPristup} disabled={vytvarimPristup || !pristupEmail.trim()}>
+              {vytvarimPristup ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Vytvářím…</>
+              ) : (
+                'Vytvořit a odeslat pozvánku'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
