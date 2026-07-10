@@ -1,5 +1,7 @@
 'use client';
 
+import { parseCSV, extractEmail, celaAdresa } from "@/lib/kontroly";
+import { compressImage, FOTO_NEDOSTATKU } from "@/lib/obrazky";
 import { stav, paskaPro, STAVY } from "@/lib/stavy";
 import { useData, db, auth } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
@@ -22,43 +24,9 @@ import { doc, deleteDoc, getDoc } from "firebase/firestore";
 
 const TEXTS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRiXWE13sHgXwCiFobHGpI3zvKR8nIOnzLtLxWdK7kyn2c4BhZDOwOf5ulUycMyfF1xJXonFSTG88JS/pub?gid=1978510431&single=true&output=csv";
 
-function parseCSV(str: string) {
-  const arr: string[][] = []; let quote = false; let row = 0, col = 0;
-  for (let c = 0; c < str.length; c++) {
-    let cc = str[c], nc = str[c+1];
-    arr[row] = arr[row] || []; arr[row][col] = arr[row][col] || '';
-    if (cc == '"' && quote && nc == '"') { arr[row][col] += cc; ++c; continue; }
-    if (cc == '"') { quote = !quote; continue; }
-    if (cc == ',' && !quote) { ++col; continue; }
-    if (cc == '\r' && nc == '\n' && !quote) { ++row; col = 0; ++c; continue; }
-    if (cc == '\n' && !quote) { ++row; col = 0; continue; }
-    if (cc == '\r' && !quote) { ++row; col = 0; continue; }
-    arr[row][col] += cc;
-  }
-  return arr;
-}
 
-const compressImage = (file: File): Promise<string> => {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1024; const MAX_HEIGHT = 1024;
-        let width = img.width; let height = img.height;
-        if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
-        else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
-        canvas.width = width; canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.7));
-      };
-      img.src = e.target?.result as string;
-    };
-    reader.readAsDataURL(file);
-  });
-};
+
+
 
 interface AuditorConfig {
   firmaNazev?: string;
@@ -169,28 +137,7 @@ export default function RecordDetailPage() {
   }, [aktualniKlient, record]);
 
   // ADRESNÝ VYHLEDÁVAČ VŠECH E-MAILŮ (NEPRŮSTŘELNÝ MULTI-EMAIL)
-  const extractEmail = (klientObj: any): string => {
-    if (!klientObj) return "";
-    const emaily = new Set<string>();
-    
-    const pridejEmail = (val: any) => {
-      if (typeof val === 'string' && val.includes('@') && val.includes('.')) {
-        emaily.add(val.trim());
-      }
-    };
-
-    pridejEmail(klientObj.email);
-    pridejEmail(klientObj.kontaktniOsoba?.email);
-    
-    const poleKeKontrole = ['odpovedneOsoby', 'kontakty', 'pozice'];
-    poleKeKontrole.forEach(nazevPole => {
-      if (Array.isArray(klientObj[nazevPole])) {
-        klientObj[nazevPole].forEach((polozka: any) => pridejEmail(polozka?.email));
-      }
-    });
-
-    return Array.from(emaily).join(', ');
-  };
+  
 
   const [filterPosition, setFilterPosition] = useState<string>("all");
   const [onlyDefects, setOnlyDefects] = useState<boolean>(false);
@@ -470,14 +417,7 @@ export default function RecordDetailPage() {
               <p className="font-bold uppercase text-[11px] text-slate-500 mb-1">KONTROLOVANÝ SUBJEKT / KLIENT:</p>
               <p className="font-bold text-sm">{klient?.nazev}</p>
               
-              <p>Sídlo: {(() => {
-                // Klient dnes nese pouze 'mesto'. 'adresa'/'psc' zůstávají volitelné
-                // pro případ pozdějšího rozšíření formuláře klienta.
-                const adresa = klient?.adresa || '';
-                const mestoPSC = klient?.mesto ? `${klient.psc || ''} ${klient.mesto}`.trim() : '';
-                const plnaAdresa = [adresa, mestoPSC].filter(Boolean).join(', ');
-                return plnaAdresa || 'Neuvedeno';
-              })()}</p>
+              <p>Sídlo: {celaAdresa(klient || {})}</p>
               <p>IČO: {klient?.ico || 'Neuvedeno'}</p>
               
               <div className="mt-2">
@@ -778,7 +718,7 @@ export default function RecordDetailPage() {
                                                 <Label className="text-xs font-bold text-slate-700 flex items-center gap-2"><Camera className="h-4 w-4 text-blue-600" /> Nahrát fotodůkaz (volitelně)</Label>
                                                 <Input type="file" accept="image/*" multiple onChange={async (e) => {
                                                     const files = Array.from(e.target.files || []); if (files.length === 0) return;
-                                                    const newPhotos: string[] = []; for (const f of files) newPhotos.push(await compressImage(f));
+                                                    const newPhotos: string[] = []; for (const f of files) newPhotos.push(await compressImage(f, FOTO_NEDOSTATKU));
                                                     setResolveData(p => ({...p, foto: [...p.foto, ...newPhotos]}));
                                                 }} className="h-9 cursor-pointer text-xs" />
                                                 {resolveData.foto.length > 0 && (
