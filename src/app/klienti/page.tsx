@@ -1,5 +1,6 @@
 'use client';
 
+import { adresaZAres } from "@/lib/kontroly";
 import { useData, db } from "@/components/data-provider";
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -38,7 +39,7 @@ export default function ClientsPage() {
   
   // Komplexní stav pro nového klienta
   const [newClient, setNewClient] = useState({
-    nazev: "", ico: "", mesto: "",
+    nazev: "", ico: "", dic: "", sidlo: "", psc: "", mesto: "",
     pracoviste: [{ id: "p1", nazev: "", adresa: "" }],
     pozice: [{ id: "fix1", nazev: "Zaměstnavatel / provozovatel", isFixed: true }],
     kontakty: [{ id: "k1", jmeno: "", funkce: "", email: "", telefon: "" }]
@@ -96,10 +97,15 @@ export default function ClientsPage() {
       
       const data = await response.json();
       
+      const adresa = adresaZAres(data);
+
       setNewClient(prev => ({
         ...prev,
         nazev: data.obchodniJmeno || prev.nazev,
-        mesto: data.sidlo?.textovaAdresa || data.sidlo?.nazevObce || prev.mesto
+        dic: data.dic || prev.dic,
+        sidlo: adresa.sidlo || prev.sidlo,
+        psc: adresa.psc || prev.psc,
+        mesto: adresa.mesto || prev.mesto
       }));
       
       toast({ title: "Údaje načteny", description: "Informace z registru ARES byly úspěšně vyplněny." });
@@ -140,6 +146,9 @@ export default function ClientsPage() {
         id: newRef.id,
         nazev: newClient.nazev,
         ico: newClient.ico,
+        dic: newClient.dic,
+        sidlo: newClient.sidlo,
+        psc: newClient.psc,
         mesto: newClient.mesto,
         pracoviste: newClient.pracoviste.filter(p => p.nazev.trim() !== ''),
         pozice: newClient.pozice.filter(p => p.nazev.trim() !== ''),
@@ -153,7 +162,7 @@ export default function ClientsPage() {
       
       setIsAddModalOpen(false);
       setNewClient({
-        nazev: "", ico: "", mesto: "",
+        nazev: "", ico: "", dic: "", sidlo: "", psc: "", mesto: "",
         pracoviste: [{ id: "p1", nazev: "", adresa: "" }],
         pozice: [{ id: "fix1", nazev: "Zaměstnavatel / provozovatel", isFixed: true }],
         kontakty: [{ id: "k1", jmeno: "", funkce: "", email: "", telefon: "" }]
@@ -249,10 +258,28 @@ export default function ClientsPage() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label className="font-bold">Sídlo společnosti (oficiální)</Label>
+                      <Label className="font-bold">Ulice a číslo</Label>
+                      <Input value={newClient.sidlo} onChange={e => setNewClient(p => ({...p, sidlo: e.target.value}))} placeholder="Bude načteno z ARES..." />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="space-y-2">
+                      <Label className="font-bold">PSČ</Label>
+                      <Input value={newClient.psc} onChange={e => setNewClient(p => ({...p, psc: e.target.value}))} placeholder="790 01" className="font-mono" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-bold">Obec</Label>
                       <Input value={newClient.mesto} onChange={e => setNewClient(p => ({...p, mesto: e.target.value}))} placeholder="Bude načteno z ARES..." />
                     </div>
-                    <div className="space-y-2 md:col-span-2">
+                    <div className="space-y-2">
+                      <Label className="font-bold">DIČ</Label>
+                      <Input value={newClient.dic} onChange={e => setNewClient(p => ({...p, dic: e.target.value}))} placeholder="Bude načteno z ARES..." className="font-mono" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-6">
+                    <div className="space-y-2">
                       <Label className="font-bold">Název společnosti *</Label>
                       <Input required value={newClient.nazev} onChange={e => setNewClient(p => ({...p, nazev: e.target.value}))} placeholder="Bude načteno z ARES..." className="text-lg font-bold" />
                     </div>
