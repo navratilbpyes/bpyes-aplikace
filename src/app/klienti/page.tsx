@@ -329,7 +329,13 @@ export default function ClientsPage() {
                 {/* PRACOVNÍ POZICE */}
                 <div className="space-y-4">
                   <div className="flex justify-between items-center border-b pb-2">
-                    <div className="flex items-center gap-2"><Briefcase className="h-5 w-5 text-purple-600" /><h3 className="font-bold text-slate-800 uppercase tracking-wider text-sm">Přednastavené pracovní pozice</h3></div>
+                    <div className="flex items-center gap-2">
+                      <Briefcase className="h-5 w-5 text-purple-600" />
+                      <div>
+                        <h3 className="font-bold text-slate-800 uppercase tracking-wider text-sm">Odpovědné osoby</h3>
+                        <p className="text-[11px] text-muted-foreground normal-case font-normal">Pracovní pozice, kterým lze přiřadit odstranění nedostatku.</p>
+                      </div>
+                    </div>
                     <Button type="button" variant="outline" size="sm" onClick={handleAddPozice} className="h-8 text-xs font-bold border-purple-200 text-purple-700 hover:bg-purple-50"><Plus className="h-3 w-3 mr-1" /> Přidat pozici</Button>
                   </div>
                   <div className="flex flex-wrap gap-3">
@@ -435,7 +441,7 @@ export default function ClientsPage() {
                           {lastRecord ? formatCzechDate(lastRecord.datum) : <span className="text-muted-foreground italic text-xs">Žádná</span>}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                          <div className="flex justify-end gap-1">
                             <Button variant="ghost" size="icon" asChild title="Detail klienta" className="hover:bg-blue-50 hover:text-blue-600">
                               <Link href={`/klienti/${k.id}`}><Eye className="h-4 w-4" /></Link>
                             </Button>
