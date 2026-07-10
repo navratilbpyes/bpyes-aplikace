@@ -71,7 +71,7 @@ export interface Zaznam {
   klientNazev?: string;
   klientSnapshot?: KlientSnapshot;
   pracovisteIds: string[];
-  typKontroly: 'BOZPaPO' | 'PPP' | 'PBOZP' | 'KONTROLA';
+  typKontroly: 'BOZPaPO' | 'PPP' | 'PBOZP' | 'PBOZPS' | 'KONTROLA';
   datum: string;
   ucastnici?: { jmeno: string; pozice: string }[];
   poznamka?: string;
