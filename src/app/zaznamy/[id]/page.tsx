@@ -1,6 +1,7 @@
 'use client';
 
 import { parseCSV, extractEmail, celaAdresa } from "@/lib/kontroly";
+import { nactiCsv } from "@/lib/csv-cache";
 import { compressImage, FOTO_NEDOSTATKU } from "@/lib/obrazky";
 import { stav, paskaPro, STAVY } from "@/lib/stavy";
 import { useData, db, auth } from "@/components/data-provider";
@@ -91,7 +92,10 @@ export default function RecordDetailPage() {
   }, [zaznamy]);
 
   useEffect(() => {
-    fetch(TEXTS_URL).then(res => res.text()).then(csv => {
+    const controller = new AbortController();
+
+    nactiCsv(TEXTS_URL, controller.signal)
+      .then(({ csv }) => {
         const rows = parseCSV(csv);
         const map: Record<string, string> = {};
         rows.forEach(r => { 
@@ -102,7 +106,10 @@ export default function RecordDetailPage() {
           }
         });
         setT(prev => ({ ...prev, ...map }));
-      }).catch(console.error);
+      })
+      .catch((e) => { if (!controller.signal.aborted) console.error('Texty protokolu:', e); });
+
+    return () => controller.abort();
   }, []);
 
   const record = useMemo(() => zaznamy.find((z: any) => z.id === params.id), [zaznamy, params.id]);
