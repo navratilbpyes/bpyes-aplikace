@@ -1,5 +1,6 @@
 'use client';
 
+import { adresaZAres } from "@/lib/kontroly";
 import { useData, db } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, CardContent } from "@/components/ui/card";
@@ -58,7 +59,10 @@ export default function EditClientPage() {
       setEditClient((prev: any) => ({
         ...prev,
         nazev: data.obchodniJmeno || prev.nazev,
-        mesto: data.sidlo?.textovaAdresa || data.sidlo?.nazevObce || prev.mesto
+        dic: data.dic || prev.dic,
+        sidlo: adresaZAres(data).sidlo || prev.sidlo,
+        psc: adresaZAres(data).psc || prev.psc,
+        mesto: adresaZAres(data).mesto || prev.mesto
       }));
       
       toast({ title: "Údaje načteny", description: "Informace z registru ARES byly úspěšně zaktualizovány." });
@@ -97,6 +101,9 @@ export default function EditClientPage() {
       const updatedData = {
         nazev: editClient.nazev,
         ico: editClient.ico,
+        dic: editClient.dic || '',
+        sidlo: editClient.sidlo || '',
+        psc: editClient.psc || '',
         mesto: editClient.mesto,
         pracoviste: editClient.pracoviste.filter((p:any) => p.nazev.trim() !== ''),
         pozice: editClient.pozice.filter((p:any) => p.nazev.trim() !== ''),
@@ -152,8 +159,20 @@ export default function EditClientPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="font-bold">Sídlo společnosti (oficiální)</Label>
-                  <Input value={editClient.mesto} onChange={e => setEditClient((p:any) => ({...p, mesto: e.target.value}))} />
+                  <Label className="font-bold">Ulice a číslo</Label>
+                  <Input value={editClient.sidlo || ''} onChange={e => setEditClient((p:any) => ({...p, sidlo: e.target.value}))} placeholder="Načte se z ARES" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold">PSČ</Label>
+                  <Input value={editClient.psc || ''} onChange={e => setEditClient((p:any) => ({...p, psc: e.target.value}))} placeholder="790 01" className="font-mono" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold">Obec</Label>
+                  <Input value={editClient.mesto || ''} onChange={e => setEditClient((p:any) => ({...p, mesto: e.target.value}))} />
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold">DIČ</Label>
+                  <Input value={editClient.dic || ''} onChange={e => setEditClient((p:any) => ({...p, dic: e.target.value}))} placeholder="Načte se z ARES" className="font-mono" />
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label className="font-bold">Název společnosti *</Label>
