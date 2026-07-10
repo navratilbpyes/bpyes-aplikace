@@ -1,6 +1,7 @@
 'use client';
 
 import { adresaZAres } from "@/lib/kontroly";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useData, db } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, CardContent } from "@/components/ui/card";
@@ -36,7 +37,7 @@ export default function EditClientPage() {
           ...client,
           pracoviste: client.pracoviste?.length > 0 ? client.pracoviste : [{ id: "p1", nazev: "", adresa: "" }],
           pozice: client.pozice?.length > 0 ? client.pozice : [{ id: "fix1", nazev: "Zaměstnavatel / provozovatel", isFixed: true }],
-          kontakty: client.kontakty?.length > 0 ? client.kontakty : [{ id: "k1", jmeno: "", funkce: "", email: "", telefon: "" }]
+          kontakty: client.kontakty?.length > 0 ? client.kontakty : [{ id: "k1", jmeno: "", funkce: "", email: "", telefon: "", hlavni: false }]
         });
       }
     }
@@ -86,9 +87,9 @@ export default function EditClientPage() {
     setEditClient((p:any) => { const arr = [...p.pozice]; arr[idx].nazev = val; return { ...p, pozice: arr }; });
   };
 
-  const handleAddKontakt = () => setEditClient((p:any) => ({...p, kontakty: [...p.kontakty, { id: Math.random().toString(36).substring(7), jmeno: "", funkce: "", email: "", telefon: "" }]}));
+  const handleAddKontakt = () => setEditClient((p:any) => ({...p, kontakty: [...p.kontakty, { id: Math.random().toString(36).substring(7), jmeno: "", funkce: "", email: "", telefon: "", hlavni: false }]}));
   const handleRemoveKontakt = (idx: number) => setEditClient((p:any) => ({...p, kontakty: p.kontakty.filter((_:any, i:number) => i !== idx)}));
-  const handleKontaktChange = (idx: number, field: 'jmeno'|'funkce'|'email'|'telefon', val: string) => {
+  const handleKontaktChange = (idx: number, field: 'jmeno'|'funkce'|'email'|'telefon'|'hlavni', val: string | boolean) => {
     setEditClient((p:any) => { const arr = [...p.kontakty]; arr[idx][field] = val; return { ...p, kontakty: arr }; });
   };
 
@@ -215,11 +216,20 @@ export default function EditClientPage() {
               <div className="space-y-3">
                 {editClient.kontakty.map((kont:any, idx:number) => (
                   <div key={kont.id} className="flex gap-2 items-start bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 flex-1">
-                      <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Jméno</Label><Input value={kont.jmeno} onChange={(e) => handleKontaktChange(idx, 'jmeno', e.target.value)} /></div>
-                      <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Funkce</Label><Input value={kont.funkce} onChange={(e) => handleKontaktChange(idx, 'funkce', e.target.value)} /></div>
-                      <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">E-mail</Label><Input type="email" value={kont.email} onChange={(e) => handleKontaktChange(idx, 'email', e.target.value)} /></div>
-                      <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Telefon</Label><Input value={kont.telefon} onChange={(e) => handleKontaktChange(idx, 'telefon', e.target.value)} /></div>
+                    <div className="flex-1 space-y-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+                        <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Jméno</Label><Input value={kont.jmeno} onChange={(e) => handleKontaktChange(idx, 'jmeno', e.target.value)} /></div>
+                        <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Funkce</Label><Input value={kont.funkce} onChange={(e) => handleKontaktChange(idx, 'funkce', e.target.value)} /></div>
+                        <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">E-mail</Label><Input type="email" value={kont.email} onChange={(e) => handleKontaktChange(idx, 'email', e.target.value)} /></div>
+                        <div><Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Telefon</Label><Input value={kont.telefon} onChange={(e) => handleKontaktChange(idx, 'telefon', e.target.value)} /></div>
+                      </div>
+                      <label className="flex items-center gap-2 cursor-pointer w-fit">
+                        <Checkbox
+                          checked={kont.hlavni || false}
+                          onCheckedChange={(v) => handleKontaktChange(idx, 'hlavni', v === true)}
+                        />
+                        <span className="text-xs text-muted-foreground">Hlavní kontakt</span>
+                      </label>
                     </div>
                     {editClient.kontakty.length > 1 && (<Button type="button" variant="ghost" size="icon" className="text-red-500 shrink-0 mt-5" onClick={() => handleRemoveKontakt(idx)}><X className="h-4 w-4" /></Button>)}
                   </div>
