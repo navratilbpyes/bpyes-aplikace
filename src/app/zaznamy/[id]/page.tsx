@@ -1,6 +1,6 @@
 'use client';
 
-import { parseCSV, extractEmail, celaAdresa } from "@/lib/kontroly";
+import { parseCSV, celaAdresa, prijemciKlienta } from "@/lib/kontroly";
 import { nactiCsv } from "@/lib/csv-cache";
 import { compressImage, FOTO_NEDOSTATKU } from "@/lib/obrazky";
 import { stav, paskaPro, STAVY } from "@/lib/stavy";
@@ -72,7 +72,9 @@ export default function RecordDetailPage() {
 
   // Stavy pro bezpečné odesílání e-mailu bez prompt() window
   const [showEmailModal, setShowEmailModal] = useState(false);
-  const [emailRecipient, setEmailRecipient] = useState("");
+  // Výběr příjemců reportu – klíče jsou e-maily kontaktů.
+  const [vybraniPrijemci, setVybraniPrijemci] = useState<Record<string, boolean>>({});
+  const [dalsiEmail, setDalsiEmail] = useState("");
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const isAdmin = userProfile?.role === 'admin';
@@ -234,6 +236,18 @@ export default function RecordDetailPage() {
       }));
   }, [record]);
 
+  // Výsledný seznam adres: zaškrtnuté kontakty + ručně dopsaná adresa.
+  const finalniPrijemci = useMemo(() => {
+    const adresy = Object.entries(vybraniPrijemci)
+      .filter(([, vybrano]) => vybrano)
+      .map(([email]) => email);
+
+    const rucni = dalsiEmail.trim();
+    if (rucni.includes('@') && !adresy.includes(rucni)) adresy.push(rucni);
+
+    return adresy;
+  }, [vybraniPrijemci, dalsiEmail]);
+
   const filteredKontrolniBody = useMemo(() => {
     if (!record?.kontrolniBody) return [];
     return record.kontrolniBody.filter((kb: any) => {
@@ -350,23 +364,68 @@ export default function RecordDetailPage() {
             </CardHeader>
             <CardContent className="p-6 space-y-4 text-slate-700">
               <p>Přejete si odeslat e-mail s upozorněním a odkazem na klientský dispečink zprávy <strong>{record.cisloKlientske || record.cislo}</strong>?</p>
-              
+
               <div className="space-y-2 pt-2">
-                <Label className="text-xs font-bold text-slate-700">E-mail příjemce:</Label>
+                <Label className="text-xs font-bold text-slate-700">Příjemci:</Label>
+
+                {prijemciKlienta(klient).length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-2">
+                    Klient nemá u kontaktů vyplněný e-mail. Zadejte adresu ručně níže.
+                  </p>
+                ) : (
+                  <div className="space-y-1 max-h-48 overflow-y-auto rounded-md border p-2">
+                    {prijemciKlienta(klient).map((p) => (
+                      <label
+                        key={p.id}
+                        className="flex items-start gap-2 p-2 rounded hover:bg-slate-50 cursor-pointer"
+                      >
+                        <Checkbox
+                          className="mt-0.5"
+                          checked={vybraniPrijemci[p.email] || false}
+                          onCheckedChange={(v) =>
+                            setVybraniPrijemci(prev => ({ ...prev, [p.email]: v === true }))
+                          }
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium">{p.jmeno}</span>
+                            {p.funkce && <span className="text-xs text-muted-foreground">· {p.funkce}</span>}
+                            {p.hlavni && (
+                              <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded bg-[hsl(var(--stav-vyhovuje))]/10 text-[hsl(var(--stav-vyhovuje))]">
+                                Hlavní
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground break-all">{p.email}</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-700">Další adresa (nepovinné):</Label>
                 <Input 
-                  value={emailRecipient} 
-                  onChange={(e) => setEmailRecipient(e.target.value)}
-                  placeholder="Zadejte e-mailovou adresu..."
+                  value={dalsiEmail} 
+                  onChange={(e) => setDalsiEmail(e.target.value)}
+                  placeholder="jan.novak@firma.cz"
                   className="bg-white h-10 border-slate-200 focus:border-blue-500"
                 />
               </div>
+
+              {finalniPrijemci.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Report se odešle na {finalniPrijemci.length} {finalniPrijemci.length === 1 ? 'adresu' : finalniPrijemci.length < 5 ? 'adresy' : 'adres'}.
+                </p>
+              )}
             </CardContent>
             <div className="p-4 border-t flex justify-end gap-2 bg-muted/20 rounded-b-xl">
               <Button variant="outline" onClick={() => setShowEmailModal(false)}>Zrušit</Button>
               <Button 
                 onClick={async () => {
-                  if (!emailRecipient.trim()) {
-                    toast({ title: "Chyba", description: "Zadejte platný e-mail.", variant: "destructive" });
+                  if (finalniPrijemci.length === 0) {
+                    toast({ title: "Chybí příjemce", description: "Vyberte alespoň jeden kontakt nebo zadejte adresu.", variant: "destructive" });
                     return;
                   }
                   setIsSendingEmail(true);
@@ -377,7 +436,7 @@ export default function RecordDetailPage() {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                       body: JSON.stringify({
-                        email: emailRecipient.split(',').map((e: string) => e.trim()).filter((e: string) => e.includes('@')),
+                        email: finalniPrijemci,
                         jmenoKlienta: klient?.nazev || "Klient",
                         cisloZpravy: record.cisloKlientske || record.cislo,
                         odkaz: odkaz
@@ -385,7 +444,7 @@ export default function RecordDetailPage() {
                     });
                     const result = await response.json();
                     if (result.success) {
-                      toast({ title: "E-mail úspěšně odeslán", description: `Zpráva byla zaslána na: ${emailRecipient}` });
+                      toast({ title: "E-mail úspěšně odeslán", description: finalniPrijemci.length === 1 ? `Zpráva byla zaslána na: ${finalniPrijemci[0]}` : `Zpráva byla zaslána na ${finalniPrijemci.length} adres.` });
                       setShowEmailModal(false);
                     } else {
                       toast({ title: "Chyba při odesílání", description: "E-mail se nepodařilo odeslat.", variant: "destructive" });
@@ -396,7 +455,7 @@ export default function RecordDetailPage() {
                     setIsSendingEmail(false);
                   }
                 }} 
-                disabled={isSendingEmail || !emailRecipient.trim()} 
+                disabled={isSendingEmail || finalniPrijemci.length === 0} 
                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold"
               >
                 {isSendingEmail ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />} Odeslat report
@@ -614,8 +673,14 @@ export default function RecordDetailPage() {
             {/* TLAČÍTKO PRO ODESLÁNÍ E-MAILU - KLIKNUTÍM SE OTEVŘE MODAL */}
             <Button 
               onClick={() => {
-                const email = extractEmail(klient);
-                setEmailRecipient(email);
+                const prijemci = prijemciKlienta(klient);
+                const maHlavni = prijemci.some(p => p.hlavni);
+                // Předzaškrtneme hlavní kontakty. Když žádný není označen,
+                // zaškrtneme všechny – aby výchozí chování zůstalo jako dřív.
+                const vychozi: Record<string, boolean> = {};
+                prijemci.forEach(p => { vychozi[p.email] = maHlavni ? p.hlavni : true; });
+                setVybraniPrijemci(vychozi);
+                setDalsiEmail("");
                 setShowEmailModal(true);
               }} 
               disabled={isSendingEmail}
