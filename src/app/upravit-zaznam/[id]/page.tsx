@@ -70,7 +70,7 @@ export default function EditInspectionPage() {
       pracovisteIds: recordToEdit.pracovisteIds || [],
       typKontroly: recordToEdit.typKontroly || 'BOZPaPO',
       datum: recordToEdit.datum || new Date().toISOString().split('T')[0],
-      ucastnici: recordToEdit.ucastnici?.length > 0 ? recordToEdit.ucastnici : [{ jmeno: '', pozice: '' }],
+      ucastnici: (recordToEdit.ucastnici?.length ?? 0) > 0 ? recordToEdit.ucastnici! : [{ jmeno: '', pozice: '' }],
       poznamka: recordToEdit.poznamka || ''
     });
     setRevisionNumber(String((recordToEdit.revize || 0) + 1));
