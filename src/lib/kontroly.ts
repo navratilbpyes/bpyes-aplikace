@@ -139,6 +139,46 @@ export function parseCSV(str: string): string[][] {
 }
 
 /**
+ * Rozparsuje CSV s typovými závadami na strukturu
+ * { typKontroly: { idBodu: TypickaZavada[] } }.
+ * Hlavičky hledá podle názvu, takže snese změnu pořadí sloupců.
+ */
+export function parsujTypoveZavady(csvText: string): Record<string, Record<string, TypickaZavada[]>> {
+  const rows = parseCSV(csvText);
+  const vysledek: Record<string, Record<string, TypickaZavada[]>> = {};
+  if (rows.length <= 1) return vysledek;
+
+  const headers = rows[0].map((h) => h.toLowerCase().trim());
+  const iTyp = headers.findIndex((h) => h.includes('typ'));
+  const iId = headers.findIndex((h) => h.includes('id'));
+  let iKratky = headers.findIndex(
+    (h) => h === 'tag' || h.includes('zkrác') || h.includes('krát') || h.includes('název')
+  );
+  if (iKratky === -1) iKratky = headers.findIndex((h) => h.includes('nedostatek'));
+  const iPopis = headers.findIndex((h) => h === 'popis' || (h.includes('popis') && !h.includes('zkr')));
+  const iOpatreni = headers.findIndex((h) => h.includes('opatřen') || h.includes('opatren'));
+
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || r.length < 3) continue;
+
+    const typ = iTyp >= 0 ? r[iTyp]?.trim() : r[0]?.trim();
+    const id = parseInt(iId >= 0 ? r[iId] : r[2]);
+    const nazev = (iKratky >= 0 ? r[iKratky] : r[3])?.trim();
+    const popis = (iPopis >= 0 ? r[iPopis] : r[4])?.trim();
+    const opatreni = (iOpatreni >= 0 ? r[iOpatreni] : r[5])?.trim();
+
+    if (typ && !isNaN(id) && nazev) {
+      const idKey = String(id);
+      if (!vysledek[typ]) vysledek[typ] = {};
+      if (!vysledek[typ][idKey]) vysledek[typ][idKey] = [];
+      vysledek[typ][idKey].push({ nazev, popis: popis || '', opatreni: opatreni || '' });
+    }
+  }
+  return vysledek;
+}
+
+/**
  * Posbírá všechny e-mailové adresy klienta – z hlavního pole,
  * z kontaktní osoby i ze seznamů odpovědných osob a kontaktů.
  * Vrací je oddělené čárkou, bez duplicit.
