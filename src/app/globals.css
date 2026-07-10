@@ -63,6 +63,60 @@
     border-left-color: hsl(var(--stav-neutral));
     border-left-style: dashed;
   }
+
+  /* Tlačítka hodnocení (V / N / D / NA / NK).
+     Záměrně obyčejné CSS: Tailwind arbitrary varianty typu
+     data-[state=active]:bg-[hsl(var(--x))] se v proměnné nespolehlivě
+     escapují a vygenerují selektor bez třídy. */
+  .btn-stav {
+    transition: background-color 120ms, color 120ms, border-color 120ms;
+  }
+  .btn-stav[data-state='inactive'] {
+    background-color: hsl(var(--stav-barva) / 0.08);
+    color: hsl(var(--stav-barva));
+    border-color: hsl(var(--stav-barva) / 0.25);
+  }
+  .btn-stav[data-state='inactive']:hover {
+    background-color: hsl(var(--stav-barva) / 0.16);
+  }
+  .btn-stav[data-state='active'] {
+    background-color: hsl(var(--stav-barva));
+    color: #fff;
+    border-color: hsl(var(--stav-barva));
+    box-shadow: 0 1px 2px hsl(var(--stav-barva) / 0.4);
+  }
+
+  .btn-stav-V  { --stav-barva: var(--stav-vyhovuje); }
+  .btn-stav-N  { --stav-barva: var(--stav-zavada); }
+  .btn-stav-D  { --stav-barva: var(--stav-doporuceni); }
+  .btn-stav-NA { --stav-barva: var(--stav-neutral); }
+
+  /* NK sdílí barvu s NA, odlišuje se čárkovaným rámečkem –
+     „nekontrolováno" není totéž co „neaplikováno". */
+  .btn-stav-NK { --stav-barva: var(--stav-neutral); }
+  .btn-stav-NK[data-state='inactive'] { border-style: dashed; }
+  .btn-stav-NK[data-state='active'] {
+    border-style: dashed;
+    border-color: hsl(var(--stav-barva));
+    background-image: repeating-linear-gradient(
+      45deg,
+      transparent, transparent 4px,
+      rgba(255, 255, 255, 0.12) 4px, rgba(255, 255, 255, 0.12) 8px
+    );
+  }
+
+  /* Barva textu a odznaku podle stavu. Opět obyčejné CSS ze stejného důvodu. */
+  .txt-stav-V  { color: hsl(var(--stav-vyhovuje)); }
+  .txt-stav-N  { color: hsl(var(--stav-zavada)); }
+  .txt-stav-D  { color: hsl(var(--stav-doporuceni)); }
+  .txt-stav-NA,
+  .txt-stav-NK { color: hsl(var(--stav-neutral)); }
+
+  .odznak-stav-V  { background-color: hsl(var(--stav-vyhovuje) / 0.1); color: hsl(var(--stav-vyhovuje)); border-color: hsl(var(--stav-vyhovuje) / 0.3); }
+  .odznak-stav-N  { background-color: hsl(var(--stav-zavada) / 0.1); color: hsl(var(--stav-zavada)); border-color: hsl(var(--stav-zavada) / 0.3); }
+  .odznak-stav-D  { background-color: hsl(var(--stav-doporuceni) / 0.1); color: hsl(var(--stav-doporuceni)); border-color: hsl(var(--stav-doporuceni) / 0.3); }
+  .odznak-stav-NA { background-color: hsl(var(--stav-neutral) / 0.1); color: hsl(var(--stav-neutral)); border-color: hsl(var(--stav-neutral) / 0.3); }
+  .odznak-stav-NK { background-color: hsl(var(--stav-neutral) / 0.1); color: hsl(var(--stav-neutral)); border-color: hsl(var(--stav-neutral) / 0.3); border-style: dashed; }
 }
 
 @media print {
