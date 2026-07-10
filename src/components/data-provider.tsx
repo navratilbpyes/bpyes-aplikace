@@ -1,5 +1,6 @@
 'use client';
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import type { Klient, Zaznam } from "@/app/lib/types";
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   getFirestore,
@@ -37,14 +38,14 @@ interface UserProfile {
 }
 
 interface DataContextType {
-  klienti: any[];
-  zaznamy: any[];
+  klienti: Klient[];
+  zaznamy: Zaznam[];
   user: User | null;
   userProfile: UserProfile | null;
   authLoading: boolean;
   logout: () => Promise<void>;
-  setZaznamy: React.Dispatch<React.SetStateAction<any[]>>;
-  setKlienti: React.Dispatch<React.SetStateAction<any[]>>;
+  setZaznamy: React.Dispatch<React.SetStateAction<Zaznam[]>>;
+  setKlienti: React.Dispatch<React.SetStateAction<Klient[]>>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -54,8 +55,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const [klienti, setKlientiState] = useState<any[]>([]);
-  const [zaznamy, setZaznamyState] = useState<any[]>([]);
+  const [klienti, setKlientiState] = useState<Klient[]>([]);
+  const [zaznamy, setZaznamyState] = useState<Zaznam[]>([]);
 
   // 1. Sledování přihlášení + načtení profilu (role, klientId)
   useEffect(() => {
@@ -109,7 +110,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Klient);
         setKlientiState(docs);
       },
       (error) => {
@@ -142,7 +143,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Zaznam);
         setZaznamyState(docs);
       },
       (error) => {
@@ -160,7 +161,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   // Zápis záznamů do Firestore. Zápis smí provést pouze admin (viz Firestore Rules).
   // Ukládají se jen skutečně změněné záznamy, sériově, s odchycením chyb.
-  const setZaznamy: React.Dispatch<React.SetStateAction<any[]>> = (value) => {
+  const setZaznamy: React.Dispatch<React.SetStateAction<Zaznam[]>> = (value) => {
     setZaznamyState((prev) => {
       const next = typeof value === 'function' ? value(prev) : value;
 
