@@ -1,6 +1,7 @@
 'use client';
 
-import { parseCSV, createEmptyDefect } from "@/lib/kontroly";
+import { createEmptyDefect, parsujTypoveZavady } from "@/lib/kontroly";
+import { nactiCsv } from "@/lib/csv-cache";
 import type { DefectFormState, TypickaZavada } from "@/lib/kontroly";
 import { compressImage, FOTO_NEDOSTATKU } from "@/lib/obrazky";
 import { STAVY, POradi_TLACITEK, paskaPro } from "@/lib/stavy";
@@ -109,34 +110,11 @@ export default function EditInspectionPage() {
   }, [selectedKlient]);
 
   useEffect(() => {
-    fetch(GOOGLE_SHEETS_URL).then(res => res.text()).then(csvText => {
-      const rows = parseCSV(csvText);
-      if (rows.length > 1) {
-        const headers = rows[0].map(h => h.toLowerCase().trim());
-        const iTyp = headers.findIndex(h => h.includes('typ'));
-        const iId = headers.findIndex(h => h.includes('id'));
-        let iKratky = headers.findIndex(h => h === 'tag' || h.includes('zkrác') || h.includes('krát') || h.includes('název'));
-        if (iKratky === -1) iKratky = headers.findIndex(h => h.includes('nedostatek'));
-        const iPopis = headers.findIndex(h => h === 'popis' || (h.includes('popis') && !h.includes('zkr')));
-        const iOpatreni = headers.findIndex(h => h.includes('opatřen') || h.includes('opatren'));
-        const parsedDefects: Record<string, Record<string, TypickaZavada[]>> = {};
-        for (let i = 1; i < rows.length; i++) {
-          const r = rows[i]; if (!r || r.length < 3) continue;
-          const typ = iTyp >= 0 ? r[iTyp]?.trim() : r[0]?.trim();
-          const id = parseInt(iId >= 0 ? r[iId] : r[2]);
-          const nazev = (iKratky >= 0 ? r[iKratky] : r[3])?.trim();
-          const popis = (iPopis >= 0 ? r[iPopis] : r[4])?.trim();
-          const opatreni = (iOpatreni >= 0 ? r[iOpatreni] : r[5])?.trim();
-          if (typ && !isNaN(id) && nazev) {
-            const idKey = String(id);
-            if (!parsedDefects[typ]) parsedDefects[typ] = {};
-            if (!parsedDefects[typ][idKey]) parsedDefects[typ][idKey] = [];
-            parsedDefects[typ][idKey].push({ nazev, popis: popis || "", opatreni: opatreni || "" });
-          }
-        }
-        setGoogleZavady(parsedDefects);
-      }
-    }).catch(console.error);
+    const controller = new AbortController();
+    nactiCsv(GOOGLE_SHEETS_URL, controller.signal)
+      .then(({ csv }) => setGoogleZavady(parsujTypoveZavady(csv)))
+      .catch((e) => { if (!controller.signal.aborted) console.error('Šablony závad:', e); });
+    return () => controller.abort();
   }, []);
 
   const currentChecklistFlat = useMemo(() => {
