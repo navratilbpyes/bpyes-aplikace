@@ -178,6 +178,35 @@ export function parsujTypoveZavady(csvText: string): Record<string, Record<strin
   return vysledek;
 }
 
+/** Kontakt klienta, kterému lze poslat report. */
+export interface Prijemce {
+  id: string;
+  jmeno: string;
+  funkce: string;
+  email: string;
+  hlavni: boolean;
+}
+
+/**
+ * Vrátí kontakty klienta, které mají vyplněný e-mail.
+ * Hlavní kontakty jsou první v seznamu.
+ */
+export function prijemciKlienta(klientObj: any): Prijemce[] {
+  if (!klientObj?.kontakty) return [];
+
+  const prijemci: Prijemce[] = klientObj.kontakty
+    .filter((k: any) => typeof k?.email === 'string' && k.email.includes('@'))
+    .map((k: any, i: number) => ({
+      id: k.id || `k${i}`,
+      jmeno: k.jmeno?.trim() || k.email,
+      funkce: k.funkce?.trim() || '',
+      email: k.email.trim(),
+      hlavni: !!k.hlavni,
+    }));
+
+  return prijemci.sort((a, b) => Number(b.hlavni) - Number(a.hlavni));
+}
+
 /**
  * Posbírá všechny e-mailové adresy klienta – z hlavního pole,
  * z kontaktní osoby i ze seznamů odpovědných osob a kontaktů.
