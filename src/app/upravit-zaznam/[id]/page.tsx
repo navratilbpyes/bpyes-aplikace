@@ -127,11 +127,15 @@ export default function EditInspectionPage() {
 
   const currentChecklistFlat = useMemo(() => {
     let base: any[] = [];
-    if (formData.typKontroly === 'PPP') base = (CHECKLIST_PPP || []).map((p: any) => ({ ...p, sekce: 'PPP' }));
-    else if (formData.typKontroly === 'PBOZP') base = (CHECKLIST_PBOZP || []).map((p: any) => ({ ...p, sekce: 'PBOZP' }));
-    else if (formData.typKontroly === 'BOZPaPO') {
-      base = (CHECKLIST_SECTIONS || []).flatMap(s => s.points.map((p: any) => ({ ...p, sekce: `ODDÍL ${s.id}: ${s.title}` })));
-    }
+    // Všechny typy kontrol mají sekce. Číslování bodů je v rámci typu od 1.
+    const rozbal = (sekce: any[]) =>
+      (sekce || []).flatMap((s: any) =>
+        s.points.map((p: any) => ({ ...p, sekce: `ODDÍL ${s.id}: ${s.title}` }))
+      );
+
+    if (formData.typKontroly === 'PPP') base = rozbal(CHECKLIST_PPP);
+    else if (formData.typKontroly === 'PBOZP') base = rozbal(CHECKLIST_PBOZP);
+    else if (formData.typKontroly === 'BOZPaPO') base = rozbal(CHECKLIST_SECTIONS);
     return [...base, ...customPoints.map((p: any) => ({ ...p, sekce: 'Vlastní zjištění' }))];
   }, [formData.typKontroly, customPoints]);
 
@@ -536,9 +540,45 @@ export default function EditInspectionPage() {
       {step === 2 && (
         <div className="space-y-6">
           <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm pb-4 border-b"><div className="flex justify-between items-center"><h2 className="font-bold text-lg">Úprava auditování</h2><span className="px-3 py-1 rounded-full bg-secondary text-secondary-foreground text-xs font-bold">Typ: {formData.typKontroly}</span></div></div>
-          {formData.typKontroly === 'BOZPaPO' && <Accordion type="multiple" className="space-y-4" defaultValue={["A"]}>{CHECKLIST_SECTIONS.map((section) => { const sectionName = `ODDÍL ${section.id}: ${section.title}`; const isSectionDisabled = disabledSections.includes(sectionName); return (<div key={section.id} className={cn("border rounded-lg bg-white shadow-sm relative", isSectionDisabled && "opacity-50")}><div className="absolute top-4 right-10 z-10 flex items-center gap-2 bg-white/90 px-3 py-1.5 rounded-full shadow-sm border"><Checkbox id={`disable-${section.id}`} checked={!isSectionDisabled} onCheckedChange={(c) => setDisabledSections(prev => c ? prev.filter(s => s !== sectionName) : [...prev, sectionName])} /><label htmlFor={`disable-${section.id}`} className="text-xs font-bold cursor-pointer select-none">Zahrnout do prověrky</label></div><AccordionItem value={section.id} className={cn("border-none", isSectionDisabled && "pointer-events-none")}><AccordionTrigger className="px-6 py-4"><div className="flex flex-col items-start gap-1"><span className="text-xs font-bold uppercase text-muted-foreground">Oddíl {section.id}</span><span className="text-base font-bold">{section.title}</span></div></AccordionTrigger><AccordionContent className="px-6 pb-6 space-y-8 pt-4 divide-y">{section.points.map((p: any) => renderPoint(p, false))}</AccordionContent></AccordionItem></div>) })}</Accordion>}
-          {formData.typKontroly === 'PPP' && <div className="border rounded-lg bg-white overflow-hidden shadow-sm"><div className="px-6 py-4 bg-muted/10 border-b"><span className="text-base font-bold">Preventivní požární prohlídka</span></div><div className="px-6 pb-6 space-y-8 pt-4 divide-y">{CHECKLIST_PPP.map((p: any) => renderPoint(p, false))}</div></div>}
-          {formData.typKontroly === 'PBOZP' && <div className="border rounded-lg bg-white overflow-hidden shadow-sm"><div className="px-6 py-4 bg-muted/10 border-b"><span className="text-base font-bold">Prověrka BOZP pracoviště</span></div><div className="px-6 pb-6 space-y-8 pt-4 divide-y">{CHECKLIST_PBOZP.map((p: any) => renderPoint(p, false))}</div></div>}
+          {(() => {
+            // Všechny typy kontrol se vykreslují stejně – po oddílech.
+            const sekce =
+              formData.typKontroly === 'PPP' ? CHECKLIST_PPP :
+              formData.typKontroly === 'PBOZP' ? CHECKLIST_PBOZP :
+              CHECKLIST_SECTIONS;
+
+            return (
+              <Accordion type="multiple" className="space-y-4" defaultValue={["A"]}>
+                {sekce.map((section: any) => {
+                  const sectionName = `ODDÍL ${section.id}: ${section.title}`;
+                  const isSectionDisabled = disabledSections.includes(sectionName);
+                  return (
+                    <div key={section.id} className={cn("border rounded-lg bg-white shadow-sm relative", isSectionDisabled && "opacity-50")}>
+                      <div className="absolute top-4 right-10 z-10 flex items-center gap-2 bg-white/90 px-3 py-1.5 rounded-full shadow-sm border">
+                        <Checkbox
+                          id={`disable-${section.id}`}
+                          checked={!isSectionDisabled}
+                          onCheckedChange={(c) => setDisabledSections(prev => c ? prev.filter(s => s !== sectionName) : [...prev, sectionName])}
+                        />
+                        <label htmlFor={`disable-${section.id}`} className="text-xs font-bold cursor-pointer select-none">Zahrnout do prověrky</label>
+                      </div>
+                      <AccordionItem value={section.id} className={cn("border-none", isSectionDisabled && "pointer-events-none")}>
+                        <AccordionTrigger className="px-6 py-4">
+                          <div className="flex flex-col items-start gap-1">
+                            <span className="text-xs font-bold uppercase text-muted-foreground">Oddíl {section.id}</span>
+                            <span className="text-base font-bold">{section.title}</span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-6 pb-6 space-y-8 pt-4 divide-y">
+                          {section.points.map((p: any) => renderPoint(p, false))}
+                        </AccordionContent>
+                      </AccordionItem>
+                    </div>
+                  );
+                })}
+              </Accordion>
+            );
+          })()}
           <div className="border rounded-lg bg-white overflow-hidden shadow-sm border-blue-200 mt-6"><div className="px-6 py-4 bg-blue-50 border-b flex justify-between items-center"><span className="text-base font-bold text-blue-900">Vlastní zjištění (Volné body)</span><Button size="sm" onClick={() => setCustomPoints(prev => [...prev, { id: String(99000 + prev.length), text: "" }])}><Plus className="h-4 w-4 mr-2" /> Přidat vlastní bod</Button></div>{customPoints.length > 0 ? <div className="px-6 pb-6 space-y-8 pt-4 divide-y">{customPoints.map((p: any) => renderPoint(p, true))}</div> : <div className="p-8 text-center text-muted-foreground text-sm italic">Zatím nebyly přidány žádné volné body.</div>}</div>
         </div>
       )}
