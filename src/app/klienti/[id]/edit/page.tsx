@@ -232,7 +232,10 @@ export default function EditClientPage() {
               <div className="flex justify-between items-center border-b pb-2">
                 <div className="flex items-center gap-2">
                   <Briefcase className="h-5 w-5 text-purple-600" />
-                  <h3 className="font-bold text-slate-800 uppercase tracking-wider text-sm">Přednastavené pracovní pozice</h3>
+                  <div>
+                    <h3 className="font-bold text-slate-800 uppercase tracking-wider text-sm">Odpovědné osoby</h3>
+                    <p className="text-[11px] text-muted-foreground normal-case font-normal">Pracovní pozice, kterým lze přiřadit odstranění nedostatku.</p>
+                  </div>
                 </div>
                 <Button type="button" variant="outline" size="sm" onClick={handleAddPozice} className="h-8 text-xs font-bold border-purple-200 text-purple-700 hover:bg-purple-50">Přidat pozici</Button>
               </div>
