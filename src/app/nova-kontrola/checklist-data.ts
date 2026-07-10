@@ -487,3 +487,23 @@ export const CHECKLIST_PPP: ChecklistSection[] = [
     ],
   },
 ];
+
+// ==========================================
+// 4) PROVĚRKA BOZP NA STAVENIŠTI (PBOZPS) – číslování od 1
+//
+// Kontrola staveniště z pozice OZO / koordinátora BOZP.
+// Vychází z NV č. 591/2006 Sb. (požadavky na staveniště),
+// NV č. 362/2005 Sb. (práce ve výškách) a zák. č. 309/2006 Sb.
+//
+// Body doplní Martin. Struktura je připravena – stačí vyplnit
+// oddíly a jednotlivé body. Číslování v rámci typu začíná od 1.
+// ==========================================
+export const CHECKLIST_PBOZPS: ChecklistSection[] = [
+  {
+    id: 'A',
+    title: 'Zatím nevyplněno',
+    points: [
+      { id: '1', text: 'Doplňte první kontrolní bod.' },
+    ],
+  },
+];
