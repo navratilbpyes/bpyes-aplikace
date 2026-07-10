@@ -35,6 +35,8 @@ export interface Kontakt {
   funkce: string;
   email?: string;
   telefon?: string;
+  /** Hlavní kontakt klienta. Označených může být více (např. dva jednatelé). */
+  hlavni?: boolean;
 }
 
 /**
