@@ -1,6 +1,7 @@
 'use client';
 
-import { parseCSV, createEmptyDefect, extractEmail } from "@/lib/kontroly";
+import { createEmptyDefect, extractEmail, parsujTypoveZavady } from "@/lib/kontroly";
+import { nactiCsv, stariZalohy } from "@/lib/csv-cache";
 import type { DefectFormState, TypickaZavada } from "@/lib/kontroly";
 import { compressImage, FOTO_NEDOSTATKU } from "@/lib/obrazky";
 import { STAVY, POradi_TLACITEK, paskaPro } from "@/lib/stavy";
@@ -11,7 +12,8 @@ import { useState, useEffect, useMemo } from "react";
 import { 
   CheckCircle2, ChevronRight, ChevronLeft, Plus, X, AlertTriangle,
   Calendar as CalendarIcon, User as UserIcon, StickyNote, Camera,
-  CheckSquare, Square, Filter, Loader2, Trash2, Send
+  CheckSquare, Square, Filter, Loader2, Trash2, Send,
+  WifiOff,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -53,6 +55,8 @@ export default function NewInspectionPage() {
   const [checklist, setChecklist] = useState<Record<string, any>>({});
   const [pointDefects, setPointDefects] = useState<Record<string, DefectFormState[]>>({});
   const [googleZavady, setGoogleZavady] = useState<Record<string, Record<string, TypickaZavada[]>>>({});
+  const [zalohaStari, setZalohaStari] = useState<string | null>(null);
+  const [sablonyChyba, setSablonyChyba] = useState(false);
   const [customPoints, setCustomPoints] = useState<ChecklistPoint[]>([]);
   const [disabledSections, setDisabledSections] = useState<string[]>([]);
   const [filterPosition, setFilterPosition] = useState<string>("all");
@@ -84,34 +88,20 @@ export default function NewInspectionPage() {
   }, [selectedKlient]);
 
   useEffect(() => {
-    fetch(GOOGLE_SHEETS_URL).then(res => res.text()).then(csvText => {
-      const rows = parseCSV(csvText);
-      if (rows.length > 1) {
-        const headers = rows[0].map(h => h.toLowerCase().trim());
-        const iTyp = headers.findIndex(h => h.includes('typ'));
-        const iId = headers.findIndex(h => h.includes('id'));
-        let iKratky = headers.findIndex(h => h === 'tag' || h.includes('zkrác') || h.includes('krát') || h.includes('název'));
-        if (iKratky === -1) iKratky = headers.findIndex(h => h.includes('nedostatek'));
-        const iPopis = headers.findIndex(h => h === 'popis' || (h.includes('popis') && !h.includes('zkr')));
-        const iOpatreni = headers.findIndex(h => h.includes('opatřen') || h.includes('opatren'));
-        const parsedDefects: Record<string, Record<string, TypickaZavada[]>> = {};
-        for (let i = 1; i < rows.length; i++) {
-          const r = rows[i]; if (!r || r.length < 3) continue;
-          const typ = iTyp >= 0 ? r[iTyp]?.trim() : r[0]?.trim();
-          const id = parseInt(iId >= 0 ? r[iId] : r[2]);
-          const nazev = (iKratky >= 0 ? r[iKratky] : r[3])?.trim();
-          const popis = (iPopis >= 0 ? r[iPopis] : r[4])?.trim();
-          const opatreni = (iOpatreni >= 0 ? r[iOpatreni] : r[5])?.trim();
-          if (typ && !isNaN(id) && nazev) {
-            const idKey = String(id);
-            if (!parsedDefects[typ]) parsedDefects[typ] = {};
-            if (!parsedDefects[typ][idKey]) parsedDefects[typ][idKey] = [];
-            parsedDefects[typ][idKey].push({ nazev, popis: popis || "", opatreni: opatreni || "" });
-          }
-        }
-        setGoogleZavady(parsedDefects);
-      }
-    }).catch(console.error);
+    const controller = new AbortController();
+
+    nactiCsv(GOOGLE_SHEETS_URL, controller.signal)
+      .then(({ csv, zeZalohy, stariMs }) => {
+        setGoogleZavady(parsujTypoveZavady(csv));
+        setZalohaStari(zeZalohy && stariMs ? stariZalohy(stariMs) : null);
+      })
+      .catch((e) => {
+        if (controller.signal.aborted) return;
+        console.error('Šablony závad se nepodařilo načíst:', e);
+        setSablonyChyba(true);
+      });
+
+    return () => controller.abort();
   }, []);
 
   const currentChecklistFlat = useMemo(() => {
@@ -488,6 +478,20 @@ export default function NewInspectionPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-24 relative">
+
+      {zalohaStari && (
+        <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-md bg-[hsl(var(--stav-neutral))]/10 text-muted-foreground">
+          <WifiOff className="h-3.5 w-3.5 shrink-0" />
+          <span>Šablony závad načteny z offline zálohy (stáří {zalohaStari}). Kontrolu můžete normálně vyplnit.</span>
+        </div>
+      )}
+
+      {sablonyChyba && (
+        <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-md bg-[hsl(var(--stav-zavada))]/10 text-[hsl(var(--stav-zavada))]">
+          <WifiOff className="h-3.5 w-3.5 shrink-0" />
+          <span>Šablony závad se nepodařilo načíst. Popis a opatření vyplňte ručně.</span>
+        </div>
+      )}
       
       {/* MODÁLNÍ OKNO: ZRUŠENÍ KONTROLY */}
       {showCancelModal && (
