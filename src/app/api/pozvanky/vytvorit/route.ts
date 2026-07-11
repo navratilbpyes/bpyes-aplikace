@@ -3,6 +3,7 @@
 // pending na stejny email, posle email pres Resend.
 
 import { NextRequest, NextResponse } from "next/server";
+import { Resend } from "resend";
 import { verifyIdToken } from "@/lib/verify-id-token";
 import { getDoc, setDoc, queryEquals } from "@/lib/firestore-rest";
 import {
@@ -107,31 +108,59 @@ export async function POST(req: NextRequest) {
 
     const link = `${process.env.NEXT_PUBLIC_APP_URL}/pozvanka?token=${token}`;
 
-    // 7) email pres Resend
-    const resendKey = process.env.RESEND_API_KEY;
-    if (resendKey) {
-      await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${resendKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: process.env.POZVANKY_FROM ?? "AuditFlow <info@bpyes.cz>",
-          to: emailNorm,
-          subject: "Pozvanka do AuditFlow",
-          html: `
-            <p>Dobry den${osobaJmeno ? ", " + osobaJmeno : ""},</p>
-            <p>byl vam vytvoren pristup do aplikace <strong>AuditFlow</strong>.</p>
-            <p>Ucet dokoncite na tomto odkazu (plati ${POZVANKA_PLATNOST_DNI} dni):</p>
-            <p><a href="${link}">${link}</a></p>
-            <p>S pozdravem,<br>BPyes</p>
-          `,
-        }),
+    // 7) email pres Resend (stejny vzor jako /api/send-email)
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      // pozvanka je vytvorena, ale email neodesleme – vratime link a upozorneni
+      console.error("Chybi RESEND_API_KEY v env promennych.");
+      return NextResponse.json({
+        ok: true,
+        link,
+        emailOdeslan: false,
+        upozorneni:
+          "Pozvanka vytvorena, ale e-mail se neodeslal (chybi RESEND_API_KEY). Odkaz zkopiruj rucne.",
       });
     }
 
-    return NextResponse.json({ ok: true, link });
+    const resend = new Resend(apiKey);
+    try {
+      await resend.emails.send({
+        from:
+          process.env.POZVANKY_FROM ?? "AuditFlow | BPyes <navratil@bpyes.cz>",
+        to: emailNorm,
+        subject: "Pozvanka do AuditFlow",
+        html: `
+          <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; border: 1px solid #e5e7eb; border-radius: 8px;">
+            <h2 style="color: #2563eb; margin-top: 0;">Pozvanka do AuditFlow</h2>
+            <p>Dobry den${osobaJmeno ? ", " + osobaJmeno : ""},</p>
+            <p>byl vam vytvoren pristup do klientskeho portalu <strong>BPyes AuditFlow</strong>.</p>
+            <p>Ucet dokoncite kliknutim na odkaz nize (plati ${POZVANKA_PLATNOST_DNI} dni):</p>
+            <div style="margin: 30px 0;">
+              <a href="${link}" style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                Dokoncit registraci
+              </a>
+            </div>
+            <p style="font-size: 13px; color: #6b7280;">Nebo zkopirujte tento odkaz do prohlizece:<br>${link}</p>
+            <p style="font-size: 13px; color: #6b7280; margin-top: 30px; border-top: 1px solid #e5e7eb; padding-top: 15px;">
+              Toto je automaticky generovana zprava ze systemu BPyes AuditFlow.
+            </p>
+          </div>
+        `,
+      });
+    } catch (mailErr) {
+      // email selhal (napr. neoverena domena) – ale pozvanka uz existuje.
+      // Vratime to jako upozorneni, ne 500, at mas link a vis duvod.
+      console.error("Resend chyba:", mailErr);
+      return NextResponse.json({
+        ok: true,
+        link,
+        emailOdeslan: false,
+        upozorneni:
+          "Pozvanka vytvorena, ale e-mail se nepodarilo odeslat. Zkontroluj overenou domenu v Resendu. Odkaz zkopiruj rucne.",
+      });
+    }
+
+    return NextResponse.json({ ok: true, link, emailOdeslan: true });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "Chyba serveru" }, { status: 500 });
