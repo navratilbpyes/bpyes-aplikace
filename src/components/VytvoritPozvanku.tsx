@@ -111,7 +111,14 @@ export default function VytvoritPozvanku({
       if (!res.ok) {
         setVysledek(data.error ?? "Chyba.");
       } else {
-        setVysledek(`Pozvanka pro ${osoba.jmeno} vytvorena a odeslana.`);
+        if (data.emailOdeslan === false) {
+          setVysledek(
+            data.upozorneni ??
+              `Pozvanka pro ${osoba.jmeno} vytvorena, ale e-mail se neodeslal. Zkopiruj odkaz nize.`
+          );
+        } else {
+          setVysledek(`Pozvanka pro ${osoba.jmeno} vytvorena a odeslana.`);
+        }
         setLink(data.link);
         setOsobaKey("");
         setEmail("");
