@@ -3,7 +3,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { auth } from "@/lib/firebase";
+import { auth } from "@/components/data-provider";
 
 // Typy odpovidaji strukture v kolekci `klienti`
 interface Kontakt {
@@ -42,7 +42,7 @@ export default function VytvoritPozvanku({
   const [klientId, setKlientId] = useState("");
   const [osobaKey, setOsobaKey] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("firma");
+  const role = "client"; // pozvanka je vzdy pro klientsky ucet
   const [vysledek, setVysledek] = useState("");
   const [link, setLink] = useState("");
   const [odesilani, setOdesilani] = useState(false);
@@ -175,12 +175,6 @@ export default function VytvoritPozvanku({
         onChange={(e) => setEmail(e.target.value)}
         style={inp}
       />
-
-      <label style={lbl}>Role</label>
-      <select value={role} onChange={(e) => setRole(e.target.value)} style={inp}>
-        <option value="firma">firma</option>
-        <option value="manazer">manazer</option>
-      </select>
 
       <button onClick={odeslat} disabled={odesilani} style={btn}>
         {odesilani ? "Odesilam…" : "Vytvorit a odeslat"}
