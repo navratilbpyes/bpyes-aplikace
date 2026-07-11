@@ -4,7 +4,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase"; // tvoje stávající inicializace firebase klienta
+import { auth } from "@/components/data-provider"; // klientsky Firebase (auth) z tveho data-provideru
 
 function PozvankaInner() {
   const params = useSearchParams();
