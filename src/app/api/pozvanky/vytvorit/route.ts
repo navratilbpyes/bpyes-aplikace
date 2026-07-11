@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       klientId,
       osobaId,
       osobaTyp,
-      role = "firma",
+      role = "client",
     }: {
       email?: string;
       klientId?: string;
