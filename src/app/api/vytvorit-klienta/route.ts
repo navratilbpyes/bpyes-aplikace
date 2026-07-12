@@ -1,7 +1,28 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { Resend } from 'resend';
-import { getAccessToken } from '@/lib/google-token';
+import { createHash, randomBytes, createCipheriv } from 'crypto';
+
+function generateSecret(): string {
+  return randomBytes(32).toString('base64url');
+}
+function sha256(s: string): string {
+  return createHash('sha256').update(s).digest('hex');
+}
+// klic pro sifrovani odvozeny z aplikacniho tajemstvi (env APP_SECRET)
+function encKey(): Buffer {
+  const secret = process.env.APP_SECRET;
+  if (!secret) throw new Error('Chybi APP_SECRET');
+  return createHash('sha256').update(secret).digest(); // 32 bytu
+}
+// zasifruje text -> "ivBase64.dataBase64.tagBase64" (base64url, bezpecne do URL)
+function encrypt(text: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', encKey(), iv);
+  const enc = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return [iv, enc, tag].map((b) => b.toString('base64url')).join('.');
+}
 
 const PROJECT_ID = 'studio-2327834732-8ec09';
 const FIREBASE_API_KEY = 'AIzaSyAJ2o8AlTOXKbIAtDYSNnDUvTLChAiGeoQ';
@@ -94,13 +115,16 @@ export async function POST(request: Request) {
     );
   }
 
-  // 4) Vytvoření účtu v Firebase Auth s náhodným heslem
+  // 4) Vytvoření účtu v Firebase Auth s náhodným heslem.
+  //    returnSecureToken: true -> dostaneme refreshToken, kterym pozdeji (pri
+  //    nastaveni hesla klientem) ziskame cerstvy idToken bez znalosti hesla.
   let novyUid: string;
+  let refreshToken: string;
   try {
     const res = await fetch(`${IDENTITY}/accounts:signUp?key=${FIREBASE_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: nahodneHeslo(), returnSecureToken: false }),
+      body: JSON.stringify({ email, password: nahodneHeslo(), returnSecureToken: true }),
     });
     const data = await res.json();
 
@@ -116,10 +140,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Účet se nepodařilo vytvořit.' }, { status: 500 });
     }
     novyUid = data.localId;
+    refreshToken = data.refreshToken;
   } catch (e) {
     console.error('Chyba při vytváření účtu:', e);
     return NextResponse.json({ success: false, error: 'Účet se nepodařilo vytvořit.' }, { status: 500 });
   }
+
+  // vlastni token pro nastaveni hesla: "uid.tajemstvi.encRefresh"
+  // - hash tajemstvi je v profilu (jednorazovost/invalidace)
+  // - refreshToken je zasifrovany (AES-GCM), aby ho endpoint mohl smenit za idToken
+  const tajemstvi = generateSecret();
+  const encRefresh = encrypt(refreshToken);
+  const tokenProEmail = `${novyUid}.${tajemstvi}.${encRefresh}`;
+  const tokenHash = sha256(tajemstvi);
+  const tokenExp = Date.now() + 14 * 24 * 3600 * 1000; // 14 dni
 
   // 5) Vytvoření profilu v kolekci 'uzivatele'.
   //    Zapisuje se adminovým tokenem – Rules povolí jen role 'client'
@@ -139,6 +173,10 @@ export async function POST(request: Request) {
             klientId: { stringValue: klientId },
             klientNazev: { stringValue: klientNazev || '' },
             email: { stringValue: email },
+            // udaje pro nastaveni hesla vlastnim flow (bez service account klice)
+            tokenHesla: { stringValue: tokenHash },
+            tokenExp: { integerValue: String(tokenExp) },
+            hesloNastaveno: { booleanValue: false },
           },
         }),
       }
@@ -166,64 +204,34 @@ export async function POST(request: Request) {
     );
   }
 
-  // 6) Vygenerovani odkazu pro nastaveni hesla BEZ odeslani Firebase emailu
-  //    (returnOobLink: true funguje jen u autentizovaneho pozadavku pres service account),
-  //    a odeslani vlastniho brandovaneho emailu pres Resend z overene domeny bpyes.cz.
+  // 6) Odeslani brandovaneho emailu pres Resend s odkazem na VLASTNI stranku
+  //    /nastavit-heslo?token=... . Zadny service account klic neni potreba.
   let pozvankaOdeslana = true;
   try {
-    // 6a) autentizovane volani sendOobCode se service account tokenem
-    const saToken = await getAccessToken(
-      'https://www.googleapis.com/auth/identitytoolkit'
-    );
-    const oobRes = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts:sendOobCode`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${saToken}`,
-        },
-        body: JSON.stringify({
-          requestType: 'PASSWORD_RESET',
-          email,
-          returnOobLink: true, // <- odkaz jen vratit, email NEposilat
-        }),
-      }
-    );
-
-    if (!oobRes.ok) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
       pozvankaOdeslana = false;
-      console.error('Generovani odkazu selhalo:', await oobRes.text());
+      console.error('Chybi RESEND_API_KEY v env promennych.');
     } else {
-      const oobData = await oobRes.json();
-      const odkaz: string | undefined = oobData.oobLink;
-
-      if (!odkaz) {
-        pozvankaOdeslana = false;
-        console.error('Firebase nevratil oobLink:', JSON.stringify(oobData));
-      } else {
-        // 6b) odeslani vlastniho emailu pres Resend (stejny vzor jako /api/send-email)
-        const apiKey = process.env.RESEND_API_KEY;
-        if (!apiKey) {
-          pozvankaOdeslana = false;
-          console.error('Chybi RESEND_API_KEY v env promennych.');
-        } else {
-          const resend = new Resend(apiKey);
-          try {
-            await resend.emails.send({
-              from:
-                process.env.POZVANKY_FROM ??
-                'BPyes AuditFlow <navratil@bpyes.cz>',
-              to: email,
-              subject: 'Váš přístup do BPyes AuditFlow',
-              html: `
+      const base = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.bpyes.cz';
+      const odkaz = `${base}/nastavit-heslo?token=${encodeURIComponent(
+        tokenProEmail
+      )}`;
+      const resend = new Resend(apiKey);
+      try {
+        await resend.emails.send({
+          from:
+            process.env.POZVANKY_FROM ?? 'BPyes AuditFlow <navratil@bpyes.cz>',
+          to: email,
+          subject: 'Váš přístup do BPyes AuditFlow',
+          html: `
         <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; border: 1px solid #e5e7eb; border-radius: 8px;">
           <h2 style="color: #2563eb; margin-top: 0;">Vítejte v BPyes AuditFlow</h2>
           <p>Dobrý den,</p>
           <p>byl vám vytvořen přístup do klientského portálu <strong>${
             klientNazev || 'BPyes AuditFlow'
           }</strong>, kde uvidíte auditní protokoly a zjištění týkající se vaší firmy.</p>
-          <p>Pro dokončení registrace si prosím nastavte vlastní heslo kliknutím na tlačítko níže:</p>
+          <p>Pro dokončení registrace si prosím nastavte vlastní heslo kliknutím na tlačítko níže (odkaz platí 14 dní):</p>
           <div style="margin: 30px 0;">
             <a href="${odkaz}" style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
               Nastavit heslo a vstoupit
@@ -231,22 +239,20 @@ export async function POST(request: Request) {
           </div>
           <p style="font-size: 13px; color: #6b7280;">Pokud tlačítko nefunguje, zkopírujte do prohlížeče tento odkaz:<br>${odkaz}</p>
           <p style="font-size: 13px; color: #6b7280; margin-top: 30px; border-top: 1px solid #e5e7eb; padding-top: 15px;">
-            Na tuto adresu se budete přihlašovat. Uvidíte pouze záznamy své firmy.<br>
+            Na e-mailovou adresu ${email} se budete přihlašovat. Uvidíte pouze záznamy své firmy.<br>
             Toto je automaticky generovaná zpráva ze systému BPyes AuditFlow.
           </p>
         </div>
-              `,
-            });
-          } catch (mailErr) {
-            pozvankaOdeslana = false;
-            console.error('Resend chyba:', mailErr);
-          }
-        }
+          `,
+        });
+      } catch (mailErr) {
+        pozvankaOdeslana = false;
+        console.error('Resend chyba:', mailErr);
       }
     }
   } catch (e) {
     pozvankaOdeslana = false;
-    console.error('Chyba při generování/odesílání pozvánky:', e);
+    console.error('Chyba při odesílání pozvánky:', e);
   }
 
   return NextResponse.json({
