@@ -23,7 +23,9 @@ import {
   Briefcase,
   Edit2,
   KeyRound,
-  Loader2
+  Loader2,
+  Send,
+  CheckCircle2
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -31,7 +33,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/app/lib/utils";
 
 export default function ClientDetailPage() {
@@ -45,6 +47,97 @@ export default function ClientDetailPage() {
   const [showPristupModal, setShowPristupModal] = useState(false);
   const [pristupEmail, setPristupEmail] = useState('');
   const [vytvarimPristup, setVytvarimPristup] = useState(false);
+
+  // Stav pristupu kontaktnich osob
+  // mapa email(lowercase) -> 'nastaveno' | 'pozvano' (ucet existuje, heslo jeste ne)
+  const [pristupy, setPristupy] = useState<Record<string, 'nastaveno' | 'pozvano'>>({});
+  const [nacitamPristupy, setNacitamPristupy] = useState(false);
+  const [odesilamEmail, setOdesilamEmail] = useState<string | null>(null); // email prave odesilany
+  const [odesilamVsem, setOdesilamVsem] = useState(false);
+
+  // nacte, kdo uz ma pristup (po nacteni klienta)
+  const nacistPristupy = async (klientId: string) => {
+    setNacitamPristupy(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`/api/pristupy-klienta?klientId=${encodeURIComponent(klientId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        const mapa: Record<string, 'nastaveno' | 'pozvano'> = {};
+        for (const p of data.pristupy as { email: string; hesloNastaveno: boolean }[]) {
+          mapa[p.email] = p.hesloNastaveno ? 'nastaveno' : 'pozvano';
+        }
+        setPristupy(mapa);
+      }
+    } catch (e) {
+      console.error('Nacteni pristupu:', e);
+    } finally {
+      setNacitamPristupy(false);
+    }
+  };
+
+  // posle pristup jedne osobe; vraci true pri uspechu
+  const poslatPristupOsobe = async (email: string): Promise<boolean> => {
+    const klientAkt = klienti.find((k) => k.id === id);
+    if (!klientAkt) return false;
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/vytvorit-klienta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email, klientId: klientAkt.id, klientNazev: klientAkt.nazev }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPristupy((p) => ({ ...p, [email.toLowerCase()]: 'pozvano' }));
+        return true;
+      }
+      // 409 = uz existuje: taky oznacime jako pozvano, at to sedi
+      if (res.status === 409) {
+        setPristupy((p) => ({ ...p, [email.toLowerCase()]: p[email.toLowerCase()] || 'pozvano' }));
+      }
+      toast({ title: `Přístup: ${email}`, description: data.error || 'Nepodařilo se.', variant: 'destructive' });
+      return false;
+    } catch {
+      toast({ title: 'Chyba sítě', description: `Nepodařilo se odeslat na ${email}.`, variant: 'destructive' });
+      return false;
+    }
+  };
+
+  const poslatJedne = async (email: string) => {
+    setOdesilamEmail(email);
+    const ok = await poslatPristupOsobe(email);
+    if (ok) toast({ title: 'Přístup odeslán', description: `Pozvánka byla odeslána na ${email}.` });
+    setOdesilamEmail(null);
+  };
+
+  const poslatVsem = async () => {
+    const klientAkt = klienti.find((k) => k.id === id);
+    if (!klientAkt) return;
+    // kontakty s emailem, ktere jeste nemaji pristup
+    const cile = (klientAkt.kontakty || [])
+      .filter((k: any) => k.email?.includes('@'))
+      .map((k: any) => k.email.trim())
+      .filter((e: string) => !pristupy[e.toLowerCase()]);
+
+    if (cile.length === 0) {
+      toast({ title: 'Nic k odeslání', description: 'Všechny kontaktní osoby s e-mailem už mají přístup.' });
+      return;
+    }
+    setOdesilamVsem(true);
+    let uspesne = 0;
+    for (const email of cile) {
+      const ok = await poslatPristupOsobe(email);
+      if (ok) uspesne++;
+    }
+    setOdesilamVsem(false);
+    toast({
+      title: 'Hromadné pozvánky odeslány',
+      description: `Odesláno ${uspesne} z ${cile.length} pozvánek.`,
+    });
+  };
 
   const otevritPristup = () => {
     if (!klient) return;
@@ -89,6 +182,12 @@ export default function ClientDetailPage() {
 
   const klient = klienti.find(k => k.id === id);
   const clientRecords = zaznamy.filter(z => z.klientId === id);
+
+  // po nacteni klienta stahni stav pristupu jeho kontaktnich osob
+  useEffect(() => {
+    if (klient?.id) nacistPristupy(klient.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [klient?.id]);
 
   if (!klient) {
     return <div className="p-8">Klient nenalezen.</div>;
@@ -303,10 +402,25 @@ export default function ClientDetailPage() {
                   <>
                     <div className="flex justify-between items-center">
                       <h3 className="font-bold">Kontaktní osoby ({osoby.length})</h3>
-                      <Button size="sm" variant="outline" onClick={() => router.push(`/klienti/${klient.id}/edit`)}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Přidat osobu
-                      </Button>
+                      <div className="flex gap-2">
+                        {osoby.some((k: any) => k.email?.includes('@')) && (
+                          <Button
+                            size="sm"
+                            onClick={poslatVsem}
+                            disabled={odesilamVsem || nacitamPristupy}
+                          >
+                            {odesilamVsem ? (
+                              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Odesílám…</>
+                            ) : (
+                              <><Send className="mr-2 h-4 w-4" /> Poslat přístup všem</>
+                            )}
+                          </Button>
+                        )}
+                        <Button size="sm" variant="outline" onClick={() => router.push(`/klienti/${klient.id}/edit`)}>
+                          <Plus className="mr-2 h-4 w-4" />
+                          Přidat osobu
+                        </Button>
+                      </div>
                     </div>
 
                     {osoby.length === 0 ? (
@@ -347,6 +461,42 @@ export default function ClientDetailPage() {
                                     <a href={`tel:${o.telefon.replace(/\s/g, '')}`} className="text-sm hover:underline">{o.telefon}</a>
                                   </div>
                                 )}
+                                {/* Stav pristupu + tlacitko */}
+                                <div className="flex items-center min-w-[150px] justify-end">
+                                  {!o.email?.includes('@') ? (
+                                    <span className="text-xs text-muted-foreground italic">bez e-mailu</span>
+                                  ) : pristupy[o.email.toLowerCase()] === 'nastaveno' ? (
+                                    <span className="inline-flex items-center gap-1 text-xs font-bold text-[hsl(var(--stav-vyhovuje))]">
+                                      <CheckCircle2 className="h-4 w-4" /> Má přístup
+                                    </span>
+                                  ) : pristupy[o.email.toLowerCase()] === 'pozvano' ? (
+                                    <div className="flex flex-col items-end gap-1">
+                                      <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600">
+                                        <Mail className="h-4 w-4" /> Pozvánka odeslána
+                                      </span>
+                                      <button
+                                        onClick={() => poslatJedne(o.email.trim())}
+                                        disabled={odesilamEmail === o.email.trim()}
+                                        className="text-[11px] text-blue-600 hover:underline disabled:opacity-50"
+                                      >
+                                        {odesilamEmail === o.email.trim() ? 'Odesílám…' : 'Poslat znovu'}
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => poslatJedne(o.email.trim())}
+                                      disabled={odesilamEmail === o.email.trim() || nacitamPristupy}
+                                    >
+                                      {odesilamEmail === o.email.trim() ? (
+                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Odesílám…</>
+                                      ) : (
+                                        <><Send className="mr-2 h-4 w-4" /> Poslat přístup</>
+                                      )}
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             </CardContent>
                           </Card>
