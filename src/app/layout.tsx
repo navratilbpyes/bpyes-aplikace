@@ -17,7 +17,7 @@ import {
   X
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -29,6 +29,7 @@ import "@/app/globals.css";
 function AppLayoutContent({ children }: { children: React.ReactNode }) {
   const { user, userProfile, authLoading, logout } = useData();
   const pathname = usePathname();
+  const router = useRouter();
   const { toast } = useToast();
 
   const [email, setEmail] = useState("");
@@ -44,6 +45,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       toast({ title: "Přihlášení úspěšné", description: "Vítejte v systému BPyes AuditFlow." });
+      router.replace("/"); // po prihlaseni vzdy na Prehled, ne na posledni stranku
     } catch (error: any) {
       toast({ 
         title: "Chyba přihlášení", 
@@ -60,6 +62,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
     try {
       await signInWithPopup(auth, provider);
       toast({ title: "Přihlášení úspěšné", description: "Byl jste ověřen prostřednictvím Google účtu." });
+      router.replace("/"); // po prihlaseni vzdy na Prehled
     } catch (error) {
       console.error(error);
     }
