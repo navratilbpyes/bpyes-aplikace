@@ -18,7 +18,14 @@ const FIRESTORE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/da
 
 const schema = z.object({
   token: z.string().min(10),
-  heslo: z.string().min(8).max(200),
+  heslo: z
+    .string()
+    .min(8, 'Heslo musí mít alespoň 8 znaků.')
+    .max(200)
+    .regex(/[a-z]/, 'Heslo musí obsahovat malé písmeno.')
+    .regex(/[A-Z]/, 'Heslo musí obsahovat velké písmeno.')
+    .regex(/[0-9]/, 'Heslo musí obsahovat číslici.')
+    .regex(/[^A-Za-z0-9]/, 'Heslo musí obsahovat speciální znak.'),
 });
 
 function sha256(s: string): string {
@@ -43,8 +50,12 @@ export async function POST(req: Request) {
   let body: z.infer<typeof schema>;
   try {
     body = schema.parse(await req.json());
-  } catch {
-    return NextResponse.json({ success: false, error: 'Neplatný požadavek.' }, { status: 400 });
+  } catch (err) {
+    const zprava =
+      err instanceof z.ZodError
+        ? err.errors[0]?.message ?? 'Neplatný požadavek.'
+        : 'Neplatný požadavek.';
+    return NextResponse.json({ success: false, error: zprava }, { status: 400 });
   }
 
   // token = uid . tajemstvi . encRefresh(iv.data.tag)  -> 5 casti pri splitu podle '.'
