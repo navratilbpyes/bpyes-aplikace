@@ -10,16 +10,43 @@ interface ServiceAccount {
   private_key: string;
 }
 
-// Service account JSON dej do env jako jeden řádek (JSON.stringify).
-// V .env.local:  GCP_SERVICE_ACCOUNT_JSON='{"client_email":"...","private_key":"-----BEGIN..."}'
+// Service account lze do env vlozit dvema zpusoby:
+//  1) GCP_SERVICE_ACCOUNT_JSON  = cely JSON na jeden radek (JSON.stringify)
+//  2) GCP_SERVICE_ACCOUNT_BASE64 = ten samy JSON zakodovany do base64 (odolnejsi,
+//     neobsahuje uvozovky ani zalomeni, ktere se ve Vercelu snadno rozbijeji)
+// Doporucene je base64. Kod zvladne oba a je tolerantni k drobnym vadam.
 function getServiceAccount(): ServiceAccount {
-  const raw = process.env.GCP_SERVICE_ACCOUNT_JSON;
-  if (!raw) throw new Error("Chybí GCP_SERVICE_ACCOUNT_JSON");
-  const sa = JSON.parse(raw);
+  const b64 = process.env.GCP_SERVICE_ACCOUNT_BASE64;
+  const rawJson = process.env.GCP_SERVICE_ACCOUNT_JSON;
+
+  let raw: string | undefined;
+  if (b64) {
+    raw = Buffer.from(b64, "base64").toString("utf8");
+  } else {
+    raw = rawJson;
+  }
+  if (!raw)
+    throw new Error(
+      "Chybi GCP_SERVICE_ACCOUNT_BASE64 nebo GCP_SERVICE_ACCOUNT_JSON"
+    );
+
+  let sa: { client_email?: string; private_key?: string };
+  try {
+    sa = JSON.parse(raw);
+  } catch {
+    // Zachrana: nekdy se do env dostanou skutecna zalomeni uvnitr private_key,
+    // ktera rozbiji JSON. Escapujeme zalomeni jen uvnitr hodnot retezcu.
+    const opraveny = raw.replace(/[\r\n]+/g, "\\n");
+    sa = JSON.parse(opraveny);
+  }
+
+  if (!sa.client_email || !sa.private_key)
+    throw new Error("Service account JSON nema client_email/private_key");
+
   return {
     client_email: sa.client_email,
-    // v env bývají \n jako literál – nahradíme za skutečné odřádkování
-    private_key: (sa.private_key as string).replace(/\\n/g, "\n"),
+    // v env byvaji \n jako literal – prevedeme na skutecne odradkovani
+    private_key: sa.private_key.replace(/\\n/g, "\n"),
   };
 }
 
