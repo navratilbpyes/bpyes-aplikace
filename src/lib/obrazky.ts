@@ -1,7 +1,7 @@
 export interface KompreseNastaveni {
-  /** Maximální šířka i výška v pixelech. Výchozí 1024 (fotografie nedostatků). */
+  /** Maximální šířka i výška v pixelech. Výchozí 800 (fotografie nedostatků). */
   maxRozmer?: number;
-  /** Kvalita JPEG 0–1. Výchozí 0.7. */
+  /** Kvalita JPEG 0–1. Výchozí 0.55. */
   kvalita?: number;
   /**
    * Barva podkladu vykreslená pod obrázek. Nutná u PNG s průhledností –
@@ -19,7 +19,7 @@ export function compressImage(
   file: File,
   nastaveni: KompreseNastaveni = {}
 ): Promise<string> {
-  const { maxRozmer = 1024, kvalita = 0.7, podklad } = nastaveni;
+  const { maxRozmer = 800, kvalita = 0.55, podklad } = nastaveni;
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -71,13 +71,13 @@ export function compressImage(
 
 /** Fotografie nedostatku: velká, bez podkladu. */
 export const FOTO_NEDOSTATKU: KompreseNastaveni = {
-  maxRozmer: 1024,
-  kvalita: 0.7,
+  maxRozmer: 800,
+  kvalita: 0.55,
 };
 
 /** Razítko a podpis: menší, na bílém podkladu (kvůli průhlednému PNG). */
 export const RAZITKO_PODPIS: KompreseNastaveni = {
-  maxRozmer: 600,
-  kvalita: 0.8,
+  maxRozmer: 400,
+  kvalita: 0.55,
   podklad: '#FFFFFF',
 };
