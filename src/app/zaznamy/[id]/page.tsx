@@ -598,13 +598,6 @@ export default function RecordDetailPage() {
                        const nedostatkyBodu = (record.zavady || []).filter(
                          (z: any) => String(z.bodKontroly) === String(kb.bod)
                        );
-                       // DIAGNOSTIKA (docasne) – rekni co filtr vidi
-                       if (typeof window !== 'undefined' && kb.hodnoceni === 'N') {
-                         console.log('[DIAG bod]', kb.bod, 'typ:', typeof kb.bod,
-                           '| zavady celkem:', (record.zavady||[]).length,
-                           '| nalezeno pro bod:', nedostatkyBodu.length,
-                           '| bodKontroly hodnoty:', (record.zavady||[]).map((z:any)=>z.bodKontroly));
-                       }
                        const seznam = nedostatkyBodu.length > 0 ? nedostatkyBodu : [{
                          popis: kb.popis, navrhOpatreni: kb.navrhOpatreni, lokalizace: kb.lokalizace,
                          terminOdstraneni: kb.terminOdstraneni, bezOdkladu: kb.bezOdkladu,
@@ -816,26 +809,43 @@ export default function RecordDetailPage() {
 
                               {isDefect && (
                                 <div className="ml-10 space-y-4">
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm">
-                                    <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Návrh opatření</span><p className="font-medium text-slate-900 leading-relaxed">{kb.navrhOpatreni || '-'}</p></div>
-                                    <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Místo prověrky</span><p className="font-bold text-blue-900">{kb.lokalizace || '-'}</p></div>
-                                    <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Termín k odstranění</span><p className="font-medium text-slate-900">{kb.bezOdkladu ? 'Bez zbytečného odkladu' : (kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : '-')}</p></div>
-                                    <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Odpovědná pozice</span><p className="font-bold text-slate-900">{kb.odpovednaOsoba || '-'}</p></div>
-                                  </div>
-
-                                  {kb.foto && kb.foto.length > 0 && (
-                                    <div>
-                                      <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-2">Fotodokumentace závady</span>
-                                      <div className="flex flex-wrap gap-3">
-                                        {kb.foto.map((f: string, i: number) => (
-                                          <div key={i} onClick={() => setFullscreenImage(f)} className="cursor-zoom-in relative group overflow-hidden rounded-lg border border-slate-200 shadow-sm bg-white p-1">
-                                            <img src={f} alt="Foto" className="h-24 w-24 sm:h-32 sm:w-32 object-cover rounded group-hover:scale-105 transition-transform" />
-                                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none"><Camera className="text-white h-6 w-6" /></div>
+                                  {(() => {
+                                    const nedostatkyBodu = (record.zavady || []).filter(
+                                      (z: any) => String(z.bodKontroly) === String(kb.bod)
+                                    );
+                                    const seznam = nedostatkyBodu.length > 0 ? nedostatkyBodu : [{
+                                      navrhOpatreni: kb.navrhOpatreni, lokalizace: kb.lokalizace,
+                                      terminOdstraneni: kb.terminOdstraneni, bezOdkladu: kb.bezOdkladu,
+                                      odpovednaOsoba: kb.odpovednaOsoba, foto: kb.foto, popis: kb.popis,
+                                    }];
+                                    return seznam.map((z: any, zi: number) => (
+                                      <div key={zi} className="space-y-3">
+                                        {seznam.length > 1 && (
+                                          <div className="text-[11px] font-bold text-red-700 uppercase tracking-wide">Nedostatek {zi + 1} z {seznam.length}</div>
+                                        )}
+                                        {z.popis && <p className="text-sm text-slate-800 font-medium">{z.popis}</p>}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm">
+                                          <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Návrh opatření</span><p className="font-medium text-slate-900 leading-relaxed">{z.navrhOpatreni || '-'}</p></div>
+                                          <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Místo prověrky</span><p className="font-bold text-blue-900">{z.lokalizace || '-'}</p></div>
+                                          <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Termín k odstranění</span><p className="font-medium text-slate-900">{z.bezOdkladu ? 'Bez zbytečného odkladu' : (z.terminOdstraneni ? new Date(z.terminOdstraneni).toLocaleDateString('cs-CZ') : '-')}</p></div>
+                                          <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Odpovědná pozice</span><p className="font-bold text-slate-900">{z.odpovednaOsoba || '-'}</p></div>
+                                        </div>
+                                        {z.foto && z.foto.length > 0 && (
+                                          <div>
+                                            <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-2">Fotodokumentace závady</span>
+                                            <div className="flex flex-wrap gap-3">
+                                              {z.foto.map((f: string, i: number) => (
+                                                <div key={i} onClick={() => setFullscreenImage(f)} className="cursor-zoom-in relative group overflow-hidden rounded-lg border border-slate-200 shadow-sm bg-white p-1">
+                                                  <img src={f} alt="Foto" className="h-24 w-24 sm:h-32 sm:w-32 object-cover rounded group-hover:scale-105 transition-transform" />
+                                                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none"><Camera className="text-white h-6 w-6" /></div>
+                                                </div>
+                                              ))}
+                                            </div>
                                           </div>
-                                        ))}
+                                        )}
                                       </div>
-                                    </div>
-                                  )}
+                                    ));
+                                  })()}
 
                                   {!isAdmin && (
                                     <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 mt-4 shadow-sm">
