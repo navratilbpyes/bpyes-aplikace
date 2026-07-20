@@ -240,6 +240,7 @@ export default function NewInspectionPage() {
           navrhOpatreni: primaryDefect?.navrhOpatreni || "",
           lokalizace: primaryDefect?.lokalizace || "",
           terminOdstraneni: primaryDefect?.terminOdstraneni || "",
+          bezOdkladu: primaryDefect?.bezOdkladu || false,
           odpovednaOsoba: primaryDefect?.odpovednaOsoba === 'manual' ? primaryDefect.odpovednaOsobaManualni : (primaryDefect?.odpovednaOsoba || ""),
           foto: primaryDefect?.foto || []
         });
@@ -254,6 +255,7 @@ export default function NewInspectionPage() {
               zavaznost: def.zavaznost === 'none' ? "" : def.zavaznost,
               datumOdstraneni: def.odstraneno ? def.datumOdstraneni : "",
               zaznamProvedl: def.odstraneno ? (def.zaznamProvedl === 'manual' ? def.zaznamProvedlManualni : def.zaznamProvedl) : "",
+              bezOdkladu: def.bezOdkladu || false,
               // Fotky se drzi jen v kontrolniBody[].foto (odtud je cte report i detail).
               // Zde by slo o duplicitni kopii, ktera dokument zbytecne nafukuje, proto ji neukladame.
             } as any);
@@ -385,7 +387,17 @@ export default function NewInspectionPage() {
           </div>
           <div className="space-y-2"><Label className="text-xs">Popis závady *</Label><Textarea value={def.popis} onChange={(e) => updateFn('popis', e.target.value)} className="bg-white min-h-[100px]" /></div>
           <div className="space-y-2"><Label className="text-xs">Návrh opatření *</Label><Textarea value={def.navrhOpatreni} onChange={(e) => updateFn('navrhOpatreni', e.target.value)} className="bg-white min-h-[100px]" /></div>
-          <div className="space-y-2"><Label className="text-xs">Termín odstranění</Label><Input type="date" value={def.terminOdstraneni} onChange={(e) => updateFn('terminOdstraneni', e.target.value)} className="bg-white h-10" /></div>
+          <div className="space-y-2"><Label className="text-xs">Termín odstranění</Label>
+            {def.bezOdkladu ? (
+              <div className="h-10 flex items-center px-3 bg-slate-100 rounded-md text-sm italic text-slate-600">Bez zbytečného odkladu</div>
+            ) : (
+              <Input type="date" value={def.terminOdstraneni} onChange={(e) => updateFn('terminOdstraneni', e.target.value)} className="bg-white h-10" />
+            )}
+            <label className="flex items-center gap-2 cursor-pointer pt-1">
+              <Checkbox checked={!!def.bezOdkladu} onCheckedChange={(c) => updateFn('bezOdkladu', !!c)} />
+              <span className="text-xs text-slate-600">Bez zbytečného odkladu</span>
+            </label>
+          </div>
           <div className="space-y-2">
             <Label className="text-xs">Odpovědná pozice k řešení</Label>
             <Select value={def.odpovednaOsoba} onValueChange={(v) => updateFn('odpovednaOsoba', v)}>
