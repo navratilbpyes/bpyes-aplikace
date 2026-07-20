@@ -240,7 +240,7 @@ export default function EditInspectionPage() {
               zavaznost: def.zavaznost === 'none' ? "" : def.zavaznost,
               datumOdstraneni: def.odstraneno ? def.datumOdstraneni : "",
               zaznamProvedl: def.odstraneno ? (def.zaznamProvedl === 'manual' ? def.zaznamProvedlManualni : def.zaznamProvedl) : "",
-              foto: def.foto || []
+              // Fotky zustavaji jen v kontrolniBody[].foto; duplicitu v zavady[] neukladame.
             } as any);
           });
         }
@@ -292,6 +292,20 @@ export default function EditInspectionPage() {
       };
 
       const sanitizedRecord = JSON.parse(JSON.stringify(updatedRecord));
+
+      // Pojistka na 1 MB limit Firestore dokumentu (fotky jsou v base64).
+      const velikostBytu = new Blob([JSON.stringify(sanitizedRecord)]).size;
+      if (velikostBytu > 950_000) {
+        const kolikProcent = Math.round((velikostBytu / 1_048_576) * 100);
+        toast({
+          title: "Záznam je příliš velký",
+          description: `Kontrola má ${kolikProcent} % povoleného limitu. Odeberte prosím několik fotografií a uložte znovu.`,
+          variant: "destructive",
+        });
+        setIsSaving(false);
+        return;
+      }
+
       const recordRef = doc(db, 'zaznamy', recordToEdit.id);
       await setDoc(recordRef, sanitizedRecord);
 
