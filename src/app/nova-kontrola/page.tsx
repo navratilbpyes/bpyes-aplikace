@@ -256,8 +256,9 @@ export default function NewInspectionPage() {
               datumOdstraneni: def.odstraneno ? def.datumOdstraneni : "",
               zaznamProvedl: def.odstraneno ? (def.zaznamProvedl === 'manual' ? def.zaznamProvedlManualni : def.zaznamProvedl) : "",
               bezOdkladu: def.bezOdkladu || false,
-              // Fotky se drzi jen v kontrolniBody[].foto (odtud je cte report i detail).
-              // Zde by slo o duplicitni kopii, ktera dokument zbytecne nafukuje, proto ji neukladame.
+              // Fotky drzime u KAZDE zavady, aby report mohl zobrazit vsechny nedostatky
+              // bodu (nejen prvni) i s jejich fotkami. Velikost hlida pojistka pred ulozenim.
+              foto: def.foto || []
             } as any);
           });
         }
