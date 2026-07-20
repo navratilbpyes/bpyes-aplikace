@@ -242,7 +242,8 @@ export default function EditInspectionPage() {
               datumOdstraneni: def.odstraneno ? def.datumOdstraneni : "",
               zaznamProvedl: def.odstraneno ? (def.zaznamProvedl === 'manual' ? def.zaznamProvedlManualni : def.zaznamProvedl) : "",
               bezOdkladu: def.bezOdkladu || false,
-              // Fotky zustavaji jen v kontrolniBody[].foto; duplicitu v zavady[] neukladame.
+              // Fotky u kazde zavady kvuli zobrazeni vsech nedostatku bodu v reportu.
+              foto: def.foto || []
             } as any);
           });
         }
