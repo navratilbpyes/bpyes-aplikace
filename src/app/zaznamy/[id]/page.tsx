@@ -592,21 +592,41 @@ export default function RecordDetailPage() {
                         <div className={cn("text-[9px] font-bold px-2 py-0.5 border rounded uppercase", def?.odznak)}>{def?.popis ?? '—'}</div>
                      </div>
                      <div className="font-bold text-slate-900 mb-3">{kb.otazka || kb.popis}</div>
-                     {isDefect && (
-                       <div className="bg-slate-50 p-3 border rounded space-y-3">
-                         <div className="grid grid-cols-2 gap-4 text-[11px]">
-                           <div><span className="text-slate-500 font-bold block">NÁVRH OPATŘENÍ:</span>{kb.navrhOpatreni}</div>
-                           <div><span className="text-slate-500 font-bold block">MÍSTO:</span><span className="font-bold text-blue-800">{kb.lokalizace}</span></div>
-                           <div><span className="text-slate-500 font-bold block">TERMÍN:</span>{kb.bezOdkladu ? 'Bez zbytečného odkladu' : (kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : '-')}</div>
-                           <div><span className="text-slate-500 font-bold block">ODPOVĚDNÁ POZICE:</span><span className="font-bold">{kb.odpovednaOsoba}</span></div>
+                     {isDefect && (() => {
+                       // Vsechny nedostatky tohoto bodu ze zavady[] (vazba pres bodKontroly).
+                       // Fallback: kdyz zaznam nema provazane zavady (starsi data), pouzijeme kb.
+                       const nedostatkyBodu = (record.zavady || []).filter(
+                         (z: any) => z.bodKontroly === kb.bod
+                       );
+                       const seznam = nedostatkyBodu.length > 0 ? nedostatkyBodu : [{
+                         popis: kb.popis, navrhOpatreni: kb.navrhOpatreni, lokalizace: kb.lokalizace,
+                         terminOdstraneni: kb.terminOdstraneni, bezOdkladu: kb.bezOdkladu,
+                         odpovednaOsoba: kb.odpovednaOsoba, foto: kb.foto,
+                       }];
+                       return (
+                         <div className="space-y-3">
+                           {seznam.map((z: any, zi: number) => (
+                             <div key={zi} className="bg-slate-50 p-3 border rounded space-y-3">
+                               {seznam.length > 1 && (
+                                 <div className="text-[10px] font-bold text-red-700 uppercase tracking-tighter">Nedostatek {zi + 1} z {seznam.length}</div>
+                               )}
+                               {z.popis && <div className="text-[12px] font-medium text-slate-800">{z.popis}</div>}
+                               <div className="grid grid-cols-2 gap-4 text-[11px]">
+                                 <div><span className="text-slate-500 font-bold block">NÁVRH OPATŘENÍ:</span>{z.navrhOpatreni}</div>
+                                 <div><span className="text-slate-500 font-bold block">MÍSTO:</span><span className="font-bold text-blue-800">{z.lokalizace}</span></div>
+                                 <div><span className="text-slate-500 font-bold block">TERMÍN:</span>{z.bezOdkladu ? 'Bez zbytečného odkladu' : (z.terminOdstraneni ? new Date(z.terminOdstraneni).toLocaleDateString('cs-CZ') : '-')}</div>
+                                 <div><span className="text-slate-500 font-bold block">ODPOVĚDNÁ POZICE:</span><span className="font-bold">{z.odpovednaOsoba}</span></div>
+                               </div>
+                               {z.foto && z.foto.length > 0 && (
+                                 <div className="pt-2 flex flex-wrap gap-2">
+                                   {z.foto.map((f: string, idx: number) => <img src={f} key={idx} className="h-40 w-40 object-cover border bg-white" />)}
+                                 </div>
+                               )}
+                             </div>
+                           ))}
                          </div>
-                         {kb.foto && kb.foto.length > 0 && (
-                           <div className="pt-2 flex flex-wrap gap-2">
-                             {kb.foto.map((f: string, idx: number) => <img src={f} key={idx} className="h-40 w-40 object-cover border bg-white" />)}
-                           </div>
-                         )}
-                       </div>
-                     )}
+                       );
+                     })()}
                    </div>
                  )
                })
