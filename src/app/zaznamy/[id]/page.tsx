@@ -596,8 +596,15 @@ export default function RecordDetailPage() {
                        // Vsechny nedostatky tohoto bodu ze zavady[] (vazba pres bodKontroly).
                        // Fallback: kdyz zaznam nema provazane zavady (starsi data), pouzijeme kb.
                        const nedostatkyBodu = (record.zavady || []).filter(
-                         (z: any) => z.bodKontroly === kb.bod
+                         (z: any) => String(z.bodKontroly) === String(kb.bod)
                        );
+                       // DIAGNOSTIKA (docasne) – rekni co filtr vidi
+                       if (typeof window !== 'undefined' && kb.hodnoceni === 'N') {
+                         console.log('[DIAG bod]', kb.bod, 'typ:', typeof kb.bod,
+                           '| zavady celkem:', (record.zavady||[]).length,
+                           '| nalezeno pro bod:', nedostatkyBodu.length,
+                           '| bodKontroly hodnoty:', (record.zavady||[]).map((z:any)=>z.bodKontroly));
+                       }
                        const seznam = nedostatkyBodu.length > 0 ? nedostatkyBodu : [{
                          popis: kb.popis, navrhOpatreni: kb.navrhOpatreni, lokalizace: kb.lokalizace,
                          terminOdstraneni: kb.terminOdstraneni, bezOdkladu: kb.bezOdkladu,
