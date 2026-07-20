@@ -273,6 +273,30 @@ export default function RecordDetailPage() {
     return groups;
   }, [filteredKontrolniBody]);
 
+  // Zobrazovaci cislo bodu: bezne body maji sve id; volne body (id >= 99000)
+  // dostanou poradove cislo navazujici za nejvyssim beznym bodem. Interni id se nemeni.
+  const cisloBoduProZobrazeni = useMemo(() => {
+    const mapa = new Map<string, string>();
+    const vsechny = record?.kontrolniBody || [];
+    let maxBezne = 0;
+    vsechny.forEach((kb: any) => {
+      const num = parseInt(String(kb.bod), 10);
+      if (!isNaN(num) && num < 99000 && num > maxBezne) maxBezne = num;
+    });
+    let dalsi = maxBezne + 1;
+    vsechny.forEach((kb: any) => {
+      const num = parseInt(String(kb.bod), 10);
+      if (!isNaN(num) && num >= 99000) {
+        mapa.set(String(kb.bod), String(dalsi++));
+      } else {
+        mapa.set(String(kb.bod), String(kb.bod));
+      }
+    });
+    return mapa;
+  }, [record]);
+
+  const zobrazCisloBodu = (bod: any) => cisloBoduProZobrazeni.get(String(bod)) || String(bod);
+
   const stats = useMemo(() => {
     if (!record?.kontrolniBody) return { total: 0, V: 0, N: 0, NA: 0 };
     return {
@@ -588,7 +612,7 @@ export default function RecordDetailPage() {
                  return (
                    <div key={kb.id || kb.bod} className={cn("avoid-break border-b pb-6 mb-6 pl-3", paskaPro(kb.hodnoceni))}>
                      <div className="flex justify-between items-start mb-2">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter font-mono">[{kb.bod}] KAPITOLA: {group.sekce}</div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter font-mono">[{zobrazCisloBodu(kb.bod)}] KAPITOLA: {group.sekce}</div>
                         <div className={cn("text-[9px] font-bold px-2 py-0.5 border rounded uppercase", def?.odznak)}>{def?.popis ?? '—'}</div>
                      </div>
                      <div className="font-bold text-slate-900 mb-3">{kb.otazka || kb.popis}</div>
@@ -645,7 +669,7 @@ export default function RecordDetailPage() {
                 <div key={dop.bod} className="avoid-break mb-6 pb-6 border-b last:border-b-0 pl-3 paska paska-D">
                   <div className="flex justify-between items-start mb-2">
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter font-mono">
-                      [{dop.bod}] {dop.sekce ? `KAPITOLA: ${dop.sekce}` : ''}
+                      [{zobrazCisloBodu(dop.bod)}] {dop.sekce ? `KAPITOLA: ${dop.sekce}` : ''}
                     </div>
                     <div className="text-[9px] font-bold px-2 py-0.5 border rounded uppercase text-[hsl(var(--stav-doporuceni))] border-[hsl(var(--stav-doporuceni))]/30">
                       Doporučení {idx + 1}
@@ -792,7 +816,7 @@ export default function RecordDetailPage() {
                             <div key={bodId} className={cn("p-5 transition-colors", isDefect ? "bg-white" : "bg-slate-50/30")}>
                               <div className="flex justify-between items-start gap-4 mb-4">
                                 <div className="flex gap-3">
-                                  <span className={cn("font-mono text-xs font-bold h-7 w-7 rounded-lg flex items-center justify-center shrink-0 border", isDefect ? "bg-red-50 text-red-700 border-red-100" : "bg-green-50 text-green-700 border-green-100")}>{kb.bod}</span>
+                                  <span className={cn("font-mono text-xs font-bold h-7 w-7 rounded-lg flex items-center justify-center shrink-0 border", isDefect ? "bg-red-50 text-red-700 border-red-100" : "bg-green-50 text-green-700 border-green-100")}>{zobrazCisloBodu(kb.bod)}</span>
                                   <div>
                                     <h4 className={cn("font-bold text-[14px] leading-snug", isDefect ? "text-slate-900" : "text-slate-600")}>{kb.otazka || kb.popis}</h4>
                                   </div>
@@ -994,7 +1018,7 @@ export default function RecordDetailPage() {
                   </div>
                   {dop.sekce && (
                     <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-2 font-mono">
-                      [{dop.bod}] {dop.sekce}
+                      [{zobrazCisloBodu(dop.bod)}] {dop.sekce}
                     </div>
                   )}
                   <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{dop.text}</p>
