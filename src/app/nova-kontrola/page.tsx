@@ -254,7 +254,8 @@ export default function NewInspectionPage() {
               zavaznost: def.zavaznost === 'none' ? "" : def.zavaznost,
               datumOdstraneni: def.odstraneno ? def.datumOdstraneni : "",
               zaznamProvedl: def.odstraneno ? (def.zaznamProvedl === 'manual' ? def.zaznamProvedlManualni : def.zaznamProvedl) : "",
-              foto: def.foto || []
+              // Fotky se drzi jen v kontrolniBody[].foto (odtud je cte report i detail).
+              // Zde by slo o duplicitni kopii, ktera dokument zbytecne nafukuje, proto ji neukladame.
             } as any);
           });
         }
@@ -299,6 +300,28 @@ export default function NewInspectionPage() {
       };
 
       const sanitizedRecord = JSON.parse(JSON.stringify(newRecord));
+
+      // Pojistka: Firestore ma tvrdy limit 1 MB na dokument. Fotky jsou v base64
+      // ulozene primo v dokumentu, takze pri hodne fotkach se limit prekroci.
+      // Radeji zkontrolujeme velikost tady a dame srozumitelnou hlasku.
+      const velikostBytu = new Blob([JSON.stringify(sanitizedRecord)]).size;
+      const LIMIT = 1_048_576; // 1 MB
+      const BEZPECNY = 950_000; // rezerva pod limitem
+      if (velikostBytu > BEZPECNY) {
+        const kolikProcent = Math.round((velikostBytu / LIMIT) * 100);
+        const pocetFotek = aggregatedZavady.reduce(
+          (n: number, z: any) => n + (z.foto?.length || 0),
+          0
+        );
+        toast({
+          title: "Záznam je příliš velký",
+          description: `Kontrola má ${kolikProcent} % povoleného limitu (${pocetFotek} fotek). Odeberte prosím několik fotografií nebo je nahraďte méně náročnými a uložte znovu.`,
+          variant: "destructive",
+        });
+        setIsSaving(false);
+        return;
+      }
+
       await setDoc(newRecordRef, sanitizedRecord);
 
       setZaznamy(prev => {
