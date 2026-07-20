@@ -597,7 +597,7 @@ export default function RecordDetailPage() {
                          <div className="grid grid-cols-2 gap-4 text-[11px]">
                            <div><span className="text-slate-500 font-bold block">NÁVRH OPATŘENÍ:</span>{kb.navrhOpatreni}</div>
                            <div><span className="text-slate-500 font-bold block">MÍSTO:</span><span className="font-bold text-blue-800">{kb.lokalizace}</span></div>
-                           <div><span className="text-slate-500 font-bold block">TERMÍN:</span>{kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : '-'}</div>
+                           <div><span className="text-slate-500 font-bold block">TERMÍN:</span>{kb.bezOdkladu ? 'Bez zbytečného odkladu' : (kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : '-')}</div>
                            <div><span className="text-slate-500 font-bold block">ODPOVĚDNÁ POZICE:</span><span className="font-bold">{kb.odpovednaOsoba}</span></div>
                          </div>
                          {kb.foto && kb.foto.length > 0 && (
@@ -792,7 +792,7 @@ export default function RecordDetailPage() {
                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm">
                                     <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Návrh opatření</span><p className="font-medium text-slate-900 leading-relaxed">{kb.navrhOpatreni || '-'}</p></div>
                                     <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Místo prověrky</span><p className="font-bold text-blue-900">{kb.lokalizace || '-'}</p></div>
-                                    <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Termín k odstranění</span><p className="font-medium text-slate-900">{kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : '-'}</p></div>
+                                    <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Termín k odstranění</span><p className="font-medium text-slate-900">{kb.bezOdkladu ? 'Bez zbytečného odkladu' : (kb.terminOdstraneni ? new Date(kb.terminOdstraneni).toLocaleDateString('cs-CZ') : '-')}</p></div>
                                     <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Odpovědná pozice</span><p className="font-bold text-slate-900">{kb.odpovednaOsoba || '-'}</p></div>
                                   </div>
 
