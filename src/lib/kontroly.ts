@@ -20,6 +20,7 @@ export interface DefectFormState {
   zaznamProvedl: string;
   zaznamProvedlManualni: string;
   foto?: string[];
+  bezOdkladu?: boolean;
 }
 
 /** Nový prázdný nedostatek. Termín odstranění je předvyplněn na 30 dní. */
@@ -36,7 +37,8 @@ export const createEmptyDefect = (): DefectFormState => ({
   datumOdstraneni: "",
   zaznamProvedl: "",
   zaznamProvedlManualni: "",
-  foto: []
+  foto: [],
+  bezOdkladu: false
 });
 
 /** Adresa sídla rozložená na části, jak ji používá formulář klienta. */
