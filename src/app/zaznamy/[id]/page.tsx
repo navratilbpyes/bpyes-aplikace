@@ -297,6 +297,20 @@ export default function RecordDetailPage() {
 
   const zobrazCisloBodu = (bod: any) => cisloBoduProZobrazeni.get(String(bod)) || String(bod);
 
+  // Formatuje datum provedeni podle rezimu (jeden den / rozsah / vice dnu).
+  // Zpetne kompatibilni: kdyz zaznam nema datumRezim, pouzije jen record.datum.
+  const formatDatumProvedeni = (r: any): string => {
+    const fmt = (d: string) => d ? new Date(d).toLocaleDateString('cs-CZ') : '';
+    if (!r) return '-';
+    if (r.datumRezim === 'rozsah' && r.datum && r.datumDo) {
+      return `${fmt(r.datum)} – ${fmt(r.datumDo)}`;
+    }
+    if (r.datumRezim === 'vice' && Array.isArray(r.datumVice) && r.datumVice.filter(Boolean).length > 0) {
+      return r.datumVice.filter(Boolean).map(fmt).join(', ');
+    }
+    return r.datum ? fmt(r.datum) : '-';
+  };
+
   const stats = useMemo(() => {
     if (!record?.kontrolniBody) return { total: 0, V: 0, N: 0, NA: 0 };
     return {
@@ -510,6 +524,7 @@ export default function RecordDetailPage() {
           
           <div className="text-base font-bold mb-8 pb-4 border-b-2 border-slate-100">
             ČÍSLO ZPRÁVY: {record.cisloKlientske || record.cislo} | REVIZE: R{record.revize || 0}
+            <div className="text-sm font-normal text-slate-700 mt-1">Datum provedení: <span className="font-bold">{formatDatumProvedeni(record)}</span></div>
           </div>
 
           <div className="grid grid-cols-2 gap-8 mb-10">
@@ -710,7 +725,7 @@ export default function RecordDetailPage() {
               </span>
             </div>
             <p className="text-sm text-slate-500 font-medium flex items-center gap-2">
-              <Clock className="h-4 w-4" /> Audit ze dne {record.datum ? new Date(record.datum).toLocaleDateString('cs-CZ') : '-'}
+              <Clock className="h-4 w-4" /> Audit ze dne {formatDatumProvedeni(record)}
             </p>
           </div>
           
