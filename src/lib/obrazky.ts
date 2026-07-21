@@ -81,3 +81,48 @@ export const RAZITKO_PODPIS: KompreseNastaveni = {
   kvalita: 0.7,
   podklad: '#FFFFFF',
 };
+
+// ------- Nahrani fotky na hosting (pres bezpecny Vercel endpoint) -------
+
+/** Pozna, jestli je hodnota uz URL (nahrana fotka), nebo base64 (jeste ne). */
+export function jeUrl(hodnota: string): boolean {
+  return typeof hodnota === 'string' && /^https?:\/\//.test(hodnota);
+}
+
+/** Prevede base64 data URL na Blob. */
+function dataUrlNaBlob(dataUrl: string): Blob {
+  const [hlavicka, data] = dataUrl.split(',');
+  const mime = hlavicka.match(/:(.*?);/)?.[1] || 'image/jpeg';
+  const bin = atob(data);
+  const pole = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) pole[i] = bin.charCodeAt(i);
+  return new Blob([pole], { type: mime });
+}
+
+/**
+ * Nahraje jednu fotku na hosting a vrati jeji URL.
+ * Kdyz uz je vstup URL (drive nahrana), vrati ji beze zmeny.
+ * Kdyz je to base64, posle ji na /api/upload-foto a vrati vysledne URL.
+ */
+export async function nahrajFotku(fotka: string): Promise<string> {
+  if (jeUrl(fotka)) return fotka; // uz nahrana, nic nedelej
+
+  const blob = dataUrlNaBlob(fotka);
+  const fd = new FormData();
+  fd.append('file', blob, 'foto.jpg');
+
+  const res = await fetch('/api/upload-foto', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'Nahrani fotky selhalo.');
+  return data.url as string;
+}
+
+/** Nahraje pole fotek (mix URL a base64) a vrati pole URL. */
+export async function nahrajFotky(fotky: string[]): Promise<string[]> {
+  if (!fotky || fotky.length === 0) return [];
+  const vysledky: string[] = [];
+  for (const f of fotky) {
+    vysledky.push(await nahrajFotku(f));
+  }
+  return vysledky;
+}
