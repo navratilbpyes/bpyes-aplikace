@@ -28,7 +28,14 @@ export async function POST(req: NextRequest) {
 
     const res = await fetch(HOSTING_URL, {
       method: 'POST',
-      headers: { 'X-Upload-Secret': secret },
+      headers: {
+        'X-Upload-Secret': secret,
+        // WEDOS blokuje pozadavky bez bezneho User-Agent (ochrana proti botum).
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'cs-CZ,cs;q=0.9',
+        'Referer': 'https://appbpyes.cz/',
+      },
       body: forward,
     });
 
