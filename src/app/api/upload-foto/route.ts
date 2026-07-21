@@ -32,7 +32,19 @@ export async function POST(req: NextRequest) {
       body: forward,
     });
 
-    const data = await res.json();
+    // Precti odpoved jako text – hosting muze vratit i ne-JSON (PHP warning, HTML chyba).
+    const raw = await res.text();
+    let data: any;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      console.error('Hosting nevratil JSON. Status:', res.status, 'Odpoved:', raw.slice(0, 500));
+      return NextResponse.json(
+        { success: false, error: `Hosting vrátil neočekávanou odpověď (status ${res.status}).` },
+        { status: 502 }
+      );
+    }
+
     if (!res.ok || !data.success) {
       console.error('Hosting upload selhal:', data);
       return NextResponse.json(
