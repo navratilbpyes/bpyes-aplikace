@@ -3,7 +3,7 @@
 import { createEmptyDefect, parsujTypoveZavady } from "@/lib/kontroly";
 import { nactiCsv } from "@/lib/csv-cache";
 import type { DefectFormState, TypickaZavada } from "@/lib/kontroly";
-import { compressImage, FOTO_NEDOSTATKU } from "@/lib/obrazky";
+import { compressImage, FOTO_NEDOSTATKU, nahrajFotky } from "@/lib/obrazky";
 import { STAVY, POradi_TLACITEK, paskaPro } from "@/lib/stavy";
 import { useData, db } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,7 @@ export default function EditInspectionPage() {
   const [disabledSections, setDisabledSections] = useState<string[]>([]);
   const [filterPosition, setFilterPosition] = useState<string>("all");
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [velikostChyba, setVelikostChyba] = useState<string>('');
   const [revisionNumber, setRevisionNumber] = useState("0");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -192,6 +193,7 @@ export default function EditInspectionPage() {
   const executeSave = async (isDraft: boolean = false) => {
     if (!recordToEdit) return;
     setIsSaving(true);
+    setVelikostChyba('');
     try {
       const finalKontrolniBody: any[] = [];
       const aggregatedZavady: Zavada[] = [];
@@ -253,6 +255,23 @@ export default function EditInspectionPage() {
         }
       });
 
+      // Nahraj nove fotky na hosting a nahrad base64 -> URL. Uz nahrane URL zustanou.
+      // Tim se stare zaznamy pri editaci s novou fotkou postupne prevedou na URL.
+      try {
+        for (const kb of finalKontrolniBody) {
+          if (kb.foto?.length) kb.foto = await nahrajFotky(kb.foto);
+          if (kb.doporuceniFoto?.length) kb.doporuceniFoto = await nahrajFotky(kb.doporuceniFoto);
+        }
+        for (const z of aggregatedZavady as any[]) {
+          if (z.foto?.length) z.foto = await nahrajFotky(z.foto);
+        }
+      } catch (uploadErr) {
+        console.error('Nahravani fotek selhalo:', uploadErr);
+        setVelikostChyba('Nepodařilo se nahrát fotografie na úložiště. Zkontrolujte připojení a zkuste to znovu.');
+        setIsSaving(false);
+        return;
+      }
+
       // ZDE JE BEZPEČNOSTNÍ POJISTKA - NIKDY NEZAVŘE REPORT S NESHODOU
       const hasUnresolvedDefects = finalKontrolniBody.some(kb => kb.hodnoceni === 'N');
       const finalStav = (isDraft || hasUnresolvedDefects) ? 'otevreny' : 'uzavreny';
@@ -304,6 +323,7 @@ export default function EditInspectionPage() {
       const velikostBytu = new Blob([JSON.stringify(sanitizedRecord)]).size;
       if (velikostBytu > 950_000) {
         const kolikProcent = Math.round((velikostBytu / 1_048_576) * 100);
+        setVelikostChyba(`Záznam je příliš velký (${kolikProcent} % limitu). Firestore dovolí max 1 MB. Odeberte několik fotografií a uložte znovu. (Připravujeme ukládání fotek na vlastní úložiště, kde limit odpadne.)`);
         toast({
           title: "Záznam je příliš velký",
           description: `Kontrola má ${kolikProcent} % povoleného limitu. Odeberte prosím několik fotografií a uložte znovu.`,
@@ -553,6 +573,11 @@ export default function EditInspectionPage() {
           <Card className="w-full max-w-md shadow-2xl">
             <CardHeader><CardTitle>Potvrzení úprav</CardTitle><CardDescription>{stats.N > 0 ? "Záznam obsahuje neshody. Bude zapsán ve stavu 'V řešení'." : "Zkontrolujte číslo revize. Aktuální záznam bude přepsán."}</CardDescription></CardHeader>
             <CardContent className="space-y-4">
+              {velikostChyba && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm font-medium">
+                  {velikostChyba}
+                </div>
+              )}
               <div className="space-y-2"><Label>Číslo revize (R)</Label><div className="flex items-center gap-2"><span className="text-lg font-bold text-muted-foreground">R</span><Input type="number" min="0" value={revisionNumber} onChange={(e) => setRevisionNumber(e.target.value)} className="text-lg font-bold" /></div></div>
             </CardContent>
             <div className="p-4 border-t flex justify-end gap-2 bg-muted/20">
