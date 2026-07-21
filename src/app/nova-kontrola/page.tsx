@@ -3,7 +3,7 @@
 import { createEmptyDefect, prijemciKlienta, parsujTypoveZavady } from "@/lib/kontroly";
 import { nactiCsv, stariZalohy } from "@/lib/csv-cache";
 import type { DefectFormState, TypickaZavada } from "@/lib/kontroly";
-import { compressImage, FOTO_NEDOSTATKU } from "@/lib/obrazky";
+import { compressImage, FOTO_NEDOSTATKU, nahrajFotky } from "@/lib/obrazky";
 import { STAVY, POradi_TLACITEK, paskaPro } from "@/lib/stavy";
 import { useData, db, auth } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
@@ -67,6 +67,7 @@ export default function NewInspectionPage() {
   
   // Stavy pro modální okna
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [velikostChyba, setVelikostChyba] = useState<string>('');
   const [showCancelModal, setShowCancelModal] = useState(false);
   
   // Speciální stavy pro odesílání e-mailu
@@ -181,6 +182,7 @@ export default function NewInspectionPage() {
 
   const executeSave = async (isDraft: boolean = false) => {
     setIsSaving(true);
+    setVelikostChyba('');
     try {
       const year = new Date(formData.datum).getFullYear();
       
@@ -268,6 +270,23 @@ export default function NewInspectionPage() {
         }
       });
 
+      // Nahraj fotky na hosting a nahrad base64 -> URL (uz nahrane URL zustanou).
+      // Diky tomu se do Firestore uklada jen odkaz, ne obrovsky base64.
+      try {
+        for (const kb of finalKontrolniBody) {
+          if (kb.foto?.length) kb.foto = await nahrajFotky(kb.foto);
+          if (kb.doporuceniFoto?.length) kb.doporuceniFoto = await nahrajFotky(kb.doporuceniFoto);
+        }
+        for (const z of aggregatedZavady as any[]) {
+          if (z.foto?.length) z.foto = await nahrajFotky(z.foto);
+        }
+      } catch (uploadErr) {
+        console.error('Nahravani fotek selhalo:', uploadErr);
+        setVelikostChyba('Nepodařilo se nahrát fotografie na úložiště. Zkontrolujte připojení a zkuste to znovu.');
+        setIsSaving(false);
+        return;
+      }
+
       const hasUnresolvedDefects = finalKontrolniBody.some(kb => kb.hodnoceni === 'N');
       const finalStav = (isDraft || hasUnresolvedDefects) ? 'otevreny' : 'uzavreny';
 
@@ -320,6 +339,7 @@ export default function NewInspectionPage() {
           (n: number, z: any) => n + (z.foto?.length || 0),
           0
         );
+        setVelikostChyba(`Záznam je příliš velký (${kolikProcent} % limitu, ${pocetFotek} fotek). Firestore dovolí max 1 MB. Odeberte několik fotografií a uložte znovu. (Připravujeme ukládání fotek na vlastní úložiště, kde limit odpadne.)`);
         toast({
           title: "Záznam je příliš velký",
           description: `Kontrola má ${kolikProcent} % povoleného limitu (${pocetFotek} fotek). Odeberte prosím několik fotografií nebo je nahraďte méně náročnými a uložte znovu.`,
@@ -583,6 +603,11 @@ export default function NewInspectionPage() {
           <Card className="w-full max-w-md shadow-2xl">
             <CardHeader><CardTitle>Dokončení a uložení kontroly</CardTitle><CardDescription>{stats.N > 0 ? "Záznam obsahuje neshody. Bude zapsán ve stavu 'V řešení'." : "Před uložením záznamu potvrďte číslo revize dokumentu."}</CardDescription></CardHeader>
             <CardContent className="space-y-4">
+              {velikostChyba && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm font-medium">
+                  {velikostChyba}
+                </div>
+              )}
               <div className="space-y-2"><Label>Číslo revize (R)</Label><div className="flex items-center gap-2"><span className="text-lg font-bold text-muted-foreground">R</span><Input type="number" min="0" value={revisionNumber} onChange={(e) => setRevisionNumber(e.target.value)} className="text-lg font-bold" /></div></div>
             </CardContent>
             <div className="p-4 border-t flex justify-end gap-2 bg-muted/20 rounded-b-xl">
