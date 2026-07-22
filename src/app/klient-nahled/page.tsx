@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import {
   dniDo, sklonDny, sestavCasovyPlan, spoctiMetriky, spoctiMetrikyBasic,
   tonZMetrik, tonBasic, seznamOdpovednychOsob,
-} from '../../lib/dashboard/transform';
+} from './transform';
 import {
   DNES, MOCK_TERMINY, MOCK_NEDOSTATKY, MOCK_ZAZNAMY, MOCK_NAVSTEVY, MOCK_DOTAZY,
 } from './mock';
