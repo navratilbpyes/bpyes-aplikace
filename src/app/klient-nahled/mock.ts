@@ -1,4 +1,4 @@
-import type { Termin, Nedostatek, Zaznam, Navsteva, Dotaz } from '@/types/dashboard';
+import type { Termin, Nedostatek, Zaznam, Navsteva, Dotaz } from '../../types/dashboard';
 
 // Prototyp běží na mock datech ve tvaru budoucích Firestore dokumentů.
 // Nasazení na ostrá data = nahradit tento soubor čtením přes useData().
