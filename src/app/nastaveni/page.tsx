@@ -14,8 +14,6 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/app/lib/utils";
-import CiselnikSkoleni from "@/components/admin/ciselnik-skoleni";
-import CiselnikRevizi from "@/components/admin/ciselnik-revizi";
 
 // NEPRŮSTŘELNÁ KOMPRESE S BÍLÝM POZADÍM
 
