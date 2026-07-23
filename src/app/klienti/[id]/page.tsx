@@ -39,7 +39,7 @@ import ProhlidkyKlienta from "@/components/prohlidky-klienta";
 import SkoleniKlienta from "@/components/admin/skoleni-klienta";
 import RevizeKlienta from "@/components/admin/revize-klienta";
 import DriveOdkazy from "@/components/admin/drive-odkazy";
-import ProhlidkyKlienta from "@/components/prohlidky-klienta";
+
 
 export default function ClientDetailPage() {
   const { id } = useParams();
