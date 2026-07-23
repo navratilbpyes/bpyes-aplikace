@@ -6,14 +6,9 @@
  *
  * Firestore: klienti/{klientId}/skoleni/{id}
  *
- * Chování:
- *   - přidání z číselníku = kopie hodnot (snapshot), pozdější změna číselníku neovlivní
- *   - totéž školení lze přidat vícekrát (různé skupiny, odlišené poznámkou)
- *   - perioda i osoba jdou u klienta přepsat
- *   - vlastní školení mimo číselník
- *   - termín se dopočte z periody, nebo se zadá ručně
- *
- * Použití: <SkoleniKlienta klientId={klientId} />
+ * Přidání z číselníku zkopíruje hodnoty (snapshot). Totéž téma lze přidat
+ * vícekrát pro různé skupiny — rozliší je poznámka. Perioda i „kdo provádí"
+ * jdou u klienta přepsat. Termín se dopočte z periody, nebo se zadá ručně.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -21,46 +16,56 @@ import {
   collection, addDoc, updateDoc, doc, query, where, getDocs,
 } from 'firebase/firestore';
 import { db } from '@/components/data-provider';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import {
-  PERIODY, popisPeriody, dopocitejDalsi, platnyTermin,
-} from '@/lib/skoleni';
-import type {
-  CiselnikSkoleni, Osoba, SkoleniKlienta as TypSkoleni,
-} from '@/lib/skoleni';
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
+  Plus, X, Loader2, ChevronDown, ChevronRight, RotateCcw,
+} from 'lucide-react';
+import { cn } from '@/app/lib/utils';
+import { PERIODY, popisPeriody, dopocitejDalsi, platnyTermin } from '@/lib/skoleni';
+import type { CiselnikSkoleni, SkoleniKlienta as TypSkoleni } from '@/lib/skoleni';
 
 interface Props {
   klientId: string;
 }
 
-const prazdneNaUndefined = (v: string) => (v.trim() === '' ? undefined : v.trim());
+const naNull = (v: string) => (v.trim() === '' ? null : v.trim());
 const isoNaDatum = (iso?: string) => (iso ? iso.slice(0, 10) : '');
 const datumNaIso = (d: string) => (d ? new Date(d + 'T00:00:00').toISOString() : undefined);
+const formatDatum = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('cs-CZ') : '—');
 
 export default function SkoleniKlienta({ klientId }: Props) {
   const [seznam, setSeznam] = useState<TypSkoleni[]>([]);
   const [ciselnik, setCiselnik] = useState<CiselnikSkoleni[]>([]);
-  const [osoby, setOsoby] = useState<Osoba[]>([]);
   const [nacitam, setNacitam] = useState(true);
-  const [zprava, setZprava] = useState<string | null>(null);
   const [vybrane, setVybrane] = useState('');
   const [rozbaleno, setRozbaleno] = useState<string | null>(null);
 
-  const cesta = useCallback(() => collection(db, 'klienti', klientId, 'skoleni'), [klientId]);
+  const cesta = useCallback(
+    () => collection(db, 'klienti', klientId, 'skoleni'),
+    [klientId],
+  );
 
   const nacti = useCallback(async () => {
     try {
-      const [kSnap, cSnap, oSnap] = await Promise.all([
+      const [kSnap, cSnap] = await Promise.all([
         getDocs(query(cesta(), where('stav', '==', 'aktivni'))),
         getDocs(query(collection(db, 'ciselnikSkoleni'), where('stav', '==', 'aktivni'))),
-        getDocs(query(collection(db, 'ciselnikOsoby'), where('stav', '==', 'aktivni'))),
       ]);
       setSeznam(kSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as TypSkoleni));
-      setCiselnik(cSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as CiselnikSkoleni)
-        .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs')));
-      setOsoby(oSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Osoba)
-        .sort((a, b) => a.jmeno.localeCompare(b.jmeno, 'cs')));
-    } catch {
-      setZprava('Načtení školení selhalo.');
+      setCiselnik(
+        cSnap.docs
+          .map((d) => ({ id: d.id, ...d.data() }) as CiselnikSkoleni)
+          .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs')),
+      );
+    } catch (e) {
+      console.error('Načtení školení selhalo:', e);
     } finally {
       setNacitam(false);
     }
@@ -68,65 +73,49 @@ export default function SkoleniKlienta({ klientId }: Props) {
 
   useEffect(() => { nacti(); }, [nacti]);
 
-  /** Přidá školení z číselníku — zkopíruje hodnoty jako snapshot. */
   async function pridejZCiselniku() {
     const zdroj = ciselnik.find((c) => c.id === vybrane);
-    if (!zdroj) {
-      setZprava('Vyber školení z číselníku.');
-      return;
-    }
-    try {
-      await addDoc(cesta(), {
-        ciselnikId: zdroj.id,
-        nazev: zdroj.nazev,
-        periodaMesice: zdroj.periodaMesice,
-        provadiOsobaId: zdroj.provadiOsobaId ?? null,
-        poznamka: null,
-        posledniIso: null,
-        dalsiIso: null,
-        dalsiRucne: false,
-        stav: 'aktivni',
-      });
-      setVybrane('');
-      setZprava(null);
-      nacti();
-    } catch {
-      setZprava('Přidání selhalo.');
-    }
+    if (!zdroj) return;
+    await addDoc(cesta(), {
+      ciselnikId: zdroj.id,
+      nazev: zdroj.nazev,
+      periodaMesice: zdroj.periodaMesice,
+      provadi: zdroj.provadi ?? null,
+      poznamka: null,
+      posledniIso: null,
+      dalsiIso: null,
+      dalsiRucne: false,
+      stav: 'aktivni',
+    });
+    setVybrane('');
+    nacti();
   }
 
-  /** Přidá vlastní školení mimo číselník. */
   async function pridejVlastni() {
-    try {
-      const ref = await addDoc(cesta(), {
-        ciselnikId: null,
-        nazev: 'Nové školení',
-        periodaMesice: 12,
-        provadiOsobaId: null,
-        poznamka: null,
-        posledniIso: null,
-        dalsiIso: null,
-        dalsiRucne: false,
-        stav: 'aktivni',
-      });
-      setZprava(null);
-      await nacti();
-      setRozbaleno(ref.id);
-    } catch {
-      setZprava('Přidání selhalo.');
-    }
+    const ref = await addDoc(cesta(), {
+      ciselnikId: null,
+      nazev: 'Nové školení',
+      periodaMesice: 12,
+      provadi: null,
+      poznamka: null,
+      posledniIso: null,
+      dalsiIso: null,
+      dalsiRucne: false,
+      stav: 'aktivni',
+    });
+    await nacti();
+    setRozbaleno(ref.id);
   }
 
   async function uprav(id: string, zmeny: Partial<TypSkoleni>) {
-    // optimistická aktualizace UI
     setSeznam((p) => p.map((s) => (s.id === id ? { ...s, ...zmeny } : s)));
     try {
       const cistec = Object.fromEntries(
-        Object.entries(zmeny).map(([k, v]) => [k, v === undefined ? null : v]),
+        Object.entries(zmeny).map(([k, v]) => [k, v === undefined || v === '' ? null : v]),
       );
       await updateDoc(doc(db, 'klienti', klientId, 'skoleni', id), cistec);
-    } catch {
-      setZprava('Uložení změny selhalo.');
+    } catch (e) {
+      console.error('Uložení změny selhalo:', e);
     }
   }
 
@@ -135,200 +124,216 @@ export default function SkoleniKlienta({ klientId }: Props) {
     await updateDoc(doc(db, 'klienti', klientId, 'skoleni', id), { stav: 'smazano' });
   }
 
-  const jmenoOsoby = (id?: string | null) =>
-    osoby.find((o) => o.id === id)?.jmeno ?? 'neurčeno';
-
-  const formatDatum = (iso?: string) =>
-    iso ? new Date(iso).toLocaleDateString('cs-CZ') : '—';
-
-  if (nacitam) return <div style={S.blok}><p style={S.mute}>Načítám…</p></div>;
+  if (nacitam) {
+    return (
+      <Card>
+        <CardContent className="flex items-center gap-2 py-8 text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm">Načítám školení…</span>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <div style={S.blok}>
-      <h3 style={S.nadpis}>Školení klienta</h3>
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Školení klienta</CardTitle>
+      </CardHeader>
 
-      {/* přidání */}
-      <div style={S.formRadek}>
-        <select
-          value={vybrane}
-          onChange={(e) => setVybrane(e.target.value)}
-          style={{ ...S.input, flex: 1 }}
-        >
-          <option value="">Vyber školení z číselníku…</option>
-          {ciselnik.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.nazev} ({popisPeriody(c.periodaMesice)})
-            </option>
-          ))}
-        </select>
-        <button type="button" onClick={pridejZCiselniku} style={S.tlacitko}>Přidat</button>
-        <button type="button" onClick={pridejVlastni} style={S.tlacitkoSekundarni}>
-          + Vlastní
-        </button>
-      </div>
-      <p style={S.napoveda}>
-        Stejné školení lze přidat vícekrát pro různé skupiny — rozliš je poznámkou.
-      </p>
-
-      {/* seznam */}
-      {seznam.length === 0 && <p style={S.mute}>Klient zatím nemá přiřazená žádná školení.</p>}
-
-      {seznam.map((s) => {
-        const termin = platnyTermin(s);
-        const otevreno = rozbaleno === s.id;
-        return (
-          <div key={s.id} style={S.karta}>
-            <div style={S.kartaHlavicka}>
-              <button
-                type="button"
-                onClick={() => setRozbaleno(otevreno ? null : s.id)}
-                style={S.rozbalit}
-              >
-                {otevreno ? '▾' : '▸'}
-              </button>
-              <div style={{ flex: 1 }}>
-                <div style={S.kartaNazev}>
-                  {s.nazev}
-                  {s.poznamka && <span style={S.skupina}> — {s.poznamka}</span>}
-                  {!s.ciselnikId && <span style={S.vlastniStitek}>vlastní</span>}
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          <Select value={vybrane} onValueChange={setVybrane}>
+            <SelectTrigger className="flex-1 min-w-[220px]">
+              <SelectValue placeholder="Vyber téma z číselníku…" />
+            </SelectTrigger>
+            <SelectContent>
+              {ciselnik.length === 0 && (
+                <div className="px-2 py-3 text-sm text-muted-foreground">
+                  Číselník je prázdný — naplň jej v sekci Číselníky.
                 </div>
-                <div style={S.kartaMeta}>
-                  {popisPeriody(s.periodaMesice)} · {jmenoOsoby(s.provadiOsobaId)} ·
-                  {' další: '}<strong>{formatDatum(termin)}</strong>
-                  {s.dalsiRucne && <span style={S.rucneStitek}>ručně</span>}
-                </div>
-              </div>
-              <button type="button" onClick={() => smaz(s.id)} style={S.tlacitkoSmazat}>×</button>
-            </div>
+              )}
+              {ciselnik.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.nazev} ({popisPeriody(c.periodaMesice)})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button onClick={pridejZCiselniku} disabled={!vybrane}>
+            <Plus className="mr-2 h-4 w-4" /> Přidat
+          </Button>
+          <Button variant="secondary" onClick={pridejVlastni}>
+            Vlastní
+          </Button>
+        </div>
 
-            {otevreno && (
-              <div style={S.detail}>
-                <label style={S.label}>
-                  Název
-                  <input
-                    type="text" value={s.nazev}
-                    onChange={(e) => uprav(s.id, { nazev: e.target.value })}
-                    style={S.input}
-                  />
-                </label>
+        <p className="text-xs text-muted-foreground">
+          Stejné téma lze přidat vícekrát pro různé skupiny — rozliš je poznámkou.
+        </p>
 
-                <label style={S.label}>
-                  Poznámka / skupina
-                  <input
-                    type="text" value={s.poznamka ?? ''}
-                    onChange={(e) => uprav(s.id, { poznamka: prazdneNaUndefined(e.target.value) })}
-                    placeholder="např. skupina B — sklad"
-                    style={S.input}
-                  />
-                </label>
-
-                <div style={S.dvojice}>
-                  <label style={{ ...S.label, flex: 1 }}>
-                    Perioda
-                    <select
-                      value={s.periodaMesice}
-                      onChange={(e) => {
-                        const perioda = Number(e.target.value);
-                        const novyDalsi = s.dalsiRucne
-                          ? s.dalsiIso
-                          : dopocitejDalsi(s.posledniIso, perioda);
-                        uprav(s.id, { periodaMesice: perioda, dalsiIso: novyDalsi });
-                      }}
-                      style={S.input}
+        {seznam.length === 0 ? (
+          <p className="py-6 text-sm text-muted-foreground">
+            Klient zatím nemá přiřazená žádná školení.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {seznam.map((s) => {
+              const termin = platnyTermin(s);
+              const otevreno = rozbaleno === s.id;
+              return (
+                <div key={s.id} className="rounded-lg border overflow-hidden">
+                  <div className="flex items-start gap-2 bg-muted/40 p-3">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() => setRozbaleno(otevreno ? null : s.id)}
                     >
-                      {PERIODY.map((p) => (
-                        <option key={p.hodnota} value={p.hodnota}>{p.popis}</option>
-                      ))}
-                    </select>
-                  </label>
+                      {otevreno
+                        ? <ChevronDown className="h-4 w-4" />
+                        : <ChevronRight className="h-4 w-4" />}
+                    </Button>
 
-                  <label style={{ ...S.label, flex: 1 }}>
-                    Provádí
-                    <select
-                      value={s.provadiOsobaId ?? ''}
-                      onChange={(e) => uprav(s.id, { provadiOsobaId: prazdneNaUndefined(e.target.value) })}
-                      style={S.input}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-sm">{s.nazev}</span>
+                        {s.poznamka && (
+                          <span className="text-sm text-muted-foreground">— {s.poznamka}</span>
+                        )}
+                        {!s.ciselnikId && (
+                          <Badge variant="secondary" className="text-[10px]">vlastní</Badge>
+                        )}
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                        <span>{popisPeriody(s.periodaMesice)}</span>
+                        {s.provadi && <span>{s.provadi}</span>}
+                        <span>
+                          další: <strong className="text-foreground">{formatDatum(termin)}</strong>
+                        </span>
+                        {s.dalsiRucne && (
+                          <Badge variant="outline" className="text-[10px] h-4">ručně</Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => smaz(s.id)}
                     >
-                      <option value="">neurčeno</option>
-                      {osoby.map((o) => <option key={o.id} value={o.id}>{o.jmeno}</option>)}
-                    </select>
-                  </label>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  {otevreno && (
+                    <div className="border-t p-3 space-y-3">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Téma školení</Label>
+                          <Input
+                            value={s.nazev}
+                            onChange={(e) => uprav(s.id, { nazev: e.target.value })}
+                            className="h-9"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Poznámka / skupina</Label>
+                          <Input
+                            value={s.poznamka ?? ''}
+                            onChange={(e) => uprav(s.id, { poznamka: e.target.value })}
+                            placeholder="např. skupina B — sklad"
+                            className="h-9"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Perioda</Label>
+                          <Select
+                            value={String(s.periodaMesice)}
+                            onValueChange={(v) => {
+                              const perioda = Number(v);
+                              const dalsi = s.dalsiRucne
+                                ? s.dalsiIso
+                                : dopocitejDalsi(s.posledniIso, perioda);
+                              uprav(s.id, { periodaMesice: perioda, dalsiIso: dalsi });
+                            }}
+                          >
+                            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {PERIODY.map((p) => (
+                                <SelectItem key={p.hodnota} value={String(p.hodnota)}>
+                                  {p.popis}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Kdo provádí</Label>
+                          <Input
+                            value={s.provadi ?? ''}
+                            onChange={(e) => uprav(s.id, { provadi: e.target.value })}
+                            placeholder="např. OZO"
+                            className="h-9"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Poslední proškolení</Label>
+                          <Input
+                            type="date"
+                            value={isoNaDatum(s.posledniIso)}
+                            onChange={(e) => {
+                              const posledni = datumNaIso(e.target.value);
+                              const dalsi = s.dalsiRucne
+                                ? s.dalsiIso
+                                : dopocitejDalsi(posledni, s.periodaMesice);
+                              uprav(s.id, { posledniIso: posledni, dalsiIso: dalsi });
+                            }}
+                            className="h-9"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Další termín</Label>
+                          <Input
+                            type="date"
+                            value={isoNaDatum(termin)}
+                            onChange={(e) => uprav(s.id, {
+                              dalsiIso: datumNaIso(e.target.value),
+                              dalsiRucne: true,
+                            })}
+                            className="h-9"
+                          />
+                        </div>
+                      </div>
+
+                      {s.dalsiRucne && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => uprav(s.id, {
+                            dalsiRucne: false,
+                            dalsiIso: dopocitejDalsi(s.posledniIso, s.periodaMesice),
+                          })}
+                        >
+                          <RotateCcw className="mr-2 h-3 w-3" />
+                          Vrátit k automatickému výpočtu
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
-
-                <div style={S.dvojice}>
-                  <label style={{ ...S.label, flex: 1 }}>
-                    Poslední proškolení
-                    <input
-                      type="date" value={isoNaDatum(s.posledniIso)}
-                      onChange={(e) => {
-                        const posledni = datumNaIso(e.target.value);
-                        const novyDalsi = s.dalsiRucne
-                          ? s.dalsiIso
-                          : dopocitejDalsi(posledni, s.periodaMesice);
-                        uprav(s.id, { posledniIso: posledni, dalsiIso: novyDalsi });
-                      }}
-                      style={S.input}
-                    />
-                  </label>
-
-                  <label style={{ ...S.label, flex: 1 }}>
-                    Další termín
-                    <input
-                      type="date"
-                      value={isoNaDatum(termin)}
-                      onChange={(e) => uprav(s.id, {
-                        dalsiIso: datumNaIso(e.target.value),
-                        dalsiRucne: true,
-                      })}
-                      style={S.input}
-                    />
-                  </label>
-                </div>
-
-                {s.dalsiRucne && (
-                  <button
-                    type="button"
-                    onClick={() => uprav(s.id, {
-                      dalsiRucne: false,
-                      dalsiIso: dopocitejDalsi(s.posledniIso, s.periodaMesice),
-                    })}
-                    style={S.tlacitkoZpet}
-                  >
-                    Vrátit k automatickému výpočtu
-                  </button>
-                )}
-              </div>
-            )}
+              );
+            })}
           </div>
-        );
-      })}
-
-      {zprava && <p style={S.chyba}>{zprava}</p>}
-    </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
-
-const S: Record<string, React.CSSProperties> = {
-  blok: { background: '#fff', border: '1px solid #E4E4DD', borderRadius: 12, padding: 20 },
-  nadpis: { fontFamily: "'Space Grotesk', system-ui, sans-serif", fontSize: 16, fontWeight: 600, color: '#0F2038', margin: '0 0 16px' },
-  napoveda: { fontSize: 12, color: '#6B7280', margin: '0 0 16px', lineHeight: 1.5 },
-  formRadek: { display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' },
-  input: { display: 'block', width: '100%', padding: '9px 12px', border: '1px solid #E4E4DD', borderRadius: 8, fontSize: 14, color: '#0F2038', boxSizing: 'border-box', background: '#fff', marginTop: 4 },
-  tlacitko: { background: '#2F5FD0', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 14, fontWeight: 500, cursor: 'pointer', flexShrink: 0 },
-  tlacitkoSekundarni: { background: '#F1EFE8', color: '#0F2038', border: 'none', borderRadius: 8, padding: '9px 14px', fontSize: 14, cursor: 'pointer', flexShrink: 0 },
-  tlacitkoSmazat: { background: 'transparent', color: '#C0392B', border: '1px solid #E4E4DD', borderRadius: 8, width: 30, height: 30, fontSize: 17, cursor: 'pointer', flexShrink: 0 },
-  tlacitkoZpet: { background: 'transparent', color: '#2F5FD0', border: '1px solid #E4E4DD', borderRadius: 8, padding: '7px 12px', fontSize: 13, cursor: 'pointer', marginTop: 10 },
-  karta: { border: '1px solid #E4E4DD', borderRadius: 10, marginTop: 10, overflow: 'hidden' },
-  kartaHlavicka: { display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: '#FBFBF9' },
-  kartaNazev: { fontSize: 14, fontWeight: 600, color: '#0F2038' },
-  kartaMeta: { fontSize: 12, color: '#6B7280', marginTop: 3 },
-  skupina: { fontWeight: 400, color: '#6B7280' },
-  vlastniStitek: { marginLeft: 8, fontSize: 11, background: '#E6F1FB', color: '#185FA5', padding: '2px 7px', borderRadius: 10, fontWeight: 500 },
-  rucneStitek: { marginLeft: 6, fontSize: 11, background: '#F1EFE8', color: '#6B7280', padding: '1px 6px', borderRadius: 8 },
-  rozbalit: { background: 'transparent', border: 'none', color: '#6B7280', fontSize: 14, cursor: 'pointer', padding: 0, width: 16, flexShrink: 0 },
-  detail: { padding: '14px', borderTop: '1px solid #E4E4DD', display: 'flex', flexDirection: 'column', gap: 12 },
-  label: { display: 'block', fontSize: 13, color: '#0F2038', fontWeight: 500 },
-  dvojice: { display: 'flex', gap: 12, flexWrap: 'wrap' },
-  mute: { fontSize: 13, color: '#6B7280', margin: '8px 0 0' },
-  chyba: { fontSize: 13, color: '#C0392B', marginTop: 12 },
-};
