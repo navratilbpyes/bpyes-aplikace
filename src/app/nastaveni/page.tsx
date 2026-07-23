@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/app/lib/utils";
+import CiselnikSkoleni from "@/components/admin/ciselnik-skoleni";
+import CiselnikRevizi from "@/components/admin/ciselnik-revizi";
 
 // NEPRŮSTŘELNÁ KOMPRESE S BÍLÝM POZADÍM
 
@@ -241,6 +243,19 @@ export default function NastaveniAuditoraPage() {
           </div>
         </div>
       </form>
+
+      {/* Číselníky mají vlastní ukládání, proto stojí mimo formulář auditora. */}
+      <div className="max-w-5xl mx-auto px-4 md:px-8 pb-32 space-y-8">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold tracking-tight">Číselníky</h2>
+          <p className="text-sm text-muted-foreground">
+            Katalogy školení a revizí. Při přiřazení klientovi se hodnoty zkopírují —
+            pozdější úprava zde už přiřazené položky nezmění.
+          </p>
+        </div>
+        <CiselnikSkoleni />
+        <CiselnikRevizi />
+      </div>
     </div>
   );
 }
