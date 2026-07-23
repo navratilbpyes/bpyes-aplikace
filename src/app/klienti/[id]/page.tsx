@@ -36,6 +36,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { cn } from "@/app/lib/utils";
 import ProhlidkyKlienta from "@/components/prohlidky-klienta";
+import SkoleniKlienta from "@/components/admin/skoleni-klienta";
+import RevizeKlienta from "@/components/admin/revize-klienta";
+import DriveOdkazy from "@/components/admin/drive-odkazy";
+import ProhlidkyKlienta from "@/components/prohlidky-klienta";
 
 export default function ClientDetailPage() {
   const { id } = useParams();
@@ -354,11 +358,15 @@ export default function ClientDetailPage() {
         {/* Right Column - Tabs */}
         <div className="lg:col-span-2">
           <Tabs defaultValue="pracoviste" className="space-y-6">
-            <TabsList className="w-full justify-start h-auto p-1 bg-secondary">
+            <TabsList className="w-full justify-start h-auto p-1 bg-secondary flex-wrap">
               <TabsTrigger value="pracoviste" className="px-6 py-2">Pracoviště</TabsTrigger>
               <TabsTrigger value="osoby" className="px-6 py-2">Kontaktní osoby</TabsTrigger>
               <TabsTrigger value="pozice" className="px-6 py-2">Odpovědné osoby</TabsTrigger>
               <TabsTrigger value="zaznamy" className="px-6 py-2">Záznamy kontrol</TabsTrigger>
+              <TabsTrigger value="prohlidky" className="px-6 py-2">Prověrky a PPP</TabsTrigger>
+              <TabsTrigger value="skoleni" className="px-6 py-2">Školení</TabsTrigger>
+              <TabsTrigger value="revize" className="px-6 py-2">Revize</TabsTrigger>
+              <TabsTrigger value="dokumentace" className="px-6 py-2">Dokumentace</TabsTrigger>
             </TabsList>
 
             <TabsContent value="pracoviste" className="space-y-4">
@@ -619,6 +627,25 @@ export default function ClientDetailPage() {
                   </table>
                 </div>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="prohlidky" className="space-y-4">
+              <ProhlidkyKlienta
+                klientId={klient.id}
+                pracoviste={klient.pracoviste || []}
+              />
+            </TabsContent>
+
+            <TabsContent value="skoleni" className="space-y-4">
+              <SkoleniKlienta klientId={klient.id} />
+            </TabsContent>
+
+            <TabsContent value="revize" className="space-y-4">
+              <RevizeKlienta klientId={klient.id} />
+            </TabsContent>
+
+            <TabsContent value="dokumentace" className="space-y-4">
+              <DriveOdkazy klientId={klient.id} />
             </TabsContent>
           </Tabs>
         </div>
