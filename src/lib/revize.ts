@@ -1,30 +1,28 @@
 /**
  * AuditFlow — revize: typy a výpočty.
  * Umístění: src/lib/revize.ts
+ *
+ * Číselník nese jen téma a periodu. Konkrétní revizní firma
+ * se zadává až u revize v kartě klienta — u každého klienta
+ * bývá jiná, do globálního katalogu nepatří.
  */
 
 export type StavZaznamu = 'aktivni' | 'smazano';
 
-/** Firma provádějící revize (revizní technik, servisní firma). */
-export interface Firma {
+/** Položka číselníku revizí. */
+export interface CiselnikRevize {
   id: string;
+  /** téma revize, např. „Revize hromosvodu" */
   nazev: string;
-  /** volitelný popis oboru, např. „elektro, hromosvody" */
-  obor?: string;
-  telefon?: string;
-  email?: string;
+  periodaMesice: number;
   stav: StavZaznamu;
 }
 
-/** Položka globálního číselníku revizí. */
-export interface CiselnikRevize {
-  id: string;
-  nazev: string;
-  periodaMesice: number;
-  /** id firmy z ciselnikFirem, nebo prázdné */
-  provadiFirmaId?: string;
-  poznamka?: string;
-  stav: StavZaznamu;
+/** Revizní firma / technik u konkrétní revize. */
+export interface RevizniFirma {
+  nazev?: string;
+  telefon?: string;
+  email?: string;
 }
 
 /**
@@ -38,7 +36,10 @@ export interface RevizeKlienta {
   ciselnikId?: string;
   nazev: string;
   periodaMesice: number;
-  provadiFirmaId?: string;
+  /** revizní firma / technik pro tuto konkrétní revizi */
+  firmaNazev?: string;
+  firmaTelefon?: string;
+  firmaEmail?: string;
   /** popis zařízení / objektu, např. „hala B — rozvaděč RH2" */
   poznamka?: string;
   /** číslo protokolu poslední revize, např. „HR-2025/14" */
@@ -57,10 +58,7 @@ export function pridejMesice(iso: string, mesicu: number): string {
   const d = new Date(iso);
   const puvodniDen = d.getDate();
   d.setMonth(d.getMonth() + mesicu);
-  // ošetření přetečení (31. 1. + 1 měsíc by dalo 3. 3.)
-  if (d.getDate() !== puvodniDen) {
-    d.setDate(0);
-  }
+  if (d.getDate() !== puvodniDen) d.setDate(0);
   return d.toISOString();
 }
 
@@ -88,7 +86,7 @@ export function popisPeriody(mesicu: number): string {
   return `1× za ${mesicu} měsíců`;
 }
 
-/** Předvolby period pro revize (kratší i delší lhůty než u školení). */
+/** Předvolby period pro revize. */
 export const PERIODY: { hodnota: number; popis: string }[] = [
   { hodnota: 3, popis: '1× za 3 měsíce' },
   { hodnota: 6, popis: '1× za 6 měsíců' },
@@ -98,12 +96,3 @@ export const PERIODY: { hodnota: number; popis: string }[] = [
   { hodnota: 48, popis: '1× za 4 roky' },
   { hodnota: 60, popis: '1× za 5 let' },
 ];
-
-/** Krátký kontaktní řádek firmy pro výpis. */
-export function kontaktFirmy(f?: Firma): string {
-  if (!f) return 'neurčeno';
-  const casti = [f.nazev];
-  if (f.telefon) casti.push(f.telefon);
-  if (f.email) casti.push(f.email);
-  return casti.join(' · ');
-}
