@@ -28,6 +28,7 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Zavada } from "@/app/lib/types";
 import { doc, collection, setDoc } from "firebase/firestore";
+import { zapisProhlidky } from "@/lib/zapis-prohlidek";
 
 
 
