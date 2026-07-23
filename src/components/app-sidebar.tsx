@@ -7,7 +7,7 @@ import {
   FileText, 
   PlusCircle, 
   Settings,
-  ShieldCheck
+  ShieldCheck,
   BookMarked
   } from "lucide-react";
 import {
