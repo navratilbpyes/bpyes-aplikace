@@ -5,23 +5,14 @@
 
 export type StavZaznamu = 'aktivni' | 'smazano';
 
-/** Položka globálního číselníku školení. */
+/** Položka číselníku školení. */
 export interface CiselnikSkoleni {
   id: string;
+  /** téma školení, např. „Školení BOZP" */
   nazev: string;
   periodaMesice: number;
-  /** id osoby z ciselnikOsoby, nebo prázdné */
-  provadiOsobaId?: string;
-  poznamka?: string;
-  stav: StavZaznamu;
-}
-
-/** Osoba, která školení provádí. */
-export interface Osoba {
-  id: string;
-  jmeno: string;
-  /** volitelný popis role, např. „OZO", „revizní technik elektro" */
-  role?: string;
+  /** kdo školení provádí — volný text (OZO, externí dodavatel, jméno) */
+  provadi?: string;
   stav: StavZaznamu;
 }
 
@@ -36,7 +27,7 @@ export interface SkoleniKlienta {
   ciselnikId?: string;
   nazev: string;
   periodaMesice: number;
-  provadiOsobaId?: string;
+  provadi?: string;
   /** popis skupiny, např. „skupina B — sklad" */
   poznamka?: string;
   /** datum posledního proškolení */
@@ -54,16 +45,11 @@ export function pridejMesice(iso: string, mesicu: number): string {
   const puvodniDen = d.getDate();
   d.setMonth(d.getMonth() + mesicu);
   // ošetření přetečení (31. 1. + 1 měsíc by dalo 3. 3.)
-  if (d.getDate() !== puvodniDen) {
-    d.setDate(0);
-  }
+  if (d.getDate() !== puvodniDen) d.setDate(0);
   return d.toISOString();
 }
 
-/**
- * Dopočítá termín dalšího školení.
- * Vrací undefined, pokud chybí datum posledního.
- */
+/** Dopočítá termín dalšího školení. Vrací undefined, chybí-li datum posledního. */
 export function dopocitejDalsi(
   posledniIso: string | undefined,
   periodaMesice: number,
@@ -72,16 +58,13 @@ export function dopocitejDalsi(
   return pridejMesice(posledniIso, periodaMesice);
 }
 
-/**
- * Vrátí termín, který se má zobrazit: ruční přepis má přednost
- * před dopočtem z periody.
- */
+/** Ruční přepis má přednost před dopočtem z periody. */
 export function platnyTermin(s: SkoleniKlienta): string | undefined {
   if (s.dalsiRucne && s.dalsiIso) return s.dalsiIso;
   return dopocitejDalsi(s.posledniIso, s.periodaMesice);
 }
 
-/** Formát periody pro zobrazení: „1× za 12 měsíců". */
+/** Formát periody pro zobrazení. */
 export function popisPeriody(mesicu: number): string {
   if (mesicu === 12) return '1× ročně';
   if (mesicu === 24) return '1× za 2 roky';
