@@ -27,6 +27,7 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { KontrolniBod, Zavada } from "@/app/lib/types";
 import { doc, setDoc } from "firebase/firestore";
+import { zapisProhlidky } from "@/lib/zapis-prohlidek";
 
 
 
@@ -334,7 +335,21 @@ export default function EditInspectionPage() {
       }
 
       const recordRef = doc(db, 'zaznamy', recordToEdit.id);
+      
       await setDoc(recordRef, sanitizedRecord);
+
+      // Aktualizace termínů prohlídek podle upraveného reportu.
+      if (!isDraft) {
+        await zapisProhlidky({
+          klientId: formData.klientId,
+          typKontroly: formData.typKontroly,
+          datum: formData.datum,
+          pracovisteIds: formData.pracovisteIds,
+          pracoviste: selectedKlient?.pracoviste || [],
+          zaznamId: sanitizedRecord.id,
+          zaznamCislo: sanitizedRecord.cisloKlientske || sanitizedRecord.cislo,
+        });
+      }
 
       setZaznamy(prev => prev.map((p: any) => p.id === sanitizedRecord.id ? sanitizedRecord : p));
       
