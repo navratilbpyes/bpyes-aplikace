@@ -338,7 +338,6 @@ export default function EditInspectionPage() {
       
       await setDoc(recordRef, sanitizedRecord);
 
-      // Aktualizace termínů prohlídek podle upraveného reportu.
       if (!isDraft) {
         await zapisProhlidky({
           klientId: formData.klientId,
