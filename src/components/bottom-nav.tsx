@@ -11,7 +11,6 @@ const items = [
   { title: "Klienti", url: "/klienti", icon: Users },
   { title: "Nová", url: "/nova-kontrola", icon: PlusCircle },
   { title: "Záznamy", url: "/zaznamy", icon: FileText },
-  { title: "Číselníky", url: "/ciselniky", icon: BookMarked },
   { title: "Nastavení", url: "/nastaveni", icon: Settings },
 ];
 
