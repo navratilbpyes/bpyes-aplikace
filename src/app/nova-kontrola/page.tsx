@@ -365,7 +365,7 @@ export default function NewInspectionPage() {
           zaznamCislo: klientskeCislo,
         });
       }
-      
+
       setZaznamy(prev => {
         if (prev.some(p => p.id === sanitizedRecord.id)) return prev;
         return [...prev, sanitizedRecord as any];
