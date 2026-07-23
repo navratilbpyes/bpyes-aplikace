@@ -35,6 +35,7 @@ import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { cn } from "@/app/lib/utils";
+import ProhlidkyKlienta from "@/components/prohlidky-klienta";
 
 export default function ClientDetailPage() {
   const { id } = useParams();
