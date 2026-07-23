@@ -8,7 +8,8 @@ import {
   PlusCircle, 
   Settings,
   ShieldCheck
-} from "lucide-react";
+  BookMarked
+  } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -28,6 +29,7 @@ const items = [
   { title: "Klienti", url: "/klienti", icon: Users },
   { title: "Záznamy", url: "/zaznamy", icon: FileText },
   { title: "Nová kontrola", url: "/nova-kontrola", icon: PlusCircle },
+  { title: "Číselníky", url: "/ciselniky", icon: BookMarked },
   { title: "Nastavení", url: "/nastaveni", icon: Settings },
 ];
 
