@@ -6,7 +6,8 @@ import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 
 import { 
   LayoutDashboard, 
   Building2, 
-  ClipboardList, 
+  ClipboardList,
+  BookMarked,
   PlusCircle, 
   Settings, 
   LogOut, 
@@ -181,7 +182,11 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
                 <Link href="/klienti" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/klienti') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
                   <Building2 className="h-4 w-4" /> Klienti
                 </Link>
-                
+
+                <Link href="/ciselniky" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/ciselniky') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
+                  <BookMarked className="h-4 w-4" /> Číselníky
+                </Link>
+
                 <div className="pt-4 mt-4 border-t border-slate-800/80">
                   <Link href="/nastaveni" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors text-slate-400 hover:text-slate-300", pathname === '/nastaveni' ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50')}>
                     <Settings className="h-4 w-4" /> Nastavení auditora
