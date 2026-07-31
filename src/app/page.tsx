@@ -68,10 +68,7 @@ export default function Dashboard() {
       {!isAdmin && userProfile?.klientId && (
         <KlientPrehled klientId={userProfile.klientId} />
       )}
-
-      {/* Upravený Grid: Zobrazení na 3 sloupce pro admina, na 2 pro klienta */}
-      <div className={`grid gap-4 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
-      
+    
       {/* Upravený Grid: Zobrazení na 3 sloupce pro admina, na 2 pro klienta */}
       <div className={`grid gap-4 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
         
