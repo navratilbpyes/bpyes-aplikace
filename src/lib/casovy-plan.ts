@@ -37,6 +37,8 @@ export interface PolozkaPlanu {
   naliehavost: Naliehavost;
   /** true = má navázaný dokument (proklik), false = jen vypočtený termín */
   maDokument: boolean;
+  /** cílová routa prokliku, nebo undefined když položka nikam nevede */
+  odkaz?: string;
 }
 
 const DEN = 86400000;
@@ -85,7 +87,11 @@ function stitekMesic(mesic: number | undefined, rok: number | undefined, dnes: D
 
 // ── Jednotlivé zdroje → PolozkaPlanu ──
 
-export function revizeNaPolozky(revize: RevizeKlienta[], dnes: Date): PolozkaPlanu[] {
+export function revizeNaPolozky(
+  revize: RevizeKlienta[],
+  dnes: Date,
+  klientId: string,
+): PolozkaPlanu[] {
   return revize
     .filter((r) => r.stav === 'aktivni')
     .map((r) => {
@@ -102,11 +108,16 @@ export function revizeNaPolozky(revize: RevizeKlienta[], dnes: Date): PolozkaPla
         stitek: stitekDatum(datum, dnes),
         naliehavost: naliehavostZDatumu(datum, dnes),
         maDokument: !!r.cisloProtokolu,
+        odkaz: `/klienti/${klientId}?tab=revize`,
       };
     });
 }
 
-export function skoleniNaPolozky(skoleni: SkoleniKlienta[], dnes: Date): PolozkaPlanu[] {
+export function skoleniNaPolozky(
+  skoleni: SkoleniKlienta[],
+  dnes: Date,
+  klientId: string,
+): PolozkaPlanu[] {
   return skoleni
     .filter((s) => s.stav === 'aktivni')
     .map((s) => {
@@ -122,6 +133,7 @@ export function skoleniNaPolozky(skoleni: SkoleniKlienta[], dnes: Date): Polozka
         stitek: stitekDatum(datum, dnes),
         naliehavost: naliehavostZDatumu(datum, dnes),
         maDokument: false,
+        odkaz: `/klienti/${klientId}?tab=skoleni`,
       };
     });
 }
@@ -145,6 +157,7 @@ export function prohlidkyNaPolozky(prohlidky: Prohlidka[], dnes: Date): PolozkaP
         stitek: stitekMesic(p.dalsiMesic, p.dalsiRok, dnes),
         naliehavost: naliehavostZDatumu(datum, dnes),
         maDokument: !!p.zdrojZaznamId,
+        odkaz: p.zdrojZaznamId ? `/zaznamy/${p.zdrojZaznamId}` : undefined,
       };
     });
 }
@@ -169,6 +182,7 @@ export function nalezyNaPolozky(zaznamy: Zaznam[], dnes: Date): PolozkaPlanu[] {
         stitek: stitekDatum(datum, dnes),
         naliehavost: naliehavostZDatumu(datum, dnes),
         maDokument: true,
+        odkaz: `/zaznamy/${z.id}`,
       });
     }
   }
@@ -177,6 +191,7 @@ export function nalezyNaPolozky(zaznamy: Zaznam[], dnes: Date): PolozkaPlanu[] {
 
 /** Sjednotí a seřadí všechny zdroje. */
 export function sestavCasovyPlan(vstup: {
+  klientId: string;
   revize: RevizeKlienta[];
   skoleni: SkoleniKlienta[];
   prohlidky: Prohlidka[];
@@ -185,8 +200,8 @@ export function sestavCasovyPlan(vstup: {
 }): PolozkaPlanu[] {
   const dnes = vstup.dnes ?? new Date();
   const vse = [
-    ...revizeNaPolozky(vstup.revize, dnes),
-    ...skoleniNaPolozky(vstup.skoleni, dnes),
+    ...revizeNaPolozky(vstup.revize, dnes, vstup.klientId),
+    ...skoleniNaPolozky(vstup.skoleni, dnes, vstup.klientId),
     ...prohlidkyNaPolozky(vstup.prohlidky, dnes),
     ...nalezyNaPolozky(vstup.zaznamy, dnes),
   ];
