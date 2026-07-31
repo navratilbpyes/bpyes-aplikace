@@ -8,6 +8,7 @@ import { Users, FileText, AlertTriangle, Plus, CheckCircle2, Eye } from "lucide-
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMemo } from "react";
+import WidgetTerminy from "@/components/dashboard/widget-terminy";
 
 export default function Dashboard() {
   const { zaznamy, klienti, userProfile } = useData();
@@ -53,6 +54,7 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto pb-24">
+      <WidgetTerminy />
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Přehled</h1>
