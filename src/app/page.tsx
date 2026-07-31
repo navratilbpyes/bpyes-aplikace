@@ -192,6 +192,7 @@ export default function Dashboard() {
           </div>
         )}
       </div>
-      <WidgetTerminy />
-    );
+      {isAdmin && <WidgetTerminy />}
+    </div>
+  );
 }
