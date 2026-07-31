@@ -56,9 +56,9 @@ export default function Dashboard() {
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto pb-24">
        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Přehled</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">
-            {isAdmin ? "Vítejte v systému pro správu auditů BPyes." : "Vítejte v klientském portálu. Zde naleznete své reporty."}
+            {isAdmin ? "Vítej v systému pro správu klientů BPyes s.r.o., můj pane." : "Vítejte v klientském portálu. Zde naleznete své reporty."}
           </p>
          </div>
       </div>
