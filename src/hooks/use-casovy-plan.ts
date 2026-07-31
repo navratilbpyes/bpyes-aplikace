@@ -67,7 +67,7 @@ export function useCasovyPlan(klientId: string | undefined): Vysledek {
       const prohlidky = proSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Prohlidka);
       const zaznamy = zazSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Zaznam);
 
-      const plan = sestavCasovyPlan({ revize, skoleni, prohlidky, zaznamy });
+      const plan = sestavCasovyPlan({ klientId, revize, skoleni, prohlidky, zaznamy });
       setPolozky(plan);
       setMetriky(spoctiMetriky(plan));
     } catch (e) {
