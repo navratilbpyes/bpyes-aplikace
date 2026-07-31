@@ -172,7 +172,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
             )}
 
             <Link href="/" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname === '/' ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
-              <LayoutDashboard className="h-4 w-4" /> Přehled
+              <LayoutDashboard className="h-4 w-4" /> Dashboard
             </Link>
 
             {isAdmin && (
