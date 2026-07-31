@@ -60,8 +60,7 @@ export default function Dashboard() {
           <p className="text-muted-foreground">
             {isAdmin ? "Vítejte v systému pro správu auditů BPyes." : "Vítejte v klientském portálu. Zde naleznete své reporty."}
           </p>
-          <WidgetTerminy />
-        </div>
+         </div>
       </div>
 
       {/* Upravený Grid: Zobrazení na 3 sloupce pro admina, na 2 pro klienta */}
@@ -187,6 +186,7 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+      <WidgetTerminy />
     </div>
   );
 }
