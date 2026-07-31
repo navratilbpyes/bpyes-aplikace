@@ -11,11 +11,12 @@
  */
 
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
-  Zap, GraduationCap, ShieldAlert, ClipboardCheck, Loader2,
+  Zap, GraduationCap, ShieldAlert, ClipboardCheck, Loader2, ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
 import { useCasovyPlan } from '@/hooks/use-casovy-plan';
@@ -146,8 +147,9 @@ function Tecka({ b }: { b: string }) {
 
 function Radek({ p }: { p: PolozkaPlanu }) {
   const Ikona = IKONA[p.typ];
-  return (
-    <div className={cn('flex items-start gap-3 border-t border-l-[3px] py-3 pl-3', BARVA[p.naliehavost])}>
+
+  const obsah = (
+    <>
       <Ikona className={cn('mt-0.5 h-4 w-4 shrink-0', BARVA_IKONA[p.naliehavost])} />
 
       <div className="min-w-0 flex-1">
@@ -163,9 +165,29 @@ function Radek({ p }: { p: PolozkaPlanu }) {
         )}
       </div>
 
-      <div className={cn('shrink-0 whitespace-nowrap text-xs font-medium', BARVA_TEXT[p.naliehavost])}>
-        {p.stitek}
+      <div className="flex shrink-0 items-center gap-1.5">
+        <span className={cn('whitespace-nowrap text-xs font-medium', BARVA_TEXT[p.naliehavost])}>
+          {p.stitek}
+        </span>
+        {p.odkaz && (
+          <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+        )}
       </div>
-    </div>
+    </>
   );
+
+  const trida = cn(
+    'flex items-start gap-3 border-t border-l-[3px] py-3 pl-3',
+    BARVA[p.naliehavost],
+  );
+
+  if (p.odkaz) {
+    return (
+      <Link href={p.odkaz} className={cn(trida, 'pr-2 transition-colors hover:bg-muted/50')}>
+        {obsah}
+      </Link>
+    );
+  }
+
+  return <div className={trida}>{obsah}</div>;
 }
