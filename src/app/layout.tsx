@@ -9,6 +9,7 @@ import {
   ClipboardList,
   BookMarked,
   CalendarClock,
+  MessageSquare,
   PlusCircle, 
   Settings, 
   LogOut, 
@@ -195,6 +196,10 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
                 </Link>
                 <Link href="/klienti" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/klienti') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
                   <Building2 className="h-4 w-4" /> Klienti
+                </Link>
+
+                <Link href="/dotazy" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/dotazy') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
+                  <MessageSquare className="h-4 w-4" /> Dotazy
                 </Link>
 
                 <Link href="/ciselniky" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/ciselniky') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
