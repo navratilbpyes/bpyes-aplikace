@@ -8,6 +8,7 @@ import { adresaZAres } from "@/lib/kontroly";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useSearchParams } from "next/navigation";
 import { 
   Building2, 
   MapPin, 
@@ -48,6 +49,8 @@ export default function ClientDetailPage() {
   const { klienti, zaznamy, setKlienti } = useData();
   const { toast } = useToast();
   const [isAresLoading, setIsAresLoading] = useState(false);
+  const searchParams = useSearchParams();
+  const tabZUrl = searchParams.get("tab") ?? "pracoviste";
 
   // Vytvoření klientského přístupu
   const [showPristupModal, setShowPristupModal] = useState(false);
@@ -358,7 +361,7 @@ export default function ClientDetailPage() {
 
         {/* Right Column - Tabs */}
         <div className="lg:col-span-2">
-          <Tabs defaultValue="pracoviste" className="space-y-6">
+          <Tabs defaultValue={tabZUrl} className="space-y-6">
             <TabsList className="w-full justify-start h-auto p-1 bg-secondary flex-wrap">
               <TabsTrigger value="pracoviste" className="px-6 py-2">Pracoviště</TabsTrigger>
               <TabsTrigger value="plan" className="px-6 py-2">Časový plán</TabsTrigger>
