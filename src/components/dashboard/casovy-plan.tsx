@@ -10,13 +10,14 @@
  * Použití: <CasovyPlan klientId={klient.id} />
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
+import QRCode from 'qrcode';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
-  Zap, GraduationCap, ShieldAlert, ClipboardCheck, Loader2, ChevronRight,
+  Zap, GraduationCap, ShieldAlert, ClipboardCheck, Loader2, ChevronRight, Printer,
 } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
 import { useCasovyPlan } from '@/hooks/use-casovy-plan';
@@ -63,6 +64,15 @@ type FiltrTyp = 'vse' | 'po_terminu' | TypPolozky;
 export default function CasovyPlan({ klientId }: Props) {
   const { polozky, nacitam, chyba } = useCasovyPlan(klientId);
   const [filtr, setFiltr] = useState<FiltrTyp>('vse');
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+
+  // QR na aktuální URL dashboardu — vygeneruje se v prohlížeči
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    QRCode.toDataURL(window.location.href, { width: 240, margin: 1 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(''));
+  }, []);
 
   const zobraz = useMemo(() => {
     return polozky.filter((p) => {
@@ -71,6 +81,10 @@ export default function CasovyPlan({ klientId }: Props) {
       return p.typ === filtr;
     });
   }, [polozky, filtr]);
+
+  const dnesText = new Date().toLocaleDateString('cs-CZ', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  });
 
   const FILTRY: { klic: FiltrTyp; popis: string }[] = [
     { klic: 'vse', popis: 'vše' },
@@ -82,13 +96,21 @@ export default function CasovyPlan({ klientId }: Props) {
   ];
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <Card className="plan-card">
+      <CardHeader className="flex flex-row items-center justify-between pb-3 no-print">
         <CardTitle className="text-base">Časový plán</CardTitle>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8"
+          onClick={() => window.print()}
+        >
+          <Printer className="mr-2 h-4 w-4" /> Tisk ToDo
+        </Button>
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5 no-print">
           {FILTRY.map((f) => (
             <Button
               key={f.klic}
@@ -100,6 +122,12 @@ export default function CasovyPlan({ klientId }: Props) {
               {f.popis}
             </Button>
           ))}
+        </div>
+
+        {/* Tisková hlavička — jen při tisku */}
+        <div className="print-only mb-4">
+          <h1 className="text-xl font-bold">Časový plán BOZP / PO</h1>
+          <p className="text-sm">Vytištěno {dnesText}</p>
         </div>
 
         {nacitam ? (
@@ -124,7 +152,7 @@ export default function CasovyPlan({ klientId }: Props) {
 
         {/* Legenda */}
         {!nacitam && !chyba && zobraz.length > 0 && (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-[11px] text-muted-foreground">
+          <div className="no-print flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-[11px] text-muted-foreground">
             <span className="inline-flex items-center gap-1"><Zap className="h-3 w-3" /> revize</span>
             <span className="inline-flex items-center gap-1"><ShieldAlert className="h-3 w-3" /> nález</span>
             <span className="inline-flex items-center gap-1"><GraduationCap className="h-3 w-3" /> školení</span>
@@ -136,6 +164,19 @@ export default function CasovyPlan({ klientId }: Props) {
             </span>
           </div>
         )}
+
+        {/* Tisková patička s QR — jen při tisku */}
+        <div className="print-only mt-6 flex items-center gap-4 border-t pt-4">
+          {qrDataUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={qrDataUrl} alt="QR na živý přehled" className="h-24 w-24" />
+          )}
+          <div className="text-xs">
+            <p className="font-medium">Aktuální stav online</p>
+            <p>Naskenujte QR pro živý přehled termínů.</p>
+            <p className="mt-1 text-muted-foreground">Vytištěno {dnesText} · AuditFlow</p>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -177,7 +218,7 @@ function Radek({ p }: { p: PolozkaPlanu }) {
   );
 
   const trida = cn(
-    'flex items-start gap-3 border-t border-l-[3px] py-3 pl-3',
+    'plan-radek flex items-start gap-3 border-t border-l-[3px] py-3 pl-3',
     BARVA[p.naliehavost],
   );
 
