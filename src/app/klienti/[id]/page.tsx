@@ -39,6 +39,7 @@ import ProhlidkyKlienta from "@/components/prohlidky-klienta";
 import SkoleniKlienta from "@/components/admin/skoleni-klienta";
 import RevizeKlienta from "@/components/admin/revize-klienta";
 import DriveOdkazy from "@/components/admin/drive-odkazy";
+import CasovyPlan from "@/components/dashboard/casovy-plan";
 
 
 export default function ClientDetailPage() {
@@ -360,6 +361,7 @@ export default function ClientDetailPage() {
           <Tabs defaultValue="pracoviste" className="space-y-6">
             <TabsList className="w-full justify-start h-auto p-1 bg-secondary flex-wrap">
               <TabsTrigger value="pracoviste" className="px-6 py-2">Pracoviště</TabsTrigger>
+              <TabsTrigger value="plan" className="px-6 py-2">Časový plán</TabsTrigger>
               <TabsTrigger value="osoby" className="px-6 py-2">Kontaktní osoby</TabsTrigger>
               <TabsTrigger value="pozice" className="px-6 py-2">Odpovědné osoby</TabsTrigger>
               <TabsTrigger value="zaznamy" className="px-6 py-2">Záznamy kontrol</TabsTrigger>
@@ -385,7 +387,7 @@ export default function ClientDetailPage() {
     pracoviste={klient.pracoviste || []}
   />
 </div>
-              
+                            
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Bezpečný přístup přes || [] k poli pracoviště */}
                 {(klient.pracoviste || []).map((p: any) => (
@@ -644,6 +646,10 @@ export default function ClientDetailPage() {
               <RevizeKlienta klientId={klient.id} />
             </TabsContent>
 
+            <TabsContent value="plan" className="space-y-4">
+              <CasovyPlan klientId={klient.id} />
+            </TabsContent>
+            
             <TabsContent value="dokumentace" className="space-y-4">
               <DriveOdkazy klientId={klient.id} />
             </TabsContent>
