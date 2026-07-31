@@ -34,6 +34,7 @@ export const auth = getAuth(app);
 
 interface UserProfile {
   role: 'admin' | 'client';
+  uroven?: 'full' | 'basic';   // basic = jednorázový klient
   klientId?: string;
 }
 
