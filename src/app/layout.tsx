@@ -123,6 +123,19 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
   }
 
   const isAdmin = userProfile.role === 'admin';
+  const isBasic = userProfile.role === 'client' && userProfile.uroven === 'basic';
+
+  // Jednorázový klient smí jen /audit
+  if (isBasic && pathname !== '/audit') {
+    router.replace('/audit');
+    return null;
+  }
+
+  // Plný klient a admin na /audit nepatří
+  if (!isBasic && pathname === '/audit') {
+    router.replace('/');
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row print:bg-white print:block">
