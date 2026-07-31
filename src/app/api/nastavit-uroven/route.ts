@@ -91,12 +91,29 @@ export async function POST(request: Request) {
     }
 
     // Nastav uroven každému účtu (PATCH s updateMask jen na pole uroven).
+    // `name` z runQuery je resource cesta (projects/.../documents/uzivatele/{uid}),
+    // fetch potřebuje plnou https URL: https://firestore.googleapis.com/v1/{name}
+    const chyby: string[] = [];
     for (const name of jmena) {
-      await fetch(`${name}?updateMask.fieldPaths=uroven`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({ fields: { uroven: { stringValue: uroven } } }),
-      });
+      const patchRes = await fetch(
+        `https://firestore.googleapis.com/v1/${name}?updateMask.fieldPaths=uroven`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+          body: JSON.stringify({ fields: { uroven: { stringValue: uroven } } }),
+        },
+      );
+      if (!patchRes.ok) {
+        chyby.push(await patchRes.text());
+      }
+    }
+
+    if (chyby.length > 0) {
+      console.error('PATCH uroven selhal:', chyby);
+      return NextResponse.json(
+        { success: false, error: 'Zápis úrovně selhal.' },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({ success: true, pocet: jmena.length, uroven });
