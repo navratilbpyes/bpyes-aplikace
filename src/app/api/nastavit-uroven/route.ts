@@ -9,8 +9,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
-const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!;
-const API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!;
+const PROJECT_ID = 'studio-2327834732-8ec09';
+const API_KEY = 'AIzaSyAJ2o8AlTOXKbIAtDYSNnDUvTLChAiGeoQ';
 const FIRESTORE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 
 const schema = z.object({
