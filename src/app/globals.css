@@ -126,3 +126,35 @@
     print-color-adjust: exact !important;
   }
 }
+
+  /* ── Tisk časového plánu (ToDo na nástěnku) ──
+   Přidej na KONEC src/app/globals.css */
+
+.print-only { display: none; }
+
+@media print {
+  /* schovej vše, ukaž jen kartu plánu */
+  body * { visibility: hidden; }
+  .plan-card, .plan-card * { visibility: visible; }
+  .plan-card {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .no-print { display: none !important; }
+  .print-only { display: block; }
+  .print-only.flex { display: flex; }
+
+  /* položka se nezalomí přes stránku */
+  .plan-radek { break-inside: avoid; }
+
+  /* barvy naléhavosti se vytisknou (jinak prohlížeč barvy pozadí ořeže) */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
