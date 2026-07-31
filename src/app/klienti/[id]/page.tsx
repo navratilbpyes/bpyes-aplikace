@@ -9,6 +9,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useSearchParams } from "next/navigation";
+import UrovenPristupu from "@/components/admin/uroven-pristupu";
 import { 
   Building2, 
   MapPin, 
@@ -372,6 +373,7 @@ export default function ClientDetailPage() {
               <TabsTrigger value="skoleni" className="px-6 py-2">Školení</TabsTrigger>
               <TabsTrigger value="revize" className="px-6 py-2">Revize</TabsTrigger>
               <TabsTrigger value="dokumentace" className="px-6 py-2">Dokumentace</TabsTrigger>
+              <TabsTrigger value="pristup" className="px-6 py-2">Přístup</TabsTrigger>
             </TabsList>
 
             <TabsContent value="pracoviste" className="space-y-4">
@@ -655,6 +657,10 @@ export default function ClientDetailPage() {
             
             <TabsContent value="dokumentace" className="space-y-4">
               <DriveOdkazy klientId={klient.id} />
+            </TabsContent>
+
+            <TabsContent value="pristup" className="space-y-4">
+              <UrovenPristupu klientId={klient.id} />
             </TabsContent>
           </Tabs>
         </div>
