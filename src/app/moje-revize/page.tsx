@@ -39,6 +39,7 @@ import {
 } from '@/lib/revize';
 import type { RevizeKlienta } from '@/lib/revize';
 import type { SkoleniKlienta } from '@/lib/skoleni';
+import VlaknoKomentaru from '@/components/komentare/vlakno';
 
 type Druh = 'revize' | 'skoleni';
 
@@ -407,6 +408,16 @@ export default function MojeRevizePage() {
                       </div>
                     </div>
                   )}
+                  {/* Vlákno komentářů k této revizi/školení */}
+                  <div className="mt-4 pt-4 border-t">
+                    <VlaknoKomentaru
+                      klientId={klientId}
+                      cil={druh}
+                      cilId={z.id}
+                      cilPopis={z.nazev}
+                      kompaktni
+                    />
+                  </div>
                 </CardContent>
               </Card>
             );
