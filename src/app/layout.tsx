@@ -7,6 +7,7 @@ import {
   LayoutDashboard, 
   Building2, 
   ClipboardList,
+  Wrench,
   BookMarked,
   CalendarClock,
   MessageSquare,
@@ -219,6 +220,13 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
             <Link href="/" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname === '/' ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
               <LayoutDashboard className="h-4 w-4" /> Dashboard
             </Link>
+
+            {/* Plný klient: vlastní správa revizí a školení */}
+            {!isAdmin && !isBasic && (
+              <Link href="/moje-revize" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/moje-revize') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
+                <Wrench className="h-4 w-4" /> Moje revize a školení
+              </Link>
+            )}
 
             {isAdmin && (
               <>
