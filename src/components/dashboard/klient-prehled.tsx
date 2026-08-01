@@ -9,7 +9,6 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/app/lib/utils';
@@ -19,7 +18,7 @@ import { useCasovyPlan } from '@/hooks/use-casovy-plan';
 import CasovyPlan from '@/components/dashboard/casovy-plan';
 import Dokumentace from '@/components/dashboard/dokumentace';
 import {
-  MessageSquare, Clock, ExternalLink, Mail, Phone, User, ArrowRight, MessageCircle,
+  ExternalLink, Mail, Phone, User, MessageCircle,
 } from 'lucide-react';
 import type { Dotaz } from '@/lib/dotazy';
 
@@ -34,7 +33,7 @@ const OZO = {
   telefon: '+420 772 722 763',
   email: 'navratil@bpyes.cz',
   whatsapp: '420772722763',
-  iniciály: 'MN',  
+  iniciály: 'MN',
 };
 
 const HLASKY = {
@@ -84,11 +83,6 @@ export default function KlientPrehled({ klientId }: Props) {
     [dotazy],
   );
 
-  const posledniDotazy = useMemo(
-    () => [...dotazy].sort((a, b) => (b.vytvorenoIso || '').localeCompare(a.vytvorenoIso || '')).slice(0, 3),
-    [dotazy],
-  );
-
   const ton: Ton = useMemo(() => {
     if (metriky.poTerminu > 0) return 'critical';
     if (metriky.do30dni > 0 || metriky.otevreneNalezy > 0) return 'soon';
@@ -129,50 +123,10 @@ export default function KlientPrehled({ klientId }: Props) {
       {/* Časový plán */}
       <CasovyPlan klientId={klientId} />
 
-      {/* Dvousloupcová spodní část */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Dotazy */}
-        <Card>
-          <CardContent className="py-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" /> Dotazy
-              </h3>
-              {nevyrizeneDotazy.length > 0 && (
-                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
-                  {nevyrizeneDotazy.length} nevyřízený
-                </span>
-              )}
-            </div>
-            {posledniDotazy.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic">Zatím žádné dotazy.</p>
-            ) : (
-              <div className="space-y-2">
-                {posledniDotazy.map((d) => (
-                  <div key={d.id} className="text-sm border-l-2 pl-3 py-0.5"
-                    style={{ borderColor: d.stav === 'nevyrizeno' ? '#f59e0b' : '#10b981' }}>
-                    <p className="line-clamp-1">{d.text}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {d.autorJmeno || 'Vy'} · {d.vytvorenoIso ? new Date(d.vytvorenoIso).toLocaleDateString('cs-CZ') : ''}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-            <Link href="/audit">
-              <Button variant="outline" size="sm" className="w-full mt-1">
-                Nový dotaz <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
+      {/* Tři dlaždice vedle sebe: Dokumentace + Freelo + Kontakt OZO */}
+      <div className="grid gap-4 lg:grid-cols-3">
         {/* Dokumentace */}
         <Dokumentace klientId={klientId} />
-      </div>
-
-      {/* Freelo + kontakt OZO */}
-      <div className="grid gap-4 lg:grid-cols-2">
         {/* Freelo dlaždice */}
         {freeloUrl ? (
           <a href={freeloUrl} target="_blank" rel="noopener noreferrer" className="block">
@@ -208,16 +162,11 @@ export default function KlientPrehled({ klientId }: Props) {
                 <div className="text-xs text-muted-foreground flex items-center gap-1 truncate"><Mail className="h-3 w-3" /> {OZO.email}</div>
               </div>
             </div>
-            <div className="flex flex-col gap-2 shrink-0">
-              <Link href="/audit">
-                <Button size="sm" className="w-full"><MessageSquare className="mr-2 h-4 w-4" /> Napsat dotaz</Button>
-              </Link>
-              <a href={`https://wa.me/${OZO.whatsapp}`} target="_blank" rel="noopener noreferrer">
-                <Button size="sm" variant="outline" className="w-full border-green-600 text-green-700 hover:bg-green-50">
-                  <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp
-                </Button>
-              </a>
-            </div>
+            <a href={`https://wa.me/${OZO.whatsapp}`} target="_blank" rel="noopener noreferrer" className="shrink-0">
+              <Button size="sm" variant="outline" className="border-green-600 text-green-700 hover:bg-green-50">
+                <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp
+              </Button>
+            </a>
           </CardContent>
         </Card>
       </div>
