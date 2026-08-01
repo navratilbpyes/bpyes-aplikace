@@ -19,7 +19,7 @@ import { useCasovyPlan } from '@/hooks/use-casovy-plan';
 import CasovyPlan from '@/components/dashboard/casovy-plan';
 import Dokumentace from '@/components/dashboard/dokumentace';
 import {
-  MessageSquare, Clock, ExternalLink, Mail, Phone, User, ArrowRight,
+  MessageSquare, Clock, ExternalLink, Mail, Phone, User, ArrowRight, MessageCircle,
 } from 'lucide-react';
 import type { Dotaz } from '@/lib/dotazy';
 
@@ -28,11 +28,12 @@ interface Props {
 }
 
 // Kontakt na OZO — vždy Martin. Uprav zde, pokud se změní.
+// whatsapp: číslo v mezinárodním formátu bez + a mezer, např. '420777123456'
 const OZO = {
   jmeno: 'Martin Navrátil',
-  telefon: '+420 …',
-  email: 'martin@bpyes.cz',
-  iniciály: 'MN',
+  telefon: '+420 772 722 763',
+  email: 'navratil@bpyes.cz',
+  whatsapp: '420772722763',
 };
 
 const HLASKY = {
@@ -44,10 +45,12 @@ const HLASKY = {
   soon: [
     'Pár věcí klepe na dveře. Zatím zdvořile.',
     'Do měsíce něco čeká. Klidně to stihnete, když to nenecháte na poslední den.',
+    'Zatím ok, ale některým úkolům je už potřeba se věnovat.',
   ],
   critical: [
     'Něco je po termínu. Doporučuji začít shora v časovém plánu.',
-    'Máte otevřené resty po lhůtě. Bez servítků: začněte tím červeným nahoře.',
+    'Máte otevřené resty po lhůtě. Beze srandy: začněte tím červeným nahoře.',
+    'Ajéje, tady už to začíná hořet.',
   ],
 } as const;
 
@@ -204,9 +207,16 @@ export default function KlientPrehled({ klientId }: Props) {
                 <div className="text-xs text-muted-foreground flex items-center gap-1 truncate"><Mail className="h-3 w-3" /> {OZO.email}</div>
               </div>
             </div>
-            <Link href="/audit" className="shrink-0">
-              <Button size="sm"><MessageSquare className="mr-2 h-4 w-4" /> Napsat dotaz</Button>
-            </Link>
+            <div className="flex flex-col gap-2 shrink-0">
+              <Link href="/audit">
+                <Button size="sm" className="w-full"><MessageSquare className="mr-2 h-4 w-4" /> Napsat dotaz</Button>
+              </Link>
+              <a href={`https://wa.me/${OZO.whatsapp}`} target="_blank" rel="noopener noreferrer">
+                <Button size="sm" variant="outline" className="w-full border-green-600 text-green-700 hover:bg-green-50">
+                  <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp
+                </Button>
+              </a>
+            </div>
           </CardContent>
         </Card>
       </div>
