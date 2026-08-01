@@ -6,7 +6,10 @@ import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 
 import { 
   LayoutDashboard, 
   Building2, 
-  ClipboardList, 
+  ClipboardList,
+  BookMarked,
+  CalendarClock,
+  MessageSquare,
   PlusCircle, 
   Settings, 
   LogOut, 
@@ -83,6 +86,37 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
+  // Guard deaktivace: klient, kterému admin pozastavil přístup (deaktivovan=true),
+  // se dovnitř nedostane. Firebase Auth účet zůstává (disable vyžaduje service
+  // account), ale aplikace ho po přihlášení odhlásí. Admina se netýká.
+  if (user && userProfile?.role === 'client' && userProfile.deaktivovan) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-white/95 backdrop-blur shadow-2xl border-none">
+          <CardHeader className="space-y-2 text-center">
+            <div className="mx-auto h-12 w-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600 mb-2">
+              <Lock className="h-6 w-6" />
+            </div>
+            <CardTitle className="text-2xl font-black tracking-tight">Přístup pozastaven</CardTitle>
+            <CardDescription>
+              Váš přístup do portálu je dočasně pozastaven. Pro obnovení kontaktujte
+              svého BOZP/PO technika.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              variant="outline"
+              className="w-full h-11 font-bold"
+              onClick={logout}
+            >
+              <LogOut className="mr-2 h-4 w-4" /> Odhlásit se
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!user || !userProfile) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
@@ -121,6 +155,19 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
   }
 
   const isAdmin = userProfile.role === 'admin';
+  const isBasic = userProfile.role === 'client' && userProfile.uroven === 'basic';
+
+  // Jednorázový klient smí jen /audit
+  if (isBasic && pathname !== '/audit') {
+    router.replace('/audit');
+    return null;
+  }
+
+  // Plný klient a admin na /audit nepatří
+  if (!isBasic && pathname === '/audit') {
+    router.replace('/');
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row print:bg-white print:block">
@@ -170,7 +217,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
             )}
 
             <Link href="/" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname === '/' ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
-              <LayoutDashboard className="h-4 w-4" /> Přehled
+              <LayoutDashboard className="h-4 w-4" /> Dashboard
             </Link>
 
             {isAdmin && (
@@ -180,6 +227,18 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
                 </Link>
                 <Link href="/klienti" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/klienti') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
                   <Building2 className="h-4 w-4" /> Klienti
+                </Link>
+
+                <Link href="/dotazy" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/dotazy') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
+                  <MessageSquare className="h-4 w-4" /> Dotazy
+                </Link>
+
+                <Link href="/ciselniky" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/ciselniky') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
+                  <BookMarked className="h-4 w-4" /> Číselníky
+                </Link>
+
+                <Link href="/plan" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/plan') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
+                  <CalendarClock className="h-4 w-4" /> Časový plán
                 </Link>
                 
                 <div className="pt-4 mt-4 border-t border-slate-800/80">

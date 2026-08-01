@@ -8,6 +8,8 @@ import { Users, FileText, AlertTriangle, Plus, CheckCircle2, Eye } from "lucide-
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMemo } from "react";
+import WidgetTerminy from "@/components/dashboard/widget-terminy";
+import KlientPrehled from "@/components/dashboard/klient-prehled";
 
 export default function Dashboard() {
   const { zaznamy, klienti, userProfile } = useData();
@@ -53,15 +55,20 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto pb-24">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Přehled</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">
-            {isAdmin ? "Vítejte v systému pro správu auditů BPyes." : "Vítejte v klientském portálu. Zde naleznete své reporty."}
+            {isAdmin ? "Vítej v systému pro správu klientů BPyes s.r.o., můj pane." : "Vítejte v klientském portálu. Zde naleznete své reporty."}
           </p>
-        </div>
+         </div>
       </div>
 
+      {/* Klientský dashboard — jen pro plného klienta */}
+      {!isAdmin && userProfile?.klientId && (
+        <KlientPrehled klientId={userProfile.klientId} />
+      )}
+    
       {/* Upravený Grid: Zobrazení na 3 sloupce pro admina, na 2 pro klienta */}
       <div className={`grid gap-4 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
         
@@ -185,6 +192,7 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+      {isAdmin && <WidgetTerminy />}
     </div>
   );
 }

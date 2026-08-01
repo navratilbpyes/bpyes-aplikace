@@ -28,6 +28,7 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Zavada } from "@/app/lib/types";
 import { doc, collection, setDoc } from "firebase/firestore";
+import { zapisProhlidky } from "@/lib/zapis-prohlidek";
 
 
 
@@ -350,6 +351,20 @@ export default function NewInspectionPage() {
       }
 
       await setDoc(newRecordRef, sanitizedRecord);
+
+      // Prověrka BOZP / PPP se eviduje po pracovištích.
+      // Rozpracovaný report termín nezakládá.
+      if (!isDraft) {
+        await zapisProhlidky({
+          klientId: formData.klientId,
+          typKontroly: formData.typKontroly,
+          datum: formData.datum,
+          pracovisteIds: formData.pracovisteIds,
+          pracoviste: selectedKlient?.pracoviste || [],
+          zaznamId: sanitizedRecord.id,
+          zaznamCislo: klientskeCislo,
+        });
+      }
 
       setZaznamy(prev => {
         if (prev.some(p => p.id === sanitizedRecord.id)) return prev;

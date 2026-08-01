@@ -7,8 +7,9 @@ import {
   FileText, 
   PlusCircle, 
   Settings,
-  ShieldCheck
-} from "lucide-react";
+  ShieldCheck,
+  BookMarked
+  } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
