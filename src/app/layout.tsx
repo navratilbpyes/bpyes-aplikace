@@ -241,6 +241,10 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
                   <MessageSquare className="h-4 w-4" /> Dotazy
                 </Link>
 
+                <Link href="/komentare" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/komentare') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
+                  <MessageSquare className="h-4 w-4" /> Komentáře
+                </Link>
+
                 <Link href="/ciselniky" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/ciselniky') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
                   <BookMarked className="h-4 w-4" /> Číselníky
                 </Link>
