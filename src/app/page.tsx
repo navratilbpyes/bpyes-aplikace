@@ -69,8 +69,9 @@ export default function Dashboard() {
         <KlientPrehled klientId={userProfile.klientId} />
       )}
     
-      {/* Upravený Grid: Zobrazení na 3 sloupce pro admina, na 2 pro klienta */}
-      <div className={`grid gap-4 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
+      {/* Metriky — jen admin. Klient má reporty ve vlastní stránce /reporty. */}
+      {isAdmin && (
+      <div className={`grid gap-4 md:grid-cols-2 lg:grid-cols-3`}>
         
         {isAdmin && (
           <Card className="border-none shadow-sm">
@@ -85,7 +86,7 @@ export default function Dashboard() {
         <Link href="/zaznamy?filter=all" className="block focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-xl transition-transform hover:scale-[1.02]">
           <Card className="border-none shadow-sm h-full hover:bg-blue-50/30 transition-colors">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{isAdmin ? "Celkem reportů" : "Celkem mých reportů"}</CardTitle>
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Celkem reportů</CardTitle>
               <FileText className="h-4 w-4 text-amber-600" />
             </CardHeader>
             <CardContent><div className="text-3xl font-black text-slate-900">{zaznamy.length}</div></CardContent>
@@ -102,7 +103,10 @@ export default function Dashboard() {
           </Card>
         </Link>
       </div>
+      )}
 
+      {/* Poslední záznamy + Čeká na revizi — jen admin. Klient má /reporty. */}
+      {isAdmin && (
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 pt-4">
         <div className="xl:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
@@ -192,6 +196,7 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+      )}
       {isAdmin && <WidgetTerminy />}
     </div>
   );
