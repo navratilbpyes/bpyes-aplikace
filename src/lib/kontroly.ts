@@ -29,7 +29,7 @@ export const createEmptyDefect = (): DefectFormState => ({
   popis: "",
   navrhOpatreni: "",
   terminOdstraneni: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-  odpovednaOsoba: "",
+  odpovednaOsoba: "Zaměstnavatel / provozovatel",
   odpovednaOsobaManualni: "",
   lokalizace: "",
   zavaznost: "none",
