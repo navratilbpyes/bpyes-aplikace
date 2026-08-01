@@ -37,6 +37,10 @@ export interface SkoleniKlienta {
   /** true = uživatel zadal dalsiIso ručně, nepřepočítávat */
   dalsiRucne: boolean;
   stav: StavZaznamu;
+  /** kdo záznam založil: 'ozo' (admin/technik) nebo 'klient'. Chybí u starých = 'ozo'. */
+  zadal?: 'ozo' | 'klient';
+  /** potvrzeno OZO. Chybí u starých adminových = bereme jako potvrzené. */
+  potvrzenoOzo?: boolean;
 }
 
 /** Přičte měsíce k datu (ISO in, ISO out). */
