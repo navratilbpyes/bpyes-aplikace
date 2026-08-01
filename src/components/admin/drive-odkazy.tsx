@@ -27,6 +27,7 @@ interface Props {
 
 export default function DriveOdkazy({ klientId }: Props) {
   const [slozkaUrl, setSlozkaUrl] = useState('');
+  const [freeloUrl, setFreeloUrl] = useState('');
   const [rychle, setRychle] = useState<RychlyOdkaz[]>([]);
   const [nacitam, setNacitam] = useState(true);
   const [uklada, setUklada] = useState(false);
@@ -38,6 +39,7 @@ export default function DriveOdkazy({ klientId }: Props) {
         const snap = await getDoc(doc(db, 'klienti', klientId));
         const d = snap.data() ?? {};
         setSlozkaUrl(d.driveSlozkaUrl ?? '');
+        setFreeloUrl(d.freeloUrl ?? '');
         setRychle(Array.isArray(d.rychleOdkazy) ? d.rychleOdkazy : []);
       } catch {
         setZprava('Načtení odkazů selhalo.');
@@ -60,11 +62,17 @@ export default function DriveOdkazy({ klientId }: Props) {
       return;
     }
 
+    if (freeloUrl !== '' && !/^https:\/\/(app\.)?freelo\.(cz|io)\//.test(freeloUrl)) {
+      setZprava('Odkaz na Freelo musí začínat https://freelo.cz/ nebo https://app.freelo.cz/');
+      return;
+    }
+
     setUklada(true);
     setZprava(null);
     try {
       await updateDoc(doc(db, 'klienti', klientId), {
         driveSlozkaUrl: slozkaUrl.trim(),
+        freeloUrl: freeloUrl.trim(),
         rychleOdkazy: rychle
           .filter((r) => r.nazev.trim() !== '' && r.url.trim() !== '')
           .map((r) => ({ nazev: r.nazev.trim(), url: r.url.trim() })),
@@ -102,6 +110,20 @@ export default function DriveOdkazy({ klientId }: Props) {
       <p style={S.napoveda}>
         Na Disku otevři složku klienta → Sdílet → Kdokoli s odkazem (Čtenář) → Kopírovat odkaz.
         Bez nastaveného sdílení klient složku neotevře.
+      </p>
+
+      <label style={{ ...S.label, marginTop: 20, display: 'block' }}>
+        Odkaz na Freelo projekt
+        <input
+          type="url"
+          value={freeloUrl}
+          onChange={(e) => setFreeloUrl(e.target.value)}
+          placeholder="https://app.freelo.cz/project/…"
+          style={S.input}
+        />
+      </label>
+      <p style={S.napoveda}>
+        Zobrazí se klientovi na dashboardu jako dlaždice „Úkoly ve Freelu".
       </p>
 
       <div style={{ marginTop: 20 }}>
