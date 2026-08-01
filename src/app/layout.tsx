@@ -8,6 +8,7 @@ import {
   Building2, 
   ClipboardList,
   Wrench,
+  FileText,
   BookMarked,
   CalendarClock,
   MessageSquare,
@@ -179,6 +180,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
     const povoleno =
       pathname === '/' ||
       pathname.startsWith('/moje-revize') ||
+      pathname.startsWith('/reporty') ||
       // detail konkrétního reportu (ne seznam /zaznamy), např. /zaznamy/abc123
       /^\/zaznamy\/[^/]+$/.test(pathname);
     if (!povoleno) {
@@ -239,6 +241,11 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
             </Link>
 
             {/* Plný klient: vlastní správa revizí a školení */}
+            {!isAdmin && !isBasic && (
+              <Link href="/reporty" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/reporty') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
+                <FileText className="h-4 w-4" /> Reporty
+              </Link>
+            )}
             {!isAdmin && !isBasic && (
               <Link href="/moje-revize" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/moje-revize') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
                 <Wrench className="h-4 w-4" /> Moje revize a školení
