@@ -9,6 +9,10 @@ export interface Klient {
   /** Poštovní směrovací číslo. Doplňováno z ARES. */
   psc?: string;
   mesto: string;
+  /** Odkaz na sdílenou Google Drive složku klienta (dokumentace). */
+  driveSlozkaUrl?: string;
+  /** Odkaz na Freelo projekt klienta (úkoly). */
+  freeloUrl?: string;
   pracoviste: Pracoviste[];
   /** Pozice odpovědných osob (v UI „pozice“). */
   pozice?: Pozice[];
