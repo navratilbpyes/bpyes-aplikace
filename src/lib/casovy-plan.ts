@@ -28,6 +28,8 @@ export interface PolozkaPlanu {
   nazev: string;
   /** doplňující řádek: firma, kdo provádí, pracoviště… */
   meta?: string;
+  /** odpovědná osoba/firma pro filtr (firmaNazev / provadi / odpovědná osoba nálezu) */
+  odpovednaOsoba?: string;
   /** číslo protokolu / reference kontroly */
   zdroj?: string;
   /** datum termínu pro řazení */
@@ -103,6 +105,7 @@ export function revizeNaPolozky(
         typ: 'revize' as const,
         nazev: r.nazev,
         meta,
+        odpovednaOsoba: r.firmaNazev || undefined,
         zdroj: r.cisloProtokolu ? `protokol ${r.cisloProtokolu}` : undefined,
         terminDatum: datum,
         stitek: stitekDatum(datum, dnes),
@@ -129,6 +132,7 @@ export function skoleniNaPolozky(
         typ: 'skoleni' as const,
         nazev: s.nazev,
         meta,
+        odpovednaOsoba: s.provadi || undefined,
         terminDatum: datum,
         stitek: stitekDatum(datum, dnes),
         naliehavost: naliehavostZDatumu(datum, dnes),
@@ -175,6 +179,7 @@ export function nalezyNaPolozky(zaznamy: Zaznam[], dnes: Date): PolozkaPlanu[] {
         typ: 'nalez',
         nazev: zavada.popis,
         meta: zavada.lokalizace || undefined,
+        odpovednaOsoba: (zavada as any).odpovednaOsoba || undefined,
         zdroj: z.cisloKlientske || z.cislo
           ? `kontrola ${z.cisloKlientske ?? z.cislo}`
           : undefined,
