@@ -92,6 +92,7 @@ export async function GET(req: Request) {
         return {
           email: (f.email?.stringValue || '').toLowerCase(),
           hesloNastaveno: f.hesloNastaveno?.booleanValue === true,
+          deaktivovan: f.deaktivovan?.booleanValue === true,
         };
       })
       .filter((p) => p.email);
