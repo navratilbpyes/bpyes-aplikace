@@ -24,7 +24,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  Plus, X, Loader2, ChevronDown, ChevronRight, RotateCcw, Phone, Mail, FileText,
+  Plus, X, Loader2, ChevronDown, ChevronRight, RotateCcw, Phone, Mail, FileText, Check,
 } from 'lucide-react';
 import { PERIODY, popisPeriody, dopocitejDalsi, platnyTermin } from '@/lib/revize';
 import type { CiselnikRevize, RevizeKlienta as TypRevize } from '@/lib/revize';
@@ -211,7 +211,27 @@ export default function RevizeKlienta({ klientId }: Props) {
                         {!r.ciselnikId && (
                           <Badge variant="secondary" className="text-[10px]">vlastní</Badge>
                         )}
+                        {r.zadal === 'klient' && r.potvrzenoOzo === false && (
+                          <Badge className="text-[10px] bg-amber-100 text-amber-800 hover:bg-amber-100">
+                            čeká na potvrzení
+                          </Badge>
+                        )}
+                        {r.zadal === 'klient' && r.potvrzenoOzo === true && (
+                          <Badge className="text-[10px] bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                            potvrzeno
+                          </Badge>
+                        )}
                       </div>
+
+                      {r.zadal === 'klient' && r.potvrzenoOzo === false && (
+                        <Button
+                          size="sm"
+                          className="mt-2 h-7 bg-emerald-600 hover:bg-emerald-700"
+                          onClick={() => uprav(r.id, { potvrzenoOzo: true } as any)}
+                        >
+                          <Check className="h-3.5 w-3.5 mr-1" /> Potvrdit revizi
+                        </Button>
+                      )}
 
                       <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
                         <span>{popisPeriody(r.periodaMesice)}</span>
