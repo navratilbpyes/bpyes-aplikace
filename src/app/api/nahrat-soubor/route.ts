@@ -21,13 +21,19 @@ const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!;
 const SECRET = process.env.APP_UPLOAD_SECRET!;
 const ENDPOINT = process.env.UPLOAD_ENDPOINT!;
 
+// Firebase Web API key je veřejný (jezdí v prohlížeči), ochranu řeší Firestore
+// Rules. Env je primární zdroj, konstanta je fallback — bez ní `overToken`
+// volá Identity Toolkit s key=undefined a každý upload spadne na 401.
+const FIREBASE_API_KEY =
+  process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyAJ2o8AlTOXKbIAtDYSNnDUvTLChAiGeoQ';
+
 const MAX_VELIKOST = 20 * 1024 * 1024;
 const POVOLENE_MIME = ['application/pdf', 'image/jpeg', 'image/png'];
 
 /** Ověří Firebase idToken přes REST API (bez service account). */
 async function overToken(idToken: string): Promise<{ uid: string } | null> {
   const res = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}`,
+    `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
