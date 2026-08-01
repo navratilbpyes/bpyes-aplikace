@@ -11,7 +11,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { db, useData } from '@/components/data-provider';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Loader2, MessageSquare, Clock, CheckCircle2, Wrench, GraduationCap, ShieldAlert } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
@@ -52,8 +52,10 @@ export default function KomentarePage() {
   const nacti = useCallback(async () => {
     setNacitam(true);
     try {
-      const snap = await getDocs(query(collection(db, 'komentare'), orderBy('kdyIso', 'asc')));
-      setKomentare(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Komentar));
+      const snap = await getDocs(collection(db, 'komentare'));
+      const nactene = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Komentar);
+      nactene.sort((a, b) => a.kdyIso.localeCompare(b.kdyIso));
+      setKomentare(nactene);
     } catch (e) {
       console.error('Načtení komentářů selhalo:', e);
     } finally {
