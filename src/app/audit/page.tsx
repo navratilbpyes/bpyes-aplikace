@@ -26,6 +26,8 @@ import {
 import { cn } from '@/app/lib/utils';
 import type { Zaznam, Zavada } from '@/app/lib/types';
 import type { Dotaz } from '@/lib/dotazy';
+import VlaknoKomentaru from '@/components/komentare/vlakno';
+import { cilIdNalezu } from '@/lib/komentare';
 
 interface NalezRadek {
   zaznamId: string;
@@ -149,6 +151,7 @@ export default function AuditPage() {
             <NalezKarta
               key={`${n.zaznamId}_${n.zavada.id}`}
               nalez={n}
+              klientId={klientId}
               dotazy={dotazyKZavade(n.zavada.id)}
               onDotaz={(text) => polozDotaz(n, text)}
             />
@@ -160,9 +163,10 @@ export default function AuditPage() {
 }
 
 function NalezKarta({
-  nalez, dotazy, onDotaz,
+  nalez, klientId, dotazy, onDotaz,
 }: {
   nalez: NalezRadek;
+  klientId: string;
   dotazy: Dotaz[];
   onDotaz: (text: string) => void;
 }) {
@@ -264,6 +268,17 @@ function NalezKarta({
             <MessageSquarePlus className="mr-2 h-4 w-4" /> Zeptat se OZO
           </Button>
         )}
+
+        {/* Vlákno komentářů k nálezu */}
+        <div className="pt-3 border-t">
+          <VlaknoKomentaru
+            klientId={klientId}
+            cil="nalez"
+            cilId={cilIdNalezu(nalez.zaznamId, z.id)}
+            cilPopis={z.popis}
+            kompaktni
+          />
+        </div>
       </CardContent>
     </Card>
   );
