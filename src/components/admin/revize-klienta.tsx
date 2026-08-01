@@ -86,6 +86,8 @@ export default function RevizeKlienta({ klientId }: Props) {
       dalsiIso: null,
       dalsiRucne: false,
       stav: 'aktivni',
+      zadal: 'ozo',
+      potvrzenoOzo: true,
     });
     setVybrane('');
     nacti();
@@ -105,6 +107,8 @@ export default function RevizeKlienta({ klientId }: Props) {
       dalsiIso: null,
       dalsiRucne: false,
       stav: 'aktivni',
+      zadal: 'ozo',
+      potvrzenoOzo: true,
     });
     await nacti();
     setRozbaleno(ref.id);
