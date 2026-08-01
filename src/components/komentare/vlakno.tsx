@@ -19,7 +19,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { db, useData } from '@/components/data-provider';
 import {
-  collection, addDoc, getDocs, query, where, orderBy,
+  collection, addDoc, getDocs, query, where,
 } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -50,15 +50,17 @@ export default function VlaknoKomentaru({ klientId, cil, cilId, cilPopis, kompak
   const nacti = useCallback(async () => {
     setNacitam(true);
     try {
-      // dotaz na komentare daneho cile; orderBy vyzaduje kompozitni index
-      // (cilId ASC + kdyIso ASC) — Firebase pri prvnim behu nabidne odkaz na vytvoreni
+      // Filtrujeme jen podle cilId (bez orderBy — to by vyžadovalo
+      // kompozitní index). Řazení podle času děláme v paměti; vláken je
+      // vždy málo, takže výkonově bez rozdílu.
       const q = query(
         collection(db, 'komentare'),
         where('cilId', '==', cilId),
-        orderBy('kdyIso', 'asc'),
       );
       const snap = await getDocs(q);
-      setVlakno(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Komentar));
+      const nactene = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Komentar);
+      nactene.sort((a, b) => a.kdyIso.localeCompare(b.kdyIso));
+      setVlakno(nactene);
     } catch (e) {
       console.error('Načtení komentářů selhalo:', e);
     } finally {
