@@ -50,15 +50,18 @@ export default function VlaknoKomentaru({ klientId, cil, cilId, cilPopis, kompak
   const nacti = useCallback(async () => {
     setNacitam(true);
     try {
-      // Filtrujeme jen podle cilId (bez orderBy — to by vyžadovalo
-      // kompozitní index). Řazení podle času děláme v paměti; vláken je
-      // vždy málo, takže výkonově bez rozdílu.
+      // Čteme podle klientId — přesně to, co kontrolují Firestore Rules
+      // (allow read: resource.data.klientId == mujKlientId). Díky tomu
+      // collection query projde i klientovi. cilId dofiltrujeme v paměti.
+      // klientId je single-field, index Firestore vytvoří automaticky.
       const q = query(
         collection(db, 'komentare'),
-        where('cilId', '==', cilId),
+        where('klientId', '==', klientId),
       );
       const snap = await getDocs(q);
-      const nactene = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Komentar);
+      const nactene = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }) as Komentar)
+        .filter((k) => k.cilId === cilId);
       nactene.sort((a, b) => a.kdyIso.localeCompare(b.kdyIso));
       setVlakno(nactene);
     } catch (e) {
@@ -66,7 +69,7 @@ export default function VlaknoKomentaru({ klientId, cil, cilId, cilPopis, kompak
     } finally {
       setNacitam(false);
     }
-  }, [cilId]);
+  }, [cilId, klientId]);
 
   useEffect(() => { nacti(); }, [nacti]);
 
