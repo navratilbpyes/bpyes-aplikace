@@ -94,6 +94,19 @@ export default function NewInspectionPage() {
     return Array.from(new Set(positions.filter(Boolean)));
   }, [selectedKlient]);
 
+  // Konkrétní osoby klienta pro výběr účastníků (jméno + funkce).
+  // Zdroj: kontakty (aktuální), fallback odpovedneOsoby (starší data).
+  const kontaktOsoby = useMemo(() => {
+    if (!selectedKlient) return [] as { jmeno: string; funkce: string }[];
+    const zKontaktu = (selectedKlient.kontakty ?? [])
+      .map((k: any) => ({ jmeno: k.jmeno ?? '', funkce: k.funkce ?? '' }))
+      .filter((o) => o.jmeno);
+    if (zKontaktu.length > 0) return zKontaktu;
+    return (selectedKlient.odpovedneOsoby ?? [])
+      .map((o: any) => ({ jmeno: o.jmeno ?? '', funkce: o.pozice || o.funkce || '' }))
+      .filter((o) => o.jmeno);
+  }, [selectedKlient]);
+
   useEffect(() => {
     const controller = new AbortController();
 
@@ -443,6 +456,7 @@ export default function NewInspectionPage() {
             <Select value={def.odpovednaOsoba} onValueChange={(v) => updateFn('odpovednaOsoba', v)}>
               <SelectTrigger className="bg-white h-10"><SelectValue placeholder="Vyberte pozici" /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="Zaměstnavatel / provozovatel">Zaměstnavatel / provozovatel</SelectItem>
                 {uniquePositions.map((pozice: string) => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}
                 <SelectItem value="manual">-- Zadat manuálně --</SelectItem>
               </SelectContent>
@@ -752,7 +766,7 @@ export default function NewInspectionPage() {
     <Button variant="ghost" size="sm" onClick={() => setFormData({...formData, datumVice: [...(formData.datumVice.length > 0 ? formData.datumVice : ['']), '']})}><Plus className="mr-2 h-4 w-4" /> Přidat den</Button>
   </div>
 )}
-</div></div><div className="space-y-4 pt-6 border-t mt-6"><div className="flex justify-between items-center"><Label>Účastníci kontroly</Label><Button variant="ghost" size="sm" onClick={() => setFormData({...formData, ucastnici: [...formData.ucastnici, {jmeno: '', pozice: ''}]})}><Plus className="mr-2 h-4 w-4" /> Přidat osobu</Button></div>{formData.ucastnici.map((u, i) => (<div key={i} className="flex gap-2 items-center"><Input placeholder="Jméno a příjmení" value={u.jmeno} onChange={(e) => { const next = [...formData.ucastnici]; next[i].jmeno = e.target.value; setFormData({...formData, ucastnici: next}); }} className="flex-1" /><Select value={u.pozice} onValueChange={(val) => { const next = [...formData.ucastnici]; next[i].pozice = val; setFormData({...formData, ucastnici: next}); }}><SelectTrigger className="flex-1"><SelectValue placeholder="Vyberte pozici" /></SelectTrigger><SelectContent>{uniquePositions.map((pozice: string) => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}{uniquePositions.length === 0 && <SelectItem value="Neuvedeno">Žádné pozice u klienta</SelectItem>}</SelectContent></Select>{formData.ucastnici.length > 1 && <Button variant="ghost" size="icon" onClick={() => setFormData({...formData, ucastnici: formData.ucastnici.filter((_, idx) => idx !== i)})} className="shrink-0 text-muted-foreground hover:text-red-500"><X className="h-4 w-4" /></Button>}</div>))}</div></CardContent></Card>
+</div></div><div className="space-y-4 pt-6 border-t mt-6"><div className="flex justify-between items-center"><Label>Účastníci kontroly</Label><Button variant="ghost" size="sm" onClick={() => setFormData({...formData, ucastnici: [...formData.ucastnici, {jmeno: '', pozice: ''}]})}><Plus className="mr-2 h-4 w-4" /> Přidat osobu</Button></div>{formData.ucastnici.map((u, i) => (<div key={i} className="flex gap-2 items-center flex-wrap sm:flex-nowrap">{kontaktOsoby.length > 0 && (<Select value="" onValueChange={(val) => { const osoba = kontaktOsoby.find((o) => o.jmeno === val); if (!osoba) return; const next = [...formData.ucastnici]; next[i] = { jmeno: osoba.jmeno, pozice: osoba.funkce || next[i].pozice }; setFormData({...formData, ucastnici: next}); }}><SelectTrigger className="w-full sm:w-[190px] shrink-0"><SelectValue placeholder="Vybrat osobu…" /></SelectTrigger><SelectContent>{kontaktOsoby.map((o) => <SelectItem key={o.jmeno} value={o.jmeno}>{o.jmeno}{o.funkce ? ` — ${o.funkce}` : ''}</SelectItem>)}</SelectContent></Select>)}<Input placeholder="Jméno a příjmení" value={u.jmeno} onChange={(e) => { const next = [...formData.ucastnici]; next[i].jmeno = e.target.value; setFormData({...formData, ucastnici: next}); }} className="flex-1 min-w-[140px]" /><Select value={u.pozice} onValueChange={(val) => { const next = [...formData.ucastnici]; next[i].pozice = val; setFormData({...formData, ucastnici: next}); }}><SelectTrigger className="flex-1 min-w-[140px]"><SelectValue placeholder="Vyberte pozici" /></SelectTrigger><SelectContent>{uniquePositions.map((pozice: string) => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}{uniquePositions.length === 0 && <SelectItem value="Neuvedeno">Žádné pozice u klienta</SelectItem>}</SelectContent></Select>{formData.ucastnici.length > 1 && <Button variant="ghost" size="icon" onClick={() => setFormData({...formData, ucastnici: formData.ucastnici.filter((_, idx) => idx !== i)})} className="shrink-0 text-muted-foreground hover:text-red-500"><X className="h-4 w-4" /></Button>}</div>))}</div></CardContent></Card>
       )}
 
       {step === 2 && (
