@@ -133,10 +133,12 @@
 .print-only { display: none; }
 
 @media print {
-  /* schovej vše, ukaž jen kartu plánu */
-  body * { visibility: hidden; }
-  .plan-card, .plan-card * { visibility: visible; }
-  .plan-card {
+  /* Skrytí všeho platí JEN když se tiskne stránka s plánem
+     (obsahuje .plan-card). Jinak by schovalo i reporty a další tisky. */
+  body:has(.plan-card) * { visibility: hidden; }
+  body:has(.plan-card) .plan-card,
+  body:has(.plan-card) .plan-card * { visibility: visible; }
+  body:has(.plan-card) .plan-card {
     position: absolute;
     left: 0;
     top: 0;
