@@ -164,5 +164,23 @@ service cloud.firestore {
         && request.resource.data.autorUid == request.auth.uid;
       allow update, delete: if isAdmin();
     }
+
+    // ---------- komentare (vlakna u nalezu / revizi / skoleni) ----------
+    // Append-only: jen cteni a zakladani, zadne update (audit stopa).
+    // Klient cte a pise komentare sveho klientId; OZO (admin) vse.
+    match /komentare/{id} {
+      allow read: if isAdmin()
+        || (maProfil() && resource.data.klientId == mujKlientId());
+      // klient smi zalozit komentar jen ke svemu klientId, jako autor,
+      // s priznakem zadal == 'klient'
+      allow create: if isAdmin()
+        || (maProfil()
+            && request.resource.data.klientId == mujKlientId()
+            && request.resource.data.autorUid == request.auth.uid
+            && request.resource.data.zadal == 'klient');
+      // komentare se needituji; mazat smi jen admin
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
   }
 }
