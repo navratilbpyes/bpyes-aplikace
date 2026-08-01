@@ -1,234 +1,234 @@
-'use client';
-
 /**
- * AuditFlow — časový plán v kartě klienta / dashboardu.
- * Umístění: src/components/dashboard/casovy-plan.tsx
+ * AuditFlow — časový plán klienta ze čtyř reálných zdrojů.
+ * Umístění: src/lib/casovy-plan.ts
  *
- * Čte reálná data přes useCasovyPlan. Filtry podle typu, naléhavosti
- * a předvolby (měsíc/kvartál). Barva = naléhavost, ikona = typ.
+ * Sjednocuje:
+ *   - revize   (klienti/{id}/revize)
+ *   - školení  (klienti/{id}/skoleni)
+ *   - prohlídky (kolekce `prohlidky`, filtrováno klientId)
+ *   - nálezy   (otevřené závady ze `zaznamy` daného klienta)
  *
- * Použití: <CasovyPlan klientId={klient.id} />
+ * Výstup je jednotný PolozkaPlanu, seřazený podle naléhavosti a data.
  */
 
-import { useState, useMemo, useEffect } from 'react';
-import Link from 'next/link';
-import QRCode from 'qrcode';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-  Zap, GraduationCap, ShieldAlert, ClipboardCheck, Loader2, ChevronRight, Printer,
-} from 'lucide-react';
-import { cn } from '@/app/lib/utils';
-import { useCasovyPlan } from '@/hooks/use-casovy-plan';
-import type { PolozkaPlanu, TypPolozky, Naliehavost } from '@/lib/casovy-plan';
+import { platnyTermin as terminRevize } from '@/lib/revize';
+import { platnyTermin as terminSkoleni } from '@/lib/skoleni';
+import { terminNaDatum } from '@/lib/prohlidky';
+import type { RevizeKlienta } from '@/lib/revize';
+import type { SkoleniKlienta } from '@/lib/skoleni';
+import type { Prohlidka } from '@/lib/prohlidky';
+import type { Zaznam, Zavada } from '@/app/lib/types';
 
-interface Props {
-  klientId: string;
+export type TypPolozky = 'revize' | 'skoleni' | 'prohlidka' | 'nalez';
+export type Naliehavost = 'po_terminu' | 'blizi_se' | 'ok';
+
+export interface PolozkaPlanu {
+  id: string;
+  typ: TypPolozky;
+  nazev: string;
+  /** doplňující řádek: firma, kdo provádí, pracoviště… */
+  meta?: string;
+  /** odpovědná osoba/firma pro filtr (firmaNazev / provadi / odpovědná osoba nálezu) */
+  odpovednaOsoba?: string;
+  /** číslo protokolu / reference kontroly */
+  zdroj?: string;
+  /** datum termínu pro řazení */
+  terminDatum?: Date;
+  /** text štítku: „po termínu · 8 dní", „březen 2027" */
+  stitek: string;
+  naliehavost: Naliehavost;
+  /** true = má navázaný dokument (proklik), false = jen vypočtený termín */
+  maDokument: boolean;
+  /** cílová routa prokliku, nebo undefined když položka nikam nevede */
+  odkaz?: string;
 }
 
-const IKONA: Record<TypPolozky, typeof Zap> = {
-  revize: Zap,
-  skoleni: GraduationCap,
-  nalez: ShieldAlert,
-  prohlidka: ClipboardCheck,
-};
+const DEN = 86400000;
+const RANK: Record<Naliehavost, number> = { po_terminu: 0, blizi_se: 1, ok: 2 };
 
-const NAZEV_TYPU: Record<TypPolozky, string> = {
-  revize: 'revize',
-  skoleni: 'školení',
-  nalez: 'nálezy',
-  prohlidka: 'prohlídky',
-};
+function dniDo(datum: Date, dnes: Date): number {
+  return Math.round((datum.getTime() - dnes.getTime()) / DEN);
+}
 
-const BARVA: Record<Naliehavost, string> = {
-  po_terminu: 'border-l-red-500',
-  blizi_se: 'border-l-amber-500',
-  ok: 'border-l-emerald-600',
-};
+function naliehavostZDatumu(datum: Date | undefined, dnes: Date): Naliehavost {
+  if (!datum) return 'ok';
+  const d = dniDo(datum, dnes);
+  if (d < 0) return 'po_terminu';
+  if (d <= 30) return 'blizi_se';
+  return 'ok';
+}
 
-const BARVA_TEXT: Record<Naliehavost, string> = {
-  po_terminu: 'text-red-600',
-  blizi_se: 'text-amber-600',
-  ok: 'text-emerald-700',
-};
+function sklonDny(n: number): string {
+  if (n === 1) return 'den';
+  if (n >= 2 && n <= 4) return 'dny';
+  return 'dní';
+}
 
-const BARVA_IKONA: Record<Naliehavost, string> = {
-  po_terminu: 'text-red-500',
-  blizi_se: 'text-amber-500',
-  ok: 'text-emerald-600',
-};
+/** Štítek pro termín zadaný přesným datem (revize, školení, nálezy). */
+function stitekDatum(datum: Date | undefined, dnes: Date): string {
+  if (!datum) return 'bez termínu';
+  const d = dniDo(datum, dnes);
+  if (d < 0) return `po termínu · ${Math.abs(d)} ${sklonDny(Math.abs(d))}`;
+  if (d === 0) return 'dnes';
+  if (d <= 60) return `do ${d} ${sklonDny(d)}`;
+  return datum.toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' });
+}
 
-type FiltrTyp = 'vse' | 'po_terminu' | TypPolozky;
+const MESICE = [
+  'leden', 'únor', 'březen', 'duben', 'květen', 'červen',
+  'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec',
+];
 
-export default function CasovyPlan({ klientId }: Props) {
-  const { polozky, nacitam, chyba } = useCasovyPlan(klientId);
-  const [filtr, setFiltr] = useState<FiltrTyp>('vse');
-  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+/** Štítek pro termín zadaný jen měsícem a rokem (prohlídky). */
+function stitekMesic(mesic: number | undefined, rok: number | undefined, dnes: Date): string {
+  if (!mesic || !rok) return 'bez termínu';
+  const mesicu = (rok - dnes.getFullYear()) * 12 + (mesic - 1 - dnes.getMonth());
+  if (mesicu < 0) return `po termínu · ${MESICE[mesic - 1]} ${rok}`;
+  return `${MESICE[mesic - 1]} ${rok}`;
+}
 
-  // QR na aktuální URL dashboardu — vygeneruje se v prohlížeči
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    QRCode.toDataURL(window.location.href, { width: 240, margin: 1 })
-      .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(''));
-  }, []);
+// ── Jednotlivé zdroje → PolozkaPlanu ──
 
-  const zobraz = useMemo(() => {
-    return polozky.filter((p) => {
-      if (filtr === 'vse') return true;
-      if (filtr === 'po_terminu') return p.naliehavost === 'po_terminu';
-      return p.typ === filtr;
+export function revizeNaPolozky(
+  revize: RevizeKlienta[],
+  dnes: Date,
+  klientId: string,
+): PolozkaPlanu[] {
+  return revize
+    .filter((r) => r.stav === 'aktivni')
+    .map((r) => {
+      const iso = terminRevize(r);
+      const datum = iso ? new Date(iso) : undefined;
+      const meta = [r.poznamka, r.firmaNazev].filter(Boolean).join(' · ') || undefined;
+      return {
+        id: `revize_${r.id}`,
+        typ: 'revize' as const,
+        nazev: r.nazev,
+        meta,
+        odpovednaOsoba: r.firmaNazev || undefined,
+        zdroj: r.cisloProtokolu ? `protokol ${r.cisloProtokolu}` : undefined,
+        terminDatum: datum,
+        stitek: stitekDatum(datum, dnes),
+        naliehavost: naliehavostZDatumu(datum, dnes),
+        maDokument: !!r.cisloProtokolu,
+        odkaz: `/klienti/${klientId}?tab=revize`,
+      };
     });
-  }, [polozky, filtr]);
-
-  const dnesText = new Date().toLocaleDateString('cs-CZ', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  });
-
-  const FILTRY: { klic: FiltrTyp; popis: string }[] = [
-    { klic: 'vse', popis: 'vše' },
-    { klic: 'po_terminu', popis: 'po termínu' },
-    { klic: 'revize', popis: 'revize' },
-    { klic: 'skoleni', popis: 'školení' },
-    { klic: 'prohlidka', popis: 'prohlídky' },
-    { klic: 'nalez', popis: 'nálezy' },
-  ];
-
-  return (
-    <Card className="plan-card">
-      <CardHeader className="flex flex-row items-center justify-between pb-3 no-print">
-        <CardTitle className="text-base">Časový plán</CardTitle>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-8"
-          onClick={() => window.print()}
-        >
-          <Printer className="mr-2 h-4 w-4" /> Tisk ToDo
-        </Button>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        <div className="flex flex-wrap gap-1.5 no-print">
-          {FILTRY.map((f) => (
-            <Button
-              key={f.klic}
-              size="sm"
-              variant={filtr === f.klic ? 'default' : 'secondary'}
-              className="h-7 rounded-full px-3 text-xs"
-              onClick={() => setFiltr(f.klic)}
-            >
-              {f.popis}
-            </Button>
-          ))}
-        </div>
-
-        {/* Tisková hlavička — jen při tisku */}
-        <div className="print-only mb-4">
-          <h1 className="text-xl font-bold">Časový plán BOZP / PO</h1>
-          <p className="text-sm">Vytištěno {dnesText}</p>
-        </div>
-
-        {nacitam ? (
-          <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Načítám časový plán…
-          </div>
-        ) : chyba ? (
-          <p className="py-6 text-sm text-red-600">{chyba}</p>
-        ) : zobraz.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            {polozky.length === 0
-              ? 'Zatím žádné termíny ani nálezy.'
-              : 'Nic k zobrazení pro zvolený filtr.'}
-          </p>
-        ) : (
-          <div className="space-y-0">
-            {zobraz.map((p) => (
-              <Radek key={p.id} p={p} />
-            ))}
-          </div>
-        )}
-
-        {/* Legenda */}
-        {!nacitam && !chyba && zobraz.length > 0 && (
-          <div className="no-print flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-[11px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1"><Zap className="h-3 w-3" /> revize</span>
-            <span className="inline-flex items-center gap-1"><ShieldAlert className="h-3 w-3" /> nález</span>
-            <span className="inline-flex items-center gap-1"><GraduationCap className="h-3 w-3" /> školení</span>
-            <span className="inline-flex items-center gap-1"><ClipboardCheck className="h-3 w-3" /> prohlídka</span>
-            <span className="ml-auto flex items-center gap-3">
-              <span className="inline-flex items-center gap-1"><Tecka b="bg-red-500" /> po termínu</span>
-              <span className="inline-flex items-center gap-1"><Tecka b="bg-amber-500" /> blíží se</span>
-              <span className="inline-flex items-center gap-1"><Tecka b="bg-emerald-600" /> v pořádku</span>
-            </span>
-          </div>
-        )}
-
-        {/* Tisková patička s QR — jen při tisku */}
-        <div className="print-only mt-6 flex items-center gap-4 border-t pt-4">
-          {qrDataUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={qrDataUrl} alt="QR na živý přehled" className="h-24 w-24" />
-          )}
-          <div className="text-xs">
-            <p className="font-medium">Aktuální stav online</p>
-            <p>Naskenujte QR pro živý přehled termínů.</p>
-            <p className="mt-1 text-muted-foreground">Vytištěno {dnesText} · AuditFlow</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
 }
 
-function Tecka({ b }: { b: string }) {
-  return <span className={cn('inline-block h-2 w-2 rounded-full', b)} />;
+export function skoleniNaPolozky(
+  skoleni: SkoleniKlienta[],
+  dnes: Date,
+  klientId: string,
+): PolozkaPlanu[] {
+  return skoleni
+    .filter((s) => s.stav === 'aktivni')
+    .map((s) => {
+      const iso = terminSkoleni(s);
+      const datum = iso ? new Date(iso) : undefined;
+      const meta = [s.poznamka, s.provadi].filter(Boolean).join(' · ') || undefined;
+      return {
+        id: `skoleni_${s.id}`,
+        typ: 'skoleni' as const,
+        nazev: s.nazev,
+        meta,
+        odpovednaOsoba: s.provadi || undefined,
+        terminDatum: datum,
+        stitek: stitekDatum(datum, dnes),
+        naliehavost: naliehavostZDatumu(datum, dnes),
+        maDokument: false,
+        odkaz: `/klienti/${klientId}?tab=skoleni`,
+      };
+    });
 }
 
-function Radek({ p }: { p: PolozkaPlanu }) {
-  const Ikona = IKONA[p.typ];
+export function prohlidkyNaPolozky(prohlidky: Prohlidka[], dnes: Date): PolozkaPlanu[] {
+  const NAZEV: Record<string, string> = {
+    PBOZP: 'Prověrka BOZP',
+    PPP: 'Preventivní požární prohlídka',
+  };
+  return prohlidky
+    .filter((p) => p.stav === 'aktivni')
+    .map((p) => {
+      const datum = terminNaDatum(p.dalsiMesic, p.dalsiRok);
+      return {
+        id: `prohlidka_${p.id}`,
+        typ: 'prohlidka' as const,
+        nazev: NAZEV[p.typ] ?? p.typ,
+        meta: p.pracovisteNazev || undefined,
+        zdroj: p.zdrojCislo ? `kontrola ${p.zdrojCislo}` : undefined,
+        terminDatum: datum,
+        stitek: stitekMesic(p.dalsiMesic, p.dalsiRok, dnes),
+        naliehavost: naliehavostZDatumu(datum, dnes),
+        maDokument: !!p.zdrojZaznamId,
+        odkaz: p.zdrojZaznamId ? `/zaznamy/${p.zdrojZaznamId}` : undefined,
+      };
+    });
+}
 
-  const obsah = (
-    <>
-      <Ikona className={cn('mt-0.5 h-4 w-4 shrink-0', BARVA_IKONA[p.naliehavost])} />
-
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium">{p.nazev}</span>
-          <Badge variant="outline" className="h-4 text-[10px] font-normal">
-            {NAZEV_TYPU[p.typ]}
-          </Badge>
-        </div>
-        {p.meta && <div className="mt-0.5 text-xs text-muted-foreground">{p.meta}</div>}
-        {p.zdroj && (
-          <div className="mt-0.5 text-xs text-muted-foreground/70">{p.zdroj}</div>
-        )}
-      </div>
-
-      <div className="flex shrink-0 items-center gap-1.5">
-        <span className={cn('whitespace-nowrap text-xs font-medium', BARVA_TEXT[p.naliehavost])}>
-          {p.stitek}
-        </span>
-        {p.odkaz && (
-          <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
-        )}
-      </div>
-    </>
-  );
-
-  const trida = cn(
-    'plan-radek flex items-start gap-3 border-t border-l-[3px] py-3 pl-3',
-    BARVA[p.naliehavost],
-  );
-
-  if (p.odkaz) {
-    return (
-      <Link href={p.odkaz} className={cn(trida, 'pr-2 transition-colors hover:bg-muted/50')}>
-        {obsah}
-      </Link>
-    );
+/** Otevřené závady ze záznamů daného klienta. */
+export function nalezyNaPolozky(zaznamy: Zaznam[], dnes: Date): PolozkaPlanu[] {
+  const out: PolozkaPlanu[] = [];
+  for (const z of zaznamy) {
+    if (z.stav === 'archivovany') continue;
+    for (const zavada of z.zavady ?? []) {
+      if (zavada.odstraneno) continue;
+      const datum = zavada.terminOdstraneni ? new Date(zavada.terminOdstraneni) : undefined;
+      out.push({
+        id: `nalez_${z.id}_${zavada.id}`,
+        typ: 'nalez',
+        nazev: zavada.popis,
+        meta: zavada.lokalizace || undefined,
+        odpovednaOsoba: (zavada as any).odpovednaOsoba || undefined,
+        zdroj: z.cisloKlientske || z.cislo
+          ? `kontrola ${z.cisloKlientske ?? z.cislo}`
+          : undefined,
+        terminDatum: datum,
+        stitek: stitekDatum(datum, dnes),
+        naliehavost: naliehavostZDatumu(datum, dnes),
+        maDokument: true,
+        odkaz: `/zaznamy/${z.id}`,
+      });
+    }
   }
+  return out;
+}
 
-  return <div className={trida}>{obsah}</div>;
+/** Sjednotí a seřadí všechny zdroje. */
+export function sestavCasovyPlan(vstup: {
+  klientId: string;
+  revize: RevizeKlienta[];
+  skoleni: SkoleniKlienta[];
+  prohlidky: Prohlidka[];
+  zaznamy: Zaznam[];
+  dnes?: Date;
+}): PolozkaPlanu[] {
+  const dnes = vstup.dnes ?? new Date();
+  const vse = [
+    ...revizeNaPolozky(vstup.revize, dnes, vstup.klientId),
+    ...skoleniNaPolozky(vstup.skoleni, dnes, vstup.klientId),
+    ...prohlidkyNaPolozky(vstup.prohlidky, dnes),
+    ...nalezyNaPolozky(vstup.zaznamy, dnes),
+  ];
+  return vse.sort((a, b) => {
+    const r = RANK[a.naliehavost] - RANK[b.naliehavost];
+    if (r !== 0) return r;
+    const ta = a.terminDatum?.getTime() ?? Infinity;
+    const tb = b.terminDatum?.getTime() ?? Infinity;
+    return ta - tb;
+  });
+}
+
+export interface Metriky {
+  do30dni: number;
+  otevreneNalezy: number;
+  poTerminu: number;
+}
+
+export function spoctiMetriky(polozky: PolozkaPlanu[]): Metriky {
+  return {
+    do30dni: polozky.filter((p) => p.naliehavost === 'blizi_se').length,
+    otevreneNalezy: polozky.filter((p) => p.typ === 'nalez').length,
+    poTerminu: polozky.filter((p) => p.naliehavost === 'po_terminu').length,
+  };
 }
