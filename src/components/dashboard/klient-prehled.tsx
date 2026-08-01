@@ -4,24 +4,37 @@
  * AuditFlow — klientská část úvodního přehledu (reálná data).
  * Umístění: src/components/dashboard/klient-prehled.tsx
  *
- * Pro přihlášeného plného klienta: stavový signál dle nejhoršího termínu,
- * časový plán, dokumentace. Vše čte reálná data podle jeho klientId.
- *
- * Použití na / :  {!isAdmin && profil?.klientId && <KlientPrehled klientId={profil.klientId} />}
+ * Pro přihlášeného plného klienta: stavový signál + 4 metriky, časový plán,
+ * panel dotazů, dokumentace, Freelo dlaždice, kontakt na OZO.
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/app/lib/utils';
+import { db } from '@/components/data-provider';
+import { collection, getDocs, query, where, getDoc, doc } from 'firebase/firestore';
 import { useCasovyPlan } from '@/hooks/use-casovy-plan';
 import CasovyPlan from '@/components/dashboard/casovy-plan';
 import Dokumentace from '@/components/dashboard/dokumentace';
+import {
+  MessageSquare, Clock, ExternalLink, Mail, Phone, User, ArrowRight,
+} from 'lucide-react';
+import type { Dotaz } from '@/lib/dotazy';
 
 interface Props {
   klientId: string;
 }
 
-// Banka hlášek podle nálady (severity nejhoršího termínu).
+// Kontakt na OZO — vždy Martin. Uprav zde, pokud se změní.
+const OZO = {
+  jmeno: 'Martin Navrátil',
+  telefon: '+420 …',
+  email: 'martin@bpyes.cz',
+  iniciály: 'MN',
+};
+
 const HLASKY = {
   ok: [
     'Všechno v pořádku. Nejbližší problém je ten zapomenutý jogurt v lednici.',
@@ -41,7 +54,36 @@ const HLASKY = {
 type Ton = 'ok' | 'soon' | 'critical';
 
 export default function KlientPrehled({ klientId }: Props) {
-  const { metriky, polozky } = useCasovyPlan(klientId);
+  const { metriky } = useCasovyPlan(klientId);
+  const [dotazy, setDotazy] = useState<Dotaz[]>([]);
+  const [freeloUrl, setFreeloUrl] = useState('');
+
+  // Dotazy klienta + Freelo odkaz
+  useEffect(() => {
+    if (!klientId) return;
+    (async () => {
+      try {
+        const [dSnap, kSnap] = await Promise.all([
+          getDocs(query(collection(db, 'dotazy'), where('klientId', '==', klientId))),
+          getDoc(doc(db, 'klienti', klientId)),
+        ]);
+        setDotazy(dSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dotaz));
+        if (kSnap.exists()) setFreeloUrl((kSnap.data() as any).freeloUrl ?? '');
+      } catch (e) {
+        console.error('Načtení dotazů/Freelo selhalo:', e);
+      }
+    })();
+  }, [klientId]);
+
+  const nevyrizeneDotazy = useMemo(
+    () => dotazy.filter((d) => d.stav === 'nevyrizeno'),
+    [dotazy],
+  );
+
+  const posledniDotazy = useMemo(
+    () => [...dotazy].sort((a, b) => (b.vytvorenoIso || '').localeCompare(a.vytvorenoIso || '')).slice(0, 3),
+    [dotazy],
+  );
 
   const ton: Ton = useMemo(() => {
     if (metriky.poTerminu > 0) return 'critical';
@@ -49,7 +91,6 @@ export default function KlientPrehled({ klientId }: Props) {
     return 'ok';
   }, [metriky]);
 
-  // stabilní denní varianta hlášky
   const hlaska = useMemo(() => {
     const d = new Date();
     const seed = d.getFullYear() * 366 + d.getMonth() * 31 + d.getDate();
@@ -67,27 +108,108 @@ export default function KlientPrehled({ klientId }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Stavový signál */}
+      {/* Stavový signál + 4 metriky */}
       <Card className={cn('border-l-[6px]', okraj)}>
         <CardContent className="py-5">
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-            {popis}
-          </div>
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{popis}</div>
           <div className="mt-1 text-lg font-semibold leading-snug">{hlaska}</div>
-
-          <div className="mt-4 flex flex-wrap gap-6 border-t pt-4">
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4 border-t pt-4">
             <Metrika n={metriky.do30dni} l="termíny do 30 dní" />
             <Metrika n={metriky.otevreneNalezy} l="otevřené nálezy" />
             <Metrika n={metriky.poTerminu} l="po termínu" hot={metriky.poTerminu > 0} />
+            <Metrika n={nevyrizeneDotazy.length} l="nevyřízené dotazy" hot={nevyrizeneDotazy.length > 0} />
           </div>
         </CardContent>
       </Card>
 
-      {/* Časový plán — reálná data, tisk, filtry */}
+      {/* Časový plán */}
       <CasovyPlan klientId={klientId} />
 
-      {/* Dokumentace — odkaz na Drive složku, pokud je nastavená */}
-      <Dokumentace klientId={klientId} />
+      {/* Dvousloupcová spodní část */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Dotazy */}
+        <Card>
+          <CardContent className="py-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" /> Dotazy
+              </h3>
+              {nevyrizeneDotazy.length > 0 && (
+                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                  {nevyrizeneDotazy.length} nevyřízený
+                </span>
+              )}
+            </div>
+            {posledniDotazy.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">Zatím žádné dotazy.</p>
+            ) : (
+              <div className="space-y-2">
+                {posledniDotazy.map((d) => (
+                  <div key={d.id} className="text-sm border-l-2 pl-3 py-0.5"
+                    style={{ borderColor: d.stav === 'nevyrizeno' ? '#f59e0b' : '#10b981' }}>
+                    <p className="line-clamp-1">{d.text}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {d.autorJmeno || 'Vy'} · {d.vytvorenoIso ? new Date(d.vytvorenoIso).toLocaleDateString('cs-CZ') : ''}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Link href="/audit">
+              <Button variant="outline" size="sm" className="w-full mt-1">
+                Nový dotaz <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Dokumentace */}
+        <Dokumentace klientId={klientId} />
+      </div>
+
+      {/* Freelo + kontakt OZO */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Freelo dlaždice */}
+        {freeloUrl ? (
+          <a href={freeloUrl} target="_blank" rel="noopener noreferrer" className="block">
+            <Card className="hover:bg-slate-50 transition-colors h-full">
+              <CardContent className="py-5 flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold">Úkoly ve Freelu</h3>
+                  <p className="text-sm text-muted-foreground">Otevřít projekt s úkoly</p>
+                </div>
+                <ExternalLink className="h-5 w-5 text-muted-foreground" />
+              </CardContent>
+            </Card>
+          </a>
+        ) : (
+          <Card className="h-full">
+            <CardContent className="py-5">
+              <h3 className="font-bold text-muted-foreground">Úkoly ve Freelu</h3>
+              <p className="text-sm text-muted-foreground mt-1">Odkaz zatím nenastaven.</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Kontakt OZO */}
+        <Card className="h-full">
+          <CardContent className="py-5 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="h-11 w-11 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary shrink-0">
+                {OZO.iniciály}
+              </div>
+              <div className="min-w-0">
+                <div className="font-bold flex items-center gap-1"><User className="h-3.5 w-3.5" /> {OZO.jmeno}</div>
+                <div className="text-xs text-muted-foreground flex items-center gap-1"><Phone className="h-3 w-3" /> {OZO.telefon}</div>
+                <div className="text-xs text-muted-foreground flex items-center gap-1 truncate"><Mail className="h-3 w-3" /> {OZO.email}</div>
+              </div>
+            </div>
+            <Link href="/audit" className="shrink-0">
+              <Button size="sm"><MessageSquare className="mr-2 h-4 w-4" /> Napsat dotaz</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
