@@ -34,6 +34,7 @@ const OZO = {
   telefon: '+420 772 722 763',
   email: 'navratil@bpyes.cz',
   whatsapp: '420772722763',
+  iniciály: 'MN',  
 };
 
 const HLASKY = {
