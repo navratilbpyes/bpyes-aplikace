@@ -25,43 +25,144 @@ service cloud.firestore {
       return profil().klientId;
     }
 
+    // klientsky ucet, ktery NENI deaktivovany (guard i na urovni dat).
+    // Chybejici pole deaktivovan bereme jako aktivni (zpetna kompatibilita).
+    function jeAktivniKlient() {
+      return maProfil()
+        && profil().role == 'client'
+        && (!('deaktivovan' in profil()) || profil().deaktivovan == false);
+    }
+
     // ---------- pozvanky ----------
-    // Klient se k pozvankam nedostane. Cteni/zapis jen admin z UI;
-    // server route jede pres service account (mimo tato pravidla).
     match /pozvanky/{id} {
       allow read, write: if isAdmin();
     }
 
     // ---------- uzivatele ----------
     match /uzivatele/{uid} {
-      // svuj profil smi cist uzivatel; vsechny admin
       allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
-      // role/klientId/osobaId zapisuje JEN admin (server ma service account)
+      // role/klientId/potvrzeni zapisuje JEN admin (server ma sve tokeny)
       allow create, update, delete: if isAdmin();
+    }
+
+    // ---------- pravidla pro klientsky zapis revizi/skoleni ----------
+    // Klient smi ZALOZIT zaznam, jen kdyz:
+    //  - pise do sveho vlastniho klienta,
+    //  - je aktivni (nedeaktivovany),
+    //  - novy zaznam ma potvrzenoOzo == false (klient si nesmi sam potvrdit),
+    //  - oznaci se jako zadal 'klient' (evidence puvodu),
+    //  - stav zaznamu je 'aktivni'.
+    function klientSmiVytvorit(klientId) {
+      let d = request.resource.data;
+      return jeAktivniKlient()
+        && mujKlientId() == klientId
+        && d.potvrzenoOzo == false
+        && d.zadal == 'klient'
+        && d.stav == 'aktivni';
+    }
+
+    // Klient smi UPRAVIT existujici zaznam, jen kdyz:
+    //  - pise do sveho klienta a je aktivni,
+    //  - upravuje zaznam, ktery zadal klient (ne adminovy zaznamy),
+    //  - po uprave zustava potvrzenoOzo == false (nesmi si potvrdit),
+    //  - nemeni priznak puvodu (zadal zustava 'klient'),
+    //  - nemeni stav na 'smazano' (mazani je jen adminovo).
+    function klientSmiUpravit(klientId) {
+      let stary = resource.data;
+      let novy = request.resource.data;
+      return jeAktivniKlient()
+        && mujKlientId() == klientId
+        && stary.zadal == 'klient'
+        && novy.potvrzenoOzo == false
+        && novy.zadal == 'klient'
+        && novy.stav == 'aktivni';
     }
 
     // ---------- klienti ----------
     match /klienti/{klientId} {
-      // admin vse; klientsky ucet jen SVEHO klienta
       allow read: if isAdmin()
         || (maProfil() && mujKlientId() == klientId);
-      // zapisovat klienty smi jen admin
       allow write: if isAdmin();
+
+      // --- revize a skoleni: klient smi PRIDAT a UPRAVIT vlastni zaznamy ---
+      // Ostatni podkolekce (a mazani) zustavaji jen adminovi.
+      match /revize/{docId} {
+        allow read: if isAdmin()
+          || (maProfil() && mujKlientId() == klientId);
+        allow create: if isAdmin() || klientSmiVytvorit(klientId);
+        allow update: if isAdmin() || klientSmiUpravit(klientId);
+        allow delete: if isAdmin();   // klient nemaze; admin dela soft-delete
+      }
+
+      match /skoleni/{docId} {
+        allow read: if isAdmin()
+          || (maProfil() && mujKlientId() == klientId);
+        allow create: if isAdmin() || klientSmiVytvorit(klientId);
+        allow update: if isAdmin() || klientSmiUpravit(klientId);
+        allow delete: if isAdmin();
+      }
+
+      // vsechny ostatni podkolekce klienta — jen admin (jako dosud)
+      match /{podkolekce}/{docId} {
+        allow read: if isAdmin()
+          || (maProfil() && mujKlientId() == klientId);
+        allow write: if isAdmin();
+      }
     }
 
     // ---------- zaznamy (kontroly/protokoly) ----------
-    // Predpoklad: kazdy dokument v `zaznamy` ma pole klientId.
     match /zaznamy/{zaznamId} {
       allow read: if isAdmin()
         || (maProfil() && resource.data.klientId == mujKlientId());
-      // vytvaret/menit zaznamy smi jen admin (ty jsi OZO)
       allow create, update, delete: if isAdmin();
+    }
+
+    // ---------- prohlidky ----------
+    match /prohlidky/{id} {
+      allow read: if isAdmin()
+        || (maProfil() && resource.data.klientId == mujKlientId());
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---------- ciselniky (globalni katalogy) ----------
+    match /ciselnikSkoleni/{id} {
+      allow read: if maProfil();
+      allow write: if isAdmin();
+    }
+    match /ciselnikOsoby/{id} {
+      allow read: if maProfil();
+      allow write: if isAdmin();
+    }
+    match /ciselnikRevizi/{id} {
+      allow read: if maProfil();
+      allow write: if isAdmin();
+    }
+    match /ciselnikFirem/{id} {
+      allow read: if maProfil();
+      allow write: if isAdmin();
+    }
+
+    // ---------- dokumenty (soubory na Wedos uloziste) ----------
+    match /dokumenty/{id} {
+      allow read: if isAdmin()
+        || (maProfil() && resource.data.klientId == mujKlientId());
+      allow write: if false;
     }
 
     // ---------- konfigurace ----------
     match /konfigurace/{doc} {
-      allow read: if maProfil();   // cist smi kazdy prihlaseny
+      allow read: if maProfil();
       allow write: if isAdmin();
+    }
+
+    // ---------- dotazy ----------
+    match /dotazy/{id} {
+      allow read: if isAdmin()
+        || (maProfil() && resource.data.klientId == mujKlientId());
+      allow create: if maProfil()
+        && request.resource.data.klientId == mujKlientId()
+        && request.resource.data.autorUid == request.auth.uid;
+      allow update, delete: if isAdmin();
     }
   }
 }
