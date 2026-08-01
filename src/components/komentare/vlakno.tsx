@@ -19,11 +19,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { db, useData } from '@/components/data-provider';
 import {
-  collection, addDoc, getDocs, query, where,
+  collection, addDoc, getDocs, query, where, deleteDoc, doc,
 } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, MessageSquare, Send } from 'lucide-react';
+import { Loader2, MessageSquare, Send, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { Komentar, CilKomentare } from '@/lib/komentare';
@@ -46,6 +46,8 @@ export default function VlaknoKomentaru({ klientId, cil, cilId, cilPopis, kompak
   const [nacitam, setNacitam] = useState(true);
   const [text, setText] = useState('');
   const [odesilam, setOdesilam] = useState(false);
+  const [sbaleno, setSbaleno] = useState(false); // default rozbaleno
+  const [mazu, setMazu] = useState<string | null>(null);
 
   const nacti = useCallback(async () => {
     setNacitam(true);
@@ -99,15 +101,38 @@ export default function VlaknoKomentaru({ klientId, cil, cilId, cilPopis, kompak
     }
   }
 
+  async function smazat(id: string) {
+    if (!jeAdmin || mazu) return;
+    if (!window.confirm('Smazat tento komentář? Nelze vrátit zpět.')) return;
+    setMazu(id);
+    try {
+      await deleteDoc(doc(db, 'komentare', id));
+      setVlakno((v) => v.filter((k) => k.id !== id));
+    } catch (e) {
+      console.error('Smazání komentáře selhalo:', e);
+      toast({ title: 'Nepodařilo se smazat', description: 'Zkuste to znovu.', variant: 'destructive' });
+    } finally {
+      setMazu(null);
+    }
+  }
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-muted-foreground">
+      <button
+        type="button"
+        onClick={() => setSbaleno((s) => !s)}
+        className="flex items-center gap-2 text-muted-foreground w-full"
+      >
         <MessageSquare className="h-4 w-4" />
         <span className={cn('font-bold', kompaktni ? 'text-xs' : 'text-sm')}>
           Komentáře{vlakno.length > 0 && ` (${vlakno.length})`}
         </span>
-      </div>
+        {sbaleno
+          ? <ChevronDown className="h-4 w-4 ml-auto" />
+          : <ChevronUp className="h-4 w-4 ml-auto" />}
+      </button>
 
+      {!sbaleno && (<>
       {nacitam ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
           <Loader2 className="h-4 w-4 animate-spin" /> Načítám…
@@ -131,9 +156,24 @@ export default function VlaknoKomentaru({ klientId, cil, cilId, cilPopis, kompak
                     jeOzo ? 'text-blue-700' : 'text-slate-600')}>
                     {jeOzo ? 'OZO technik' : (k.autorEmail || 'Klient')}
                   </span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {new Date(k.kdyIso).toLocaleString('cs-CZ')}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-muted-foreground">
+                      {new Date(k.kdyIso).toLocaleString('cs-CZ')}
+                    </span>
+                    {jeAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => smazat(k.id)}
+                        disabled={mazu === k.id}
+                        className="text-muted-foreground hover:text-red-600 disabled:opacity-50"
+                        title="Smazat komentář"
+                      >
+                        {mazu === k.id
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <Trash2 className="h-3.5 w-3.5" />}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <p className="whitespace-pre-wrap">{k.text}</p>
               </div>
@@ -158,6 +198,7 @@ export default function VlaknoKomentaru({ klientId, cil, cilId, cilPopis, kompak
           <span className="ml-2">Odeslat</span>
         </Button>
       </div>
+      </>)}
     </div>
   );
 }
