@@ -25,7 +25,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  Plus, X, Loader2, ChevronDown, ChevronRight, RotateCcw,
+  Plus, X, Loader2, ChevronDown, ChevronRight, RotateCcw, Check,
 } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
 import { PERIODY, popisPeriody, dopocitejDalsi, platnyTermin } from '@/lib/skoleni';
@@ -208,7 +208,27 @@ export default function SkoleniKlienta({ klientId }: Props) {
                         {!s.ciselnikId && (
                           <Badge variant="secondary" className="text-[10px]">vlastní</Badge>
                         )}
+                        {s.zadal === 'klient' && s.potvrzenoOzo === false && (
+                          <Badge className="text-[10px] bg-amber-100 text-amber-800 hover:bg-amber-100">
+                            čeká na potvrzení
+                          </Badge>
+                        )}
+                        {s.zadal === 'klient' && s.potvrzenoOzo === true && (
+                          <Badge className="text-[10px] bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                            potvrzeno
+                          </Badge>
+                        )}
                       </div>
+
+                      {s.zadal === 'klient' && s.potvrzenoOzo === false && (
+                        <Button
+                          size="sm"
+                          className="mt-2 h-7 bg-emerald-600 hover:bg-emerald-700"
+                          onClick={() => uprav(s.id, { potvrzenoOzo: true } as any)}
+                        >
+                          <Check className="h-3.5 w-3.5 mr-1" /> Potvrdit školení
+                        </Button>
+                      )}
                       <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
                         <span>{popisPeriody(s.periodaMesice)}</span>
                         {s.provadi && <span>{s.provadi}</span>}
