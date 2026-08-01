@@ -170,6 +170,23 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
     return null;
   }
 
+  // Whitelist plného klienta: smí jen své stránky. Cokoliv jiného
+  // (admin routy jako /klienti, /zaznamy seznam, /ciselniky, /plan,
+  // /dotazy, /komentare, /nova-kontrola…) ho vrátí na dashboard.
+  // Detail reportu /zaznamy/{id} je klient-aware, proto povolen.
+  const isFullKlient = userProfile.role === 'client' && !isBasic;
+  if (isFullKlient) {
+    const povoleno =
+      pathname === '/' ||
+      pathname.startsWith('/moje-revize') ||
+      // detail konkrétního reportu (ne seznam /zaznamy), např. /zaznamy/abc123
+      /^\/zaznamy\/[^/]+$/.test(pathname);
+    if (!povoleno) {
+      router.replace('/');
+      return null;
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row print:bg-white print:block">
       
