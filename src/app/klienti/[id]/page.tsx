@@ -27,8 +27,21 @@ import {
   KeyRound,
   Loader2,
   Send,
-  CheckCircle2
+  CheckCircle2,
+  MoreHorizontal,
+  RotateCcw,
+  Ban,
+  ShieldCheck,
+  Trash2
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,11 +72,14 @@ export default function ClientDetailPage() {
   const [vytvarimPristup, setVytvarimPristup] = useState(false);
 
   // Stav pristupu kontaktnich osob
-  // mapa email(lowercase) -> 'nastaveno' | 'pozvano' (ucet existuje, heslo jeste ne)
-  const [pristupy, setPristupy] = useState<Record<string, 'nastaveno' | 'pozvano'>>({});
+  // mapa email(lowercase) -> { stav: 'nastaveno' | 'pozvano', deaktivovan }
+  //   nastaveno = ucet existuje a heslo je nastaveno; pozvano = ucet existuje, heslo jeste ne
+  type PristupInfo = { stav: 'nastaveno' | 'pozvano'; deaktivovan: boolean };
+  const [pristupy, setPristupy] = useState<Record<string, PristupInfo>>({});
   const [nacitamPristupy, setNacitamPristupy] = useState(false);
   const [odesilamEmail, setOdesilamEmail] = useState<string | null>(null); // email prave odesilany
   const [odesilamVsem, setOdesilamVsem] = useState(false);
+  const [akceEmail, setAkceEmail] = useState<string | null>(null); // email, na kterem prave bezi sprava pristupu (reset/deaktivace/zruseni)
 
   // nacte, kdo uz ma pristup (po nacteni klienta)
   const nacistPristupy = async (klientId: string) => {
@@ -75,9 +91,12 @@ export default function ClientDetailPage() {
       });
       const data = await res.json();
       if (data.success) {
-        const mapa: Record<string, 'nastaveno' | 'pozvano'> = {};
-        for (const p of data.pristupy as { email: string; hesloNastaveno: boolean }[]) {
-          mapa[p.email] = p.hesloNastaveno ? 'nastaveno' : 'pozvano';
+        const mapa: Record<string, PristupInfo> = {};
+        for (const p of data.pristupy as { email: string; hesloNastaveno: boolean; deaktivovan?: boolean }[]) {
+          mapa[p.email] = {
+            stav: p.hesloNastaveno ? 'nastaveno' : 'pozvano',
+            deaktivovan: p.deaktivovan === true,
+          };
         }
         setPristupy(mapa);
       }
@@ -101,12 +120,15 @@ export default function ClientDetailPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setPristupy((p) => ({ ...p, [email.toLowerCase()]: 'pozvano' }));
+        setPristupy((p) => ({ ...p, [email.toLowerCase()]: { stav: 'pozvano', deaktivovan: false } }));
         return true;
       }
       // 409 = uz existuje: taky oznacime jako pozvano, at to sedi
       if (res.status === 409) {
-        setPristupy((p) => ({ ...p, [email.toLowerCase()]: p[email.toLowerCase()] || 'pozvano' }));
+        setPristupy((p) => ({
+          ...p,
+          [email.toLowerCase()]: p[email.toLowerCase()] || { stav: 'pozvano', deaktivovan: false },
+        }));
       }
       toast({ title: `Přístup: ${email}`, description: data.error || 'Nepodařilo se.', variant: 'destructive' });
       return false;
@@ -121,6 +143,99 @@ export default function ClientDetailPage() {
     const ok = await poslatPristupOsobe(email);
     if (ok) toast({ title: 'Přístup odeslán', description: `Pozvánka byla odeslána na ${email}.` });
     setOdesilamEmail(null);
+  };
+
+  // --- Správa přístupu jedné osoby (reset / deaktivace / zrušení) ---
+
+  const resetHesla = async (email: string) => {
+    const klientAkt = klienti.find((k) => k.id === id);
+    if (!klientAkt) return;
+    setAkceEmail(email);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/reset-hesla', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email, klientId: klientAkt.id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: 'Reset odeslán', description: `Na ${email} byl odeslán odkaz pro nové heslo.` });
+      } else {
+        toast({ title: 'Nepodařilo se', description: data.error || 'Zkuste to znovu.', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Chyba sítě', description: 'Zkuste to znovu.', variant: 'destructive' });
+    } finally {
+      setAkceEmail(null);
+    }
+  };
+
+  const prepnoutDeaktivaci = async (email: string, deaktivovan: boolean) => {
+    const klientAkt = klienti.find((k) => k.id === id);
+    if (!klientAkt) return;
+    setAkceEmail(email);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/deaktivovat-pristup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email, klientId: klientAkt.id, deaktivovan }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPristupy((p) => {
+          const key = email.toLowerCase();
+          const stav = p[key];
+          return stav ? { ...p, [key]: { ...stav, deaktivovan } } : p;
+        });
+        toast({
+          title: deaktivovan ? 'Přístup pozastaven' : 'Přístup obnoven',
+          description: deaktivovan
+            ? `${email} se dočasně nedostane dovnitř.`
+            : `${email} má opět přístup.`,
+        });
+      } else {
+        toast({ title: 'Nepodařilo se', description: data.error || 'Zkuste to znovu.', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Chyba sítě', description: 'Zkuste to znovu.', variant: 'destructive' });
+    } finally {
+      setAkceEmail(null);
+    }
+  };
+
+  const zrusitPristup = async (email: string) => {
+    const klientAkt = klienti.find((k) => k.id === id);
+    if (!klientAkt) return;
+    if (!window.confirm(
+      `Opravdu zrušit přístup pro ${email}?\n\nÚčet přijde o profil a do aplikace se nedostane. ` +
+      `Toto je trvalé — pro dočasné pozastavení použijte „Pozastavit přístup".`
+    )) return;
+    setAkceEmail(email);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/zrusit-pristup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email, klientId: klientAkt.id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPristupy((p) => {
+          const kopie = { ...p };
+          delete kopie[email.toLowerCase()];
+          return kopie;
+        });
+        toast({ title: 'Přístup zrušen', description: `${email} už do portálu nevstoupí.` });
+      } else {
+        toast({ title: 'Nepodařilo se', description: data.error || 'Zkuste to znovu.', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Chyba sítě', description: 'Zkuste to znovu.', variant: 'destructive' });
+    } finally {
+      setAkceEmail(null);
+    }
   };
 
   const poslatVsem = async () => {
@@ -485,42 +600,87 @@ export default function ClientDetailPage() {
                                     <a href={`tel:${o.telefon.replace(/\s/g, '')}`} className="text-sm hover:underline">{o.telefon}</a>
                                   </div>
                                 )}
-                                {/* Stav pristupu + tlacitko */}
-                                <div className="flex items-center min-w-[150px] justify-end">
-                                  {!o.email?.includes('@') ? (
-                                    <span className="text-xs text-muted-foreground italic">bez e-mailu</span>
-                                  ) : pristupy[o.email.toLowerCase()] === 'nastaveno' ? (
-                                    <span className="inline-flex items-center gap-1 text-xs font-bold text-[hsl(var(--stav-vyhovuje))]">
-                                      <CheckCircle2 className="h-4 w-4" /> Má přístup
-                                    </span>
-                                  ) : pristupy[o.email.toLowerCase()] === 'pozvano' ? (
-                                    <div className="flex flex-col items-end gap-1">
-                                      <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600">
-                                        <Mail className="h-4 w-4" /> Pozvánka odeslána
-                                      </span>
-                                      <button
-                                        onClick={() => poslatJedne(o.email.trim())}
-                                        disabled={odesilamEmail === o.email.trim()}
-                                        className="text-[11px] text-blue-600 hover:underline disabled:opacity-50"
-                                      >
-                                        {odesilamEmail === o.email.trim() ? 'Odesílám…' : 'Poslat znovu'}
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => poslatJedne(o.email.trim())}
-                                      disabled={odesilamEmail === o.email.trim() || nacitamPristupy}
-                                    >
-                                      {odesilamEmail === o.email.trim() ? (
-                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Odesílám…</>
+                                {/* Stav pristupu + akce */}
+                                {(() => {
+                                  const emailTrim = o.email?.trim() || '';
+                                  const info = o.email?.includes('@') ? pristupy[o.email.toLowerCase()] : undefined;
+                                  const maUcet = !!info; // ucet existuje (pozvano nebo nastaveno)
+                                  const bezi = akceEmail === emailTrim;
+
+                                  return (
+                                    <div className="flex items-center gap-3 min-w-[170px] justify-end">
+                                      {/* Stavovy indikator */}
+                                      {!o.email?.includes('@') ? (
+                                        <span className="text-xs text-muted-foreground italic">bez e-mailu</span>
+                                      ) : info?.deaktivovan ? (
+                                        <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-500">
+                                          <Ban className="h-4 w-4" /> Pozastaveno
+                                        </span>
+                                      ) : info?.stav === 'nastaveno' ? (
+                                        <span className="inline-flex items-center gap-1 text-xs font-bold text-[hsl(var(--stav-vyhovuje))]">
+                                          <CheckCircle2 className="h-4 w-4" /> Má přístup
+                                        </span>
+                                      ) : info?.stav === 'pozvano' ? (
+                                        <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600">
+                                          <Mail className="h-4 w-4" /> Pozvánka odeslána
+                                        </span>
                                       ) : (
-                                        <><Send className="mr-2 h-4 w-4" /> Poslat přístup</>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => poslatJedne(emailTrim)}
+                                          disabled={odesilamEmail === emailTrim || nacitamPristupy}
+                                        >
+                                          {odesilamEmail === emailTrim ? (
+                                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Odesílám…</>
+                                          ) : (
+                                            <><Send className="mr-2 h-4 w-4" /> Poslat přístup</>
+                                          )}
+                                        </Button>
                                       )}
-                                    </Button>
-                                  )}
-                                </div>
+
+                                      {/* Sprava pristupu — jen pokud ucet existuje */}
+                                      {maUcet && (
+                                        <DropdownMenu>
+                                          <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" disabled={bezi}>
+                                              {bezi
+                                                ? <Loader2 className="h-4 w-4 animate-spin" />
+                                                : <MoreHorizontal className="h-4 w-4" />}
+                                              <span className="sr-only">Správa přístupu</span>
+                                            </Button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent align="end" className="w-56">
+                                            <DropdownMenuLabel>Správa přístupu</DropdownMenuLabel>
+                                            <DropdownMenuSeparator />
+
+                                            <DropdownMenuItem onClick={() => resetHesla(emailTrim)}>
+                                              <KeyRound className="mr-2 h-4 w-4" /> Reset hesla
+                                            </DropdownMenuItem>
+
+                                            {info?.deaktivovan ? (
+                                              <DropdownMenuItem onClick={() => prepnoutDeaktivaci(emailTrim, false)}>
+                                                <ShieldCheck className="mr-2 h-4 w-4" /> Obnovit přístup
+                                              </DropdownMenuItem>
+                                            ) : (
+                                              <DropdownMenuItem onClick={() => prepnoutDeaktivaci(emailTrim, true)}>
+                                                <Ban className="mr-2 h-4 w-4" /> Pozastavit přístup
+                                              </DropdownMenuItem>
+                                            )}
+
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                              onClick={() => zrusitPristup(emailTrim)}
+                                              className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                                            >
+                                              <Trash2 className="mr-2 h-4 w-4" /> Zrušit přístup
+                                            </DropdownMenuItem>
+                                          </DropdownMenuContent>
+                                        </DropdownMenu>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             </CardContent>
                           </Card>
