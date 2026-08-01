@@ -86,6 +86,8 @@ export default function SkoleniKlienta({ klientId }: Props) {
       dalsiIso: null,
       dalsiRucne: false,
       stav: 'aktivni',
+      zadal: 'ozo',
+      potvrzenoOzo: true,
     });
     setVybrane('');
     nacti();
@@ -102,6 +104,8 @@ export default function SkoleniKlienta({ klientId }: Props) {
       dalsiIso: null,
       dalsiRucne: false,
       stav: 'aktivni',
+      zadal: 'ozo',
+      potvrzenoOzo: true,
     });
     await nacti();
     setRozbaleno(ref.id);
