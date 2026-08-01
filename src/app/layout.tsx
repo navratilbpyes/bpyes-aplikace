@@ -86,6 +86,37 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
+  // Guard deaktivace: klient, kterému admin pozastavil přístup (deaktivovan=true),
+  // se dovnitř nedostane. Firebase Auth účet zůstává (disable vyžaduje service
+  // account), ale aplikace ho po přihlášení odhlásí. Admina se netýká.
+  if (user && userProfile?.role === 'client' && userProfile.deaktivovan) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-white/95 backdrop-blur shadow-2xl border-none">
+          <CardHeader className="space-y-2 text-center">
+            <div className="mx-auto h-12 w-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600 mb-2">
+              <Lock className="h-6 w-6" />
+            </div>
+            <CardTitle className="text-2xl font-black tracking-tight">Přístup pozastaven</CardTitle>
+            <CardDescription>
+              Váš přístup do portálu je dočasně pozastaven. Pro obnovení kontaktujte
+              svého BOZP/PO technika.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              variant="outline"
+              className="w-full h-11 font-bold"
+              onClick={logout}
+            >
+              <LogOut className="mr-2 h-4 w-4" /> Odhlásit se
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!user || !userProfile) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
