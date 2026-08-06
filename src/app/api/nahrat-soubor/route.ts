@@ -17,7 +17,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac } from 'crypto';
 
-const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!;
+// Project ID je veřejné (je v klientském firebaseConfig). Env je primární,
+// konstanta je fallback — bez ní `nactiProfil` volá Firestore REST na
+// projects/undefined/... → profil se nenačte a každý upload spadne na 403.
+const PROJECT_ID =
+  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'studio-2327834732-8ec09';
 const SECRET = process.env.APP_UPLOAD_SECRET!;
 const ENDPOINT = process.env.UPLOAD_ENDPOINT!;
 
@@ -106,13 +110,37 @@ export async function POST(req: NextRequest) {
   }
 
   const profil = await nactiProfil(user.uid, idToken);
-  if (!profil?.klientId) {
-    return NextResponse.json({ chyba: 'Uživatel nemá přiřazeného klienta' }, { status: 403 });
+  if (!profil) {
+    // profil se vůbec nenačetl (REST vrátil !ok) — nejčastěji Rules/token
+    return NextResponse.json(
+      { chyba: 'Profil nenalezen', detail: 'nactiProfil vrátil null (uzivatele/{uid} nepřečten)' },
+      { status: 403 },
+    );
   }
 
-  // ── 2. Soubor z požadavku ──
+  // ── 2. Soubor + cílový klient z požadavku ──
   const form = await req.formData();
   const soubor = form.get('soubor') as File | null;
+  const zadanyKlientId = (form.get('klientId') as string | null)?.trim() || '';
+
+  // Efektivní klientId:
+  //  - admin: musí přijít v požadavku (nahrává ke konkrétnímu klientovi);
+  //           admin sám klientId v profilu nemá.
+  //  - klient: vždy jeho vlastní z profilu; případný zadaný klientId se ignoruje
+  //           (nesmí podvrhnout cizího klienta).
+  const jeAdmin = profil.role === 'admin';
+  const klientId = jeAdmin ? zadanyKlientId : (profil.klientId ?? '');
+
+  if (!klientId) {
+    return NextResponse.json(
+      {
+        chyba: jeAdmin ? 'Chybí cílový klient' : 'Uživatel nemá přiřazeného klienta',
+        detail: `role=${profil.role ?? 'chybí'} klientIdVProfilu=${profil.klientId ? 'ano' : 'ne'} zadanyKlientId=${zadanyKlientId ? 'ano' : 'ne'}`,
+      },
+      { status: 403 },
+    );
+  }
+
   if (!soubor) {
     return NextResponse.json({ chyba: 'Chybí soubor' }, { status: 400 });
   }
@@ -126,11 +154,11 @@ export async function POST(req: NextRequest) {
   // ── 3. Podpis a přeposlání na Wedos ──
   const timestamp = String(Math.floor(Date.now() / 1000));
   const nazev = soubor.name;
-  const zprava = `${profil.klientId}|${timestamp}|${nazev}`;
+  const zprava = `${klientId}|${timestamp}|${nazev}`;
   const podpis = createHmac('sha256', SECRET).update(zprava).digest('hex');
 
   const odeslat = new FormData();
-  odeslat.append('klientId', profil.klientId);
+  odeslat.append('klientId', klientId);
   odeslat.append('timestamp', timestamp);
   odeslat.append('nazev', nazev);
   odeslat.append('podpis', podpis);
@@ -148,7 +176,7 @@ export async function POST(req: NextRequest) {
 
   // ── 4. Metadata do Firestore ──
   await zapisMetadata(idToken, {
-    klientId: profil.klientId,
+    klientId,
     souborId: vysledek.souborId,
     pripona: vysledek.pripona,
     nazev,
