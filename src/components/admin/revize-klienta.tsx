@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  collection, addDoc, updateDoc, doc, query, where, getDocs,
+  collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc,
 } from 'firebase/firestore';
 import { db } from '@/components/data-provider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,6 +42,7 @@ const formatDatum = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('c
 export default function RevizeKlienta({ klientId }: Props) {
   const [seznam, setSeznam] = useState<TypRevize[]>([]);
   const [ciselnik, setCiselnik] = useState<CiselnikRevize[]>([]);
+  const [pracoviste, setPracoviste] = useState<{ id: string; nazev: string }[]>([]);
   const [nacitam, setNacitam] = useState(true);
   const [vybrane, setVybrane] = useState('');
   const [rozbaleno, setRozbaleno] = useState<string | null>(null);
@@ -53,9 +54,10 @@ export default function RevizeKlienta({ klientId }: Props) {
 
   const nacti = useCallback(async () => {
     try {
-      const [kSnap, cSnap] = await Promise.all([
+      const [kSnap, cSnap, klDoc] = await Promise.all([
         getDocs(query(cesta(), where('stav', '==', 'aktivni'))),
         getDocs(query(collection(db, 'ciselnikRevizi'), where('stav', '==', 'aktivni'))),
+        getDoc(doc(db, 'klienti', klientId)),
       ]);
       setSeznam(kSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as TypRevize));
       setCiselnik(
@@ -63,12 +65,14 @@ export default function RevizeKlienta({ klientId }: Props) {
           .map((d) => ({ id: d.id, ...d.data() }) as CiselnikRevize)
           .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs')),
       );
+      const pr = (klDoc.data()?.pracoviste ?? []) as { id: string; nazev: string }[];
+      setPracoviste(pr.map((p) => ({ id: p.id, nazev: p.nazev })));
     } catch (e) {
       console.error('Načtení revizí selhalo:', e);
     } finally {
       setNacitam(false);
     }
-  }, [cesta]);
+  }, [cesta, klientId]);
 
   useEffect(() => { nacti(); }, [nacti]);
 
@@ -216,6 +220,11 @@ export default function RevizeKlienta({ klientId }: Props) {
                         {r.poznamka && (
                           <span className="text-sm text-muted-foreground">— {r.poznamka}</span>
                         )}
+                        {(r.pracovisteNazev || r.umisteni) && (
+                          <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                            📍 {[r.pracovisteNazev, r.umisteni].filter(Boolean).join(' · ')}
+                          </span>
+                        )}
                         {!r.ciselnikId && (
                           <Badge variant="secondary" className="text-[10px]">vlastní</Badge>
                         )}
@@ -309,6 +318,41 @@ export default function RevizeKlienta({ klientId }: Props) {
                             value={r.poznamka ?? ''}
                             onChange={(e) => uprav(r.id, { poznamka: e.target.value })}
                             placeholder="např. hala B — rozvaděč RH2"
+                            className="h-9"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Pracoviště (z detailu klienta) + bližší umístění */}
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Pracoviště / provozovna</Label>
+                          <Select
+                            value={r.pracovisteId ?? '__zadne__'}
+                            onValueChange={(v) => {
+                              if (v === '__zadne__') {
+                                uprav(r.id, { pracovisteId: null, pracovisteNazev: null });
+                              } else {
+                                const p = pracoviste.find((x) => x.id === v);
+                                uprav(r.id, { pracovisteId: v, pracovisteNazev: p?.nazev ?? null });
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="h-9"><SelectValue placeholder="—" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__zadne__">— žádné —</SelectItem>
+                              {pracoviste.map((p) => (
+                                <SelectItem key={p.id} value={p.id}>{p.nazev}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Bližší určení (místnost apod.)</Label>
+                          <Input
+                            value={r.umisteni ?? ''}
+                            onChange={(e) => uprav(r.id, { umisteni: e.target.value })}
+                            placeholder="např. 2. patro, serverovna"
                             className="h-9"
                           />
                         </div>
