@@ -61,12 +61,24 @@ service cloud.firestore {
         && d.stav == 'aktivni';
     }
 
-    // Klient smi UPRAVIT existujici zaznam, jen kdyz:
+    // ---------- protokol: pomocne funkce ----------
+    // Pole protokolu, ktera smi klient menit u JAKEKOLIV sve revize/skoleni.
+    // protokolDokumentId = reference na dokumenty/{id}, protokolNazev = nazev souboru,
+    // protokolStav = 'ceka' (klient nahral, ceka na OZO) nebo null (odpojeno).
+    // Klient NIKDY nesmi nastavit 'videl' ani 'odmitnuto' (to je OZO).
+    function protokolStavKlientOk() {
+      let novy = request.resource.data;
+      return !('protokolStav' in novy)
+        || novy.protokolStav == null
+        || novy.protokolStav == 'ceka';
+    }
+
+    // Klient smi UPRAVIT existujici VLASTNI zaznam (zadal == 'klient'), jen kdyz:
     //  - pise do sveho klienta a je aktivni,
-    //  - upravuje zaznam, ktery zadal klient (ne adminovy zaznamy),
     //  - po uprave zustava potvrzenoOzo == false (nesmi si potvrdit),
     //  - nemeni priznak puvodu (zadal zustava 'klient'),
-    //  - nemeni stav na 'smazano' (mazani je jen adminovo).
+    //  - nemeni stav na 'smazano' (mazani je jen adminovo),
+    //  - pokud sahne na protokol, nastavi jen 'ceka'/null.
     function klientSmiUpravit(klientId) {
       let stary = resource.data;
       let novy = request.resource.data;
@@ -75,7 +87,21 @@ service cloud.firestore {
         && stary.zadal == 'klient'
         && novy.potvrzenoOzo == false
         && novy.zadal == 'klient'
-        && novy.stav == 'aktivni';
+        && novy.stav == 'aktivni'
+        && protokolStavKlientOk();
+    }
+
+    // Klient smi nahrat/odpojit PROTOKOL i u CIZI (OZO) revize/skoleni, ale
+    // smi zmenit VYHRADNE protokolova pole a nic jineho. Ostatni pole musi
+    // zustat beze zmeny (affectedKeys omezene na protokol-trojici) a stav
+    // protokolu jen 'ceka'/null.
+    function klientSmiJenProtokol(klientId) {
+      let novy = request.resource.data;
+      let zmenene = novy.diff(resource.data).affectedKeys();
+      return jeAktivniKlient()
+        && mujKlientId() == klientId
+        && zmenene.hasOnly(['protokolDokumentId', 'protokolNazev', 'protokolStav'])
+        && protokolStavKlientOk();
     }
 
     // ---------- klienti ----------
@@ -85,12 +111,15 @@ service cloud.firestore {
       allow write: if isAdmin();
 
       // --- revize a skoleni: klient smi PRIDAT a UPRAVIT vlastni zaznamy ---
+      // Navic smi klient nahrat PROTOKOL i k OZO zaznamu (jen protokol-pole).
       // Ostatni podkolekce (a mazani) zustavaji jen adminovi.
       match /revize/{docId} {
         allow read: if isAdmin()
           || (maProfil() && mujKlientId() == klientId);
         allow create: if isAdmin() || klientSmiVytvorit(klientId);
-        allow update: if isAdmin() || klientSmiUpravit(klientId);
+        allow update: if isAdmin()
+          || klientSmiUpravit(klientId)
+          || klientSmiJenProtokol(klientId);
         allow delete: if isAdmin();   // klient nemaze; admin dela soft-delete
       }
 
@@ -98,7 +127,9 @@ service cloud.firestore {
         allow read: if isAdmin()
           || (maProfil() && mujKlientId() == klientId);
         allow create: if isAdmin() || klientSmiVytvorit(klientId);
-        allow update: if isAdmin() || klientSmiUpravit(klientId);
+        allow update: if isAdmin()
+          || klientSmiUpravit(klientId)
+          || klientSmiJenProtokol(klientId);
         allow delete: if isAdmin();
       }
 
@@ -143,10 +174,16 @@ service cloud.firestore {
     }
 
     // ---------- dokumenty (soubory na Wedos uloziste) ----------
+    // Metadata souboru. Vytvari je API route nahrat-soubor pod idTokenem
+    // volajiciho, proto musi klient smet CREATE ke svemu klientId.
+    // Update/delete zustava adminovi (klient "maze" jen odpojenim z revize).
     match /dokumenty/{id} {
       allow read: if isAdmin()
         || (maProfil() && resource.data.klientId == mujKlientId());
-      allow write: if false;
+      allow create: if isAdmin()
+        || (jeAktivniKlient()
+            && request.resource.data.klientId == mujKlientId());
+      allow update, delete: if isAdmin();
     }
 
     // ---------- konfigurace ----------
