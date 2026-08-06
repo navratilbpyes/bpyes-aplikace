@@ -97,11 +97,7 @@ async function zapisMetadata(
     headers: { Authorization: `Bearer ${idToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const chybaText = await res.text().catch(() => '');
-    return { ok: false, status: res.status, detail: chybaText.slice(0, 300) };
-  }
-  return { ok: true, status: res.status, detail: '' };
+  return res.ok;
 }
 
 export async function POST(req: NextRequest) {
@@ -119,11 +115,7 @@ export async function POST(req: NextRequest) {
 
   const profil = await nactiProfil(user.uid, idToken);
   if (!profil) {
-    // profil se vůbec nenačetl (REST vrátil !ok) — nejčastěji Rules/token
-    return NextResponse.json(
-      { chyba: 'Profil nenalezen', detail: 'nactiProfil vrátil null (uzivatele/{uid} nepřečten)' },
-      { status: 403 },
-    );
+    return NextResponse.json({ chyba: 'Profil nenalezen' }, { status: 403 });
   }
 
   // ── 2. Soubor + cílový klient z požadavku ──
@@ -141,10 +133,7 @@ export async function POST(req: NextRequest) {
 
   if (!klientId) {
     return NextResponse.json(
-      {
-        chyba: jeAdmin ? 'Chybí cílový klient' : 'Uživatel nemá přiřazeného klienta',
-        detail: `role=${profil.role ?? 'chybí'} klientIdVProfilu=${profil.klientId ? 'ano' : 'ne'} zadanyKlientId=${zadanyKlientId ? 'ano' : 'ne'}`,
-      },
+      { chyba: jeAdmin ? 'Chybí cílový klient' : 'Uživatel nemá přiřazeného klienta' },
       { status: 403 },
     );
   }
@@ -177,23 +166,13 @@ export async function POST(req: NextRequest) {
 
   if (!wedos.ok || !vysledek.ok) {
     return NextResponse.json(
-      {
-        chyba: vysledek.chyba ?? 'Nahrání selhalo',
-        // DIAGNOSTIKA: co poslal Node vs. co vrátil Wedos
-        debug_node: {
-          delka_secret: SECRET?.length ?? 0,
-          secret_posl4: SECRET ? SECRET.slice(-4) : '',
-          zprava,
-          podpis_node: podpis,
-        },
-        debug_wedos: vysledek.debug ?? null,
-      },
+      { chyba: vysledek.chyba ?? 'Nahrání selhalo' },
       { status: wedos.status || 500 },
     );
   }
 
   // ── 4. Metadata do Firestore ──
-  const zapis = await zapisMetadata(idToken, {
+  const zapisOk = await zapisMetadata(idToken, {
     klientId,
     souborId: vysledek.souborId,
     pripona: vysledek.pripona,
@@ -202,14 +181,8 @@ export async function POST(req: NextRequest) {
     nahralUid: user.uid,
   });
 
-  if (!zapis.ok) {
-    return NextResponse.json(
-      {
-        chyba: 'Metadata se nepodařilo uložit',
-        debug_zapis: { status: zapis.status, detail: zapis.detail, souborId: vysledek.souborId },
-      },
-      { status: 500 },
-    );
+  if (!zapisOk) {
+    return NextResponse.json({ chyba: 'Metadata se nepodařilo uložit' }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, souborId: vysledek.souborId });
