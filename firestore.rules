@@ -100,7 +100,7 @@ service cloud.firestore {
       let zmenene = novy.diff(resource.data).affectedKeys();
       return jeAktivniKlient()
         && mujKlientId() == klientId
-        && zmenene.hasOnly(['protokolDokumentId', 'protokolNazev', 'protokolStav'])
+        && zmenene.hasOnly(['protokolDokumentId', 'protokolNazev', 'protokolStav', 'protokolDuvod'])
         && protokolStavKlientOk();
     }
 
