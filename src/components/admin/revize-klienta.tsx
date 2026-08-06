@@ -79,6 +79,12 @@ export default function RevizeKlienta({ klientId }: Props) {
       ciselnikId: zdroj.id,
       nazev: zdroj.nazev,
       periodaMesice: zdroj.periodaMesice,
+      // snapshot z matice (viz lib/revize.ts) — nese kategorizaci i typ lhůty
+      oblast: zdroj.oblast ?? null,
+      druhUkonu: zdroj.druhUkonu ?? null,
+      lhutaText: zdroj.lhutaText ?? null,
+      kdoProvadi: zdroj.kdoProvadi ?? null,
+      typLhuty: zdroj.typLhuty ?? null,
       firmaNazev: null,
       firmaTelefon: null,
       firmaEmail: null,
@@ -164,7 +170,7 @@ export default function RevizeKlienta({ klientId }: Props) {
               )}
               {ciselnik.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
-                  {c.nazev} ({popisPeriody(c.periodaMesice)})
+                  {c.oblast ? `[${c.oblast}] ` : ''}{c.nazev} ({c.lhutaText ?? popisPeriody(c.periodaMesice)})
                 </SelectItem>
               ))}
             </SelectContent>
