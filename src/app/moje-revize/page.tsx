@@ -55,6 +55,11 @@ interface CiselnikPolozka {
   id: string;
   nazev: string;
   periodaMesice: number;
+  oblast?: string;
+  druhUkonu?: string;
+  lhutaText?: string;
+  kdoProvadi?: string;
+  typLhuty?: 'klouzava' | 'kalendarni' | 'text';
 }
 
 export default function MojeRevizePage() {
@@ -94,7 +99,11 @@ export default function MojeRevizePage() {
       setCiselnik(
         cSnap.docs.map((d) => {
           const f = d.data();
-          return { id: d.id, nazev: f.nazev, periodaMesice: f.periodaMesice };
+          return {
+            id: d.id, nazev: f.nazev, periodaMesice: f.periodaMesice,
+            oblast: f.oblast, druhUkonu: f.druhUkonu, lhutaText: f.lhutaText,
+            kdoProvadi: f.kdoProvadi, typLhuty: f.typLhuty,
+          };
         }),
       );
     } catch (e) {
@@ -119,7 +128,15 @@ export default function MojeRevizePage() {
         nazev: zdroj.nazev,
         periodaMesice: zdroj.periodaMesice,
         ...(druh === 'revize'
-          ? { firmaNazev: null, firmaTelefon: null, firmaEmail: null, cisloProtokolu: null }
+          ? {
+              firmaNazev: null, firmaTelefon: null, firmaEmail: null, cisloProtokolu: null,
+              // snapshot z matice (jen revize; školení tato pole nemá)
+              oblast: zdroj.oblast ?? null,
+              druhUkonu: zdroj.druhUkonu ?? null,
+              lhutaText: zdroj.lhutaText ?? null,
+              kdoProvadi: zdroj.kdoProvadi ?? null,
+              typLhuty: zdroj.typLhuty ?? null,
+            }
           : { provadi: null }),
         poznamka: null,
         posledniIso: null,
@@ -249,7 +266,7 @@ export default function MojeRevizePage() {
                   ) : (
                     ciselnik.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
-                        {c.nazev} ({popisPeriody(c.periodaMesice)})
+                        {c.oblast ? `[${c.oblast}] ` : ''}{c.nazev} ({c.lhutaText ?? popisPeriody(c.periodaMesice)})
                       </SelectItem>
                     ))
                   )}
