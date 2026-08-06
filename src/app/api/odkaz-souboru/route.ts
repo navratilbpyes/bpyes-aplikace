@@ -13,7 +13,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac } from 'crypto';
 
-const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!;
+const PROJECT_ID =
+  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'studio-2327834732-8ec09';
 const SECRET = process.env.APP_UPLOAD_SECRET!;
 const ENDPOINT = process.env.DOWNLOAD_ENDPOINT!;
 
