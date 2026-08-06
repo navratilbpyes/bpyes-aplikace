@@ -20,7 +20,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { db, useData } from '@/components/data-provider';
 import {
-  collection, addDoc, updateDoc, doc, getDocs, query, where,
+  collection, addDoc, updateDoc, doc, getDoc, getDocs, query, where,
 } from 'firebase/firestore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -70,6 +70,7 @@ export default function MojeRevizePage() {
   const [druh, setDruh] = useState<Druh>('revize');
   const [seznam, setSeznam] = useState<Polozka[]>([]);
   const [ciselnik, setCiselnik] = useState<CiselnikPolozka[]>([]);
+  const [pracoviste, setPracoviste] = useState<{ id: string; nazev: string }[]>([]);
   const [nacitam, setNacitam] = useState(true);
   const [vybrane, setVybrane] = useState('');
   const [uklada, setUklada] = useState(false);
@@ -86,9 +87,10 @@ export default function MojeRevizePage() {
     if (!klientId) { setNacitam(false); return; }
     setNacitam(true);
     try {
-      const [zSnap, cSnap] = await Promise.all([
+      const [zSnap, cSnap, klDoc] = await Promise.all([
         getDocs(cesta()),
         getDocs(query(collection(db, ciselnikKolekce), where('stav', '==', 'aktivni'))),
+        getDoc(doc(db, 'klienti', klientId!)),
       ]);
       const zaznamy = zSnap.docs
         .map((d) => ({ id: d.id, ...d.data() }) as Polozka)
@@ -106,6 +108,8 @@ export default function MojeRevizePage() {
           };
         }),
       );
+      const pr = (klDoc.data()?.pracoviste ?? []) as { id: string; nazev: string }[];
+      setPracoviste(pr.map((p) => ({ id: p.id, nazev: p.nazev })));
     } catch (e) {
       console.error('Načtení selhalo:', e);
       toast({ title: 'Načtení selhalo', description: 'Zkuste to prosím znovu.', variant: 'destructive' });
@@ -416,6 +420,41 @@ export default function MojeRevizePage() {
                             onChange={(e) => uprav(z.id, { provadi: e.target.value } as Partial<Polozka>)}
                           />
                         </div>
+                      )}
+
+                      {druh === 'revize' && (
+                        <>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Pracoviště / provozovna</Label>
+                            <Select
+                              value={(z as RevizeKlienta).pracovisteId ?? '__zadne__'}
+                              onValueChange={(v) => {
+                                if (v === '__zadne__') {
+                                  uprav(z.id, { pracovisteId: null, pracovisteNazev: null } as Partial<Polozka>);
+                                } else {
+                                  const p = pracoviste.find((x) => x.id === v);
+                                  uprav(z.id, { pracovisteId: v, pracovisteNazev: p?.nazev ?? null } as Partial<Polozka>);
+                                }
+                              }}
+                            >
+                              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__zadne__">— žádné —</SelectItem>
+                                {pracoviste.map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>{p.nazev}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Bližší určení (místnost apod.)</Label>
+                            <Input
+                              value={(z as RevizeKlienta).umisteni ?? ''}
+                              onChange={(e) => uprav(z.id, { umisteni: e.target.value } as Partial<Polozka>)}
+                              placeholder="např. 2. patro, serverovna"
+                            />
+                          </div>
+                        </>
                       )}
 
                       <div className="space-y-1.5 sm:col-span-2">
