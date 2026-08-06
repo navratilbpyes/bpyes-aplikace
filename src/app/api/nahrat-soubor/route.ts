@@ -75,7 +75,11 @@ async function zapisMetadata(
     nahralUid: string;
   },
 ) {
-  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/dokumenty`;
+  // Dokument zakládáme s EXPLICITNÍM ID = souborId (Wedos ID), aby se dal
+  // později najít v odkaz-souboru podle protokolDokumentId (které = souborId).
+  // Bez ?documentId by Firestore vygeneroval vlastní auto-ID a odkaz-souboru
+  // by dokument nenašel → 404 „Dokument nenalezen".
+  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/dokumenty?documentId=${encodeURIComponent(data.souborId)}`;
   const body = {
     fields: {
       klientId: { stringValue: data.klientId },
