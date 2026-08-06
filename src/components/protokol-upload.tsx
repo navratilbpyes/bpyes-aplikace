@@ -30,6 +30,8 @@ import {
 import type { ProtokolPole, ProtokolStav } from '@/lib/protokol';
 
 interface Props {
+  /** klientId cílové revize/školení — admin ho posílá do uploadu */
+  klientId: string;
   /** aktuální protokolová pole záznamu */
   data: ProtokolPole;
   /** uloží změny protokolových polí (rodič má updateDoc na revize|skoleni) */
@@ -46,7 +48,7 @@ const STAV_STYL: Record<ProtokolStav, { label: string; tridy: string; Ikona: any
   odmitnuto: { label: 'Odmítnuto', tridy: 'text-red-700 bg-red-50', Ikona: Ban },
 };
 
-export default function ProtokolUpload({ data, onUlozit, adminMode, disabled }: Props) {
+export default function ProtokolUpload({ klientId, data, onUlozit, adminMode, disabled }: Props) {
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [nahravam, setNahravam] = useState(false);
@@ -61,7 +63,7 @@ export default function ProtokolUpload({ data, onUlozit, adminMode, disabled }: 
   async function zpracujSoubor(soubor: File) {
     setNahravam(true);
     try {
-      const dokumentId = await nahrajProtokol(soubor);
+      const dokumentId = await nahrajProtokol(soubor, klientId);
       // Po nahrání protokol vždy jde do stavu 'ceka' (i výměna po odmítnutí).
       await onUlozit({
         protokolDokumentId: dokumentId,
