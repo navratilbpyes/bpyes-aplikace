@@ -467,6 +467,7 @@ export default function RevizeKlienta({ klientId }: Props) {
                       <div className="rounded-md border bg-muted/30 p-3 space-y-2">
                         <Label className="text-xs font-medium">Revizní protokol</Label>
                         <ProtokolUpload
+                          klientId={klientId}
                           adminMode
                           data={r as ProtokolPole}
                           onUlozit={(zmeny) => uprav(r.id, zmeny as Partial<TypRevize>)}
