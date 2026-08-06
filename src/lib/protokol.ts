@@ -45,7 +45,7 @@ async function idToken(): Promise<string | null> {
  * Vrací ID dokumentu (kolekce `dokumenty`), který se uloží na revizi
  * jako `protokolDokumentId`.
  */
-export async function nahrajProtokol(soubor: File): Promise<string> {
+export async function nahrajProtokol(soubor: File, cilovyKlientId?: string): Promise<string> {
   if (soubor.size > MAX_VELIKOST) {
     throw new Error('Soubor je příliš velký (max 20 MB).');
   }
@@ -58,6 +58,9 @@ export async function nahrajProtokol(soubor: File): Promise<string> {
 
   const form = new FormData();
   form.append('soubor', soubor);
+  // Admin nahrává ke konkrétnímu klientovi → pošli cílový klientId.
+  // Klient tohle needává; server ho stejně ignoruje a vezme z profilu.
+  if (cilovyKlientId) form.append('klientId', cilovyKlientId);
 
   const res = await fetch('/api/nahrat-soubor', {
     method: 'POST',
