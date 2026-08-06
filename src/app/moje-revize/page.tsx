@@ -472,6 +472,7 @@ export default function MojeRevizePage() {
                       {druh === 'revize' ? 'Revizní protokol' : 'Doklad o školení'}
                     </div>
                     <ProtokolUpload
+                      klientId={klientId}
                       data={z as ProtokolPole}
                       onUlozit={(zmeny) => uprav(z.id, zmeny as Partial<Polozka>)}
                     />
