@@ -9,13 +9,40 @@
 
 export type StavZaznamu = 'aktivni' | 'smazano';
 
-/** Položka číselníku revizí. */
+/** Oblast revize/kontroly (kategorizace matice). */
+export type Oblast = 'Elektro' | 'Tlak' | 'Zdvihací' | 'PO' | 'Ostatní';
+
+/**
+ * Typ lhůty — řídí výpočet dalšího termínu:
+ *  - 'klouzava'   → poslední + periodaMesice (pro lhůty < 12 měsíců)
+ *  - 'kalendarni' → stejný kalendářní měsíc po N letech (roční a víceleté)
+ *  - 'text'       → bez auto-výpočtu; lhůta je jen textová (dle návodu / místního řádu)
+ */
+export type TypLhuty = 'klouzava' | 'kalendarni' | 'text';
+
+/**
+ * Položka číselníku revizí (matice revizí/kontrol BOZP/PO).
+ * Pole oblast/zarizeni/druhUkonu/lhutaText/kdoProvadi/typLhuty jsou volitelná
+ * kvůli zpětné kompatibilitě se staršími položkami, které měly jen nazev+perioda.
+ */
 export interface CiselnikRevize {
   id: string;
-  /** téma revize, např. „Revize hromosvodu" */
+  /** téma revize — u nových položek složeno „zarizeni – druhUkonu" */
   nazev: string;
   periodaMesice: number;
   stav: StavZaznamu;
+  /** kategorie (Elektro/Tlak/Zdvihací/PO/Ostatní) */
+  oblast?: Oblast;
+  /** zařízení / prostředí, např. „Administrativa" */
+  zarizeni?: string;
+  /** druh úkonu, např. „Revize", „Vizuální kontrola", „Tlaková zkouška" */
+  druhUkonu?: string;
+  /** doslovná lhůta z matice, např. „1× ročně", „14 dní", „Dle místního řádu" */
+  lhutaText?: string;
+  /** kdo úkon provádí */
+  kdoProvadi?: string;
+  /** typ lhůty pro výpočet termínu; chybí = 'klouzava' (zpětná kompatibilita) */
+  typLhuty?: TypLhuty;
 }
 
 /** Revizní firma / technik u konkrétní revize. */
@@ -63,9 +90,20 @@ export interface RevizeKlienta {
   protokolStav?: 'ceka' | 'videl' | 'odmitnuto' | null;
   /** důvod odmítnutí protokolu (vyplní OZO) */
   protokolDuvod?: string | null;
+  // --- snapshot z číselníku (matice) — kopíruje se při přidání z katalogu ---
+  /** kategorie z matice (Elektro/Tlak/…) */
+  oblast?: Oblast;
+  /** druh úkonu z matice (Revize / Vizuální kontrola / …) */
+  druhUkonu?: string;
+  /** doslovná lhůta z matice (informativní) */
+  lhutaText?: string;
+  /** kdo úkon provádí (informativní, nezaměňovat s firmaNazev u klienta) */
+  kdoProvadi?: string;
+  /** typ lhůty pro výpočet termínu; chybí = 'klouzava' */
+  typLhuty?: TypLhuty;
 }
 
-/** Přičte měsíce k datu (ISO in, ISO out). */
+/** Přičte měsíce k datu (ISO in, ISO out). Klouzavý výpočet. */
 export function pridejMesice(iso: string, mesicu: number): string {
   const d = new Date(iso);
   const puvodniDen = d.getDate();
@@ -74,19 +112,46 @@ export function pridejMesice(iso: string, mesicu: number): string {
   return d.toISOString();
 }
 
-/** Dopočítá termín další revize. Vrací undefined, chybí-li datum poslední. */
+/**
+ * Kalendářní výpočet pro roční a víceleté lhůty (bod 5):
+ * další termín padne na STEJNÝ kalendářní měsíc po N letech (N = periodaMesice/12),
+ * konkrétně na poslední den toho měsíce (aby termín „platil celý měsíc").
+ * Např. poslední 15. 3. 2025, „1× ročně" → 31. 3. 2026.
+ */
+export function pridejKalendarniRoky(iso: string, periodaMesice: number): string {
+  const d = new Date(iso);
+  const roky = Math.max(1, Math.round(periodaMesice / 12));
+  // cílový měsíc = měsíc poslední revize; rok + N; den = poslední den měsíce
+  const cil = new Date(d.getFullYear() + roky, d.getMonth() + 1, 0);
+  return cil.toISOString();
+}
+
+/**
+ * Dopočítá termín další revize podle typu lhůty.
+ * Vrací undefined, chybí-li datum poslední nebo jde o textovou lhůtu.
+ *
+ * Zpětná kompatibilita: pokud `typLhuty` chybí, chová se jako 'klouzava'
+ * (původní chování) — stará data i stará volání fungují beze změny.
+ */
 export function dopocitejDalsi(
   posledniIso: string | undefined,
   periodaMesice: number,
+  typLhuty?: TypLhuty,
 ): string | undefined {
-  if (!posledniIso || !periodaMesice) return undefined;
+  if (!posledniIso) return undefined;
+  if (typLhuty === 'text') return undefined;
+  if (!periodaMesice) return undefined;
+  if (typLhuty === 'kalendarni') {
+    return pridejKalendarniRoky(posledniIso, periodaMesice);
+  }
+  // 'klouzava' nebo nevyplněno
   return pridejMesice(posledniIso, periodaMesice);
 }
 
 /** Ruční přepis má přednost před dopočtem z periody. */
 export function platnyTermin(r: RevizeKlienta): string | undefined {
   if (r.dalsiRucne && r.dalsiIso) return r.dalsiIso;
-  return dopocitejDalsi(r.posledniIso, r.periodaMesice);
+  return dopocitejDalsi(r.posledniIso, r.periodaMesice, r.typLhuty);
 }
 
 /** Formát periody pro zobrazení. */
