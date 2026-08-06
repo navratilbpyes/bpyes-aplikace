@@ -18,7 +18,7 @@ import { useCasovyPlan } from '@/hooks/use-casovy-plan';
 import CasovyPlan from '@/components/dashboard/casovy-plan';
 import Dokumentace from '@/components/dashboard/dokumentace';
 import {
-  ExternalLink, Mail, Phone, User, MessageCircle,
+  ExternalLink, Mail, Phone, User, MessageCircle, CalendarClock,
 } from 'lucide-react';
 import type { Dotaz } from '@/lib/dotazy';
 
@@ -56,10 +56,23 @@ const HLASKY = {
 
 type Ton = 'ok' | 'soon' | 'critical';
 
+/** Vrátí formátovaný text návštěvy, jen když je v budoucnu; jinak null. */
+function navstevaText(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime()) || d.getTime() <= Date.now()) return null;
+  const datum = d.toLocaleDateString('cs-CZ', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+  const cas = d.toLocaleTimeString('cs-CZ', { hour: 'numeric', minute: '2-digit' });
+  return `${datum}, ${cas}`;
+}
+
 export default function KlientPrehled({ klientId }: Props) {
   const { metriky } = useCasovyPlan(klientId);
   const [dotazy, setDotazy] = useState<Dotaz[]>([]);
   const [freeloUrl, setFreeloUrl] = useState('');
+  const [navstevaIso, setNavstevaIso] = useState<string | null>(null);
 
   // Dotazy klienta + Freelo odkaz
   useEffect(() => {
@@ -71,7 +84,10 @@ export default function KlientPrehled({ klientId }: Props) {
           getDoc(doc(db, 'klienti', klientId)),
         ]);
         setDotazy(dSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Dotaz));
-        if (kSnap.exists()) setFreeloUrl((kSnap.data() as any).freeloUrl ?? '');
+        if (kSnap.exists()) {
+          setFreeloUrl((kSnap.data() as any).freeloUrl ?? '');
+          setNavstevaIso((kSnap.data() as any).dalsiNavstevaTechnika ?? null);
+        }
       } catch (e) {
         console.error('Načtení dotazů/Freelo selhalo:', e);
       }
@@ -119,6 +135,16 @@ export default function KlientPrehled({ klientId }: Props) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Další návštěva technika — navy pole, zadává admin */}
+      <div className="rounded-xl bg-[#0F2038] text-white px-5 py-4">
+        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-white/60">
+          <CalendarClock className="h-4 w-4" /> Další návštěva technika
+        </div>
+        <div className="mt-1 text-lg font-semibold leading-snug">
+          {navstevaText(navstevaIso) ?? 'Není plánována návštěva technika'}
+        </div>
+      </div>
 
       {/* Časový plán */}
       <CasovyPlan klientId={klientId} />
