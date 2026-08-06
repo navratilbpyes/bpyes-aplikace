@@ -69,6 +69,12 @@ export interface RevizeKlienta {
   firmaEmail?: string;
   /** popis zařízení / objektu, např. „hala B — rozvaděč RH2" */
   poznamka?: string;
+  /** pracoviště z klient.pracoviste (výběr) — id */
+  pracovisteId?: string | null;
+  /** pracoviště — název (snapshot pro zobrazení) */
+  pracovisteNazev?: string | null;
+  /** bližší určení umístění (volný text — např. místnost) */
+  umisteni?: string | null;
   /** číslo protokolu poslední revize, např. „HR-2025/14" */
   cisloProtokolu?: string;
   /** datum poslední revize */
@@ -156,6 +162,7 @@ export function platnyTermin(r: RevizeKlienta): string | undefined {
 
 /** Formát periody pro zobrazení. */
 export function popisPeriody(mesicu: number): string {
+  if (mesicu === 1) return '1× za měsíc';
   if (mesicu === 12) return '1× ročně';
   if (mesicu === 24) return '1× za 2 roky';
   if (mesicu === 36) return '1× za 3 roky';
@@ -163,8 +170,29 @@ export function popisPeriody(mesicu: number): string {
   return `1× za ${mesicu} měsíců`;
 }
 
+/**
+ * Vygeneruje textovou lhůtu podle periody a typu (dávka 2a — verze i).
+ * Rozlišuje kalendářní (roky) od klouzavé (měsíce), aby text seděl s významem:
+ *  - kalendarni 12 → „1× ročně", 24 → „1× za 2 roky"
+ *  - klouzava   12 → „1× za 12 měsíců", 6 → „1× za 6 měsíců"
+ *  - text       → volný text zadá uživatel, tato funkce vrací '' (nepoužije se)
+ */
+export function generujLhutaText(periodaMesice: number, typLhuty: TypLhuty): string {
+  if (typLhuty === 'text') return '';
+  if (typLhuty === 'kalendarni') {
+    if (periodaMesice === 12) return '1× ročně';
+    if (periodaMesice % 12 === 0) return `1× za ${periodaMesice / 12} ${periodaMesice / 12 <= 4 ? 'roky' : 'let'}`;
+    return `1× za ${periodaMesice} měsíců`;
+  }
+  // klouzava
+  if (periodaMesice === 1) return '1× za měsíc';
+  return `1× za ${periodaMesice} měsíců`;
+}
+
 /** Předvolby period pro revize. */
 export const PERIODY: { hodnota: number; popis: string }[] = [
+  { hodnota: 1, popis: '1× za měsíc' },
+  { hodnota: 2, popis: '1× za 2 měsíce' },
   { hodnota: 3, popis: '1× za 3 měsíce' },
   { hodnota: 6, popis: '1× za 6 měsíců' },
   { hodnota: 12, popis: '1× ročně' },
@@ -172,4 +200,6 @@ export const PERIODY: { hodnota: number; popis: string }[] = [
   { hodnota: 36, popis: '1× za 3 roky' },
   { hodnota: 48, popis: '1× za 4 roky' },
   { hodnota: 60, popis: '1× za 5 let' },
+  { hodnota: 72, popis: '1× za 6 let' },
+  { hodnota: 120, popis: '1× za 10 let' },
 ];
