@@ -169,7 +169,17 @@ export async function POST(req: NextRequest) {
 
   if (!wedos.ok || !vysledek.ok) {
     return NextResponse.json(
-      { chyba: vysledek.chyba ?? 'Nahrání selhalo' },
+      {
+        chyba: vysledek.chyba ?? 'Nahrání selhalo',
+        // DIAGNOSTIKA: co poslal Node vs. co vrátil Wedos
+        debug_node: {
+          delka_secret: SECRET?.length ?? 0,
+          secret_posl4: SECRET ? SECRET.slice(-4) : '',
+          zprava,
+          podpis_node: podpis,
+        },
+        debug_wedos: vysledek.debug ?? null,
+      },
       { status: wedos.status || 500 },
     );
   }
