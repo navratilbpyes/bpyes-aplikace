@@ -97,7 +97,11 @@ async function zapisMetadata(
     headers: { Authorization: `Bearer ${idToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  return res.ok;
+  if (!res.ok) {
+    const chybaText = await res.text().catch(() => '');
+    return { ok: false, status: res.status, detail: chybaText.slice(0, 300) };
+  }
+  return { ok: true, status: res.status, detail: '' };
 }
 
 export async function POST(req: NextRequest) {
@@ -189,7 +193,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 4. Metadata do Firestore ──
-  await zapisMetadata(idToken, {
+  const zapis = await zapisMetadata(idToken, {
     klientId,
     souborId: vysledek.souborId,
     pripona: vysledek.pripona,
@@ -197,6 +201,16 @@ export async function POST(req: NextRequest) {
     velikost: vysledek.velikost,
     nahralUid: user.uid,
   });
+
+  if (!zapis.ok) {
+    return NextResponse.json(
+      {
+        chyba: 'Metadata se nepodařilo uložit',
+        debug_zapis: { status: zapis.status, detail: zapis.detail, souborId: vysledek.souborId },
+      },
+      { status: 500 },
+    );
+  }
 
   return NextResponse.json({ ok: true, souborId: vysledek.souborId });
 }
