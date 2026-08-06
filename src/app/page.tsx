@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import WidgetTerminy from "@/components/dashboard/widget-terminy";
 import KlientPrehled from "@/components/dashboard/klient-prehled";
+import ProtokolyKeKontrole from "@/components/dashboard/protokoly-ke-kontrole";
 
 export default function Dashboard() {
   const { zaznamy, klienti, userProfile } = useData();
@@ -197,6 +198,10 @@ export default function Dashboard() {
         )}
       </div>
       )}
+
+      {/* Protokoly nahrané klienty, čekající na kontrolu OZO */}
+      {isAdmin && <ProtokolyKeKontrole />}
+
       {isAdmin && <WidgetTerminy />}
     </div>
   );
