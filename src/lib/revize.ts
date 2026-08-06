@@ -55,6 +55,14 @@ export interface RevizeKlienta {
   zadal?: 'ozo' | 'klient';
   /** potvrzeno OZO. Chybí u starých adminových = bereme jako potvrzené. */
   potvrzenoOzo?: boolean;
+  /** ID nahraného protokolu v kolekci `dokumenty` (viz lib/protokol.ts) */
+  protokolDokumentId?: string | null;
+  /** název souboru protokolu (pro zobrazení) */
+  protokolNazev?: string | null;
+  /** stav protokolu: 'ceka' (klient nahrál) | 'videl' | 'odmitnuto' (OZO) */
+  protokolStav?: 'ceka' | 'videl' | 'odmitnuto' | null;
+  /** důvod odmítnutí protokolu (vyplní OZO) */
+  protokolDuvod?: string | null;
 }
 
 /** Přičte měsíce k datu (ISO in, ISO out). */
