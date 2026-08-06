@@ -40,6 +40,8 @@ import {
 import type { RevizeKlienta } from '@/lib/revize';
 import type { SkoleniKlienta } from '@/lib/skoleni';
 import VlaknoKomentaru from '@/components/komentare/vlakno';
+import ProtokolUpload from '@/components/protokol-upload';
+import type { ProtokolPole } from '@/lib/protokol';
 
 type Druh = 'revize' | 'skoleni';
 
@@ -408,6 +410,17 @@ export default function MojeRevizePage() {
                       </div>
                     </div>
                   )}
+                  {/* Protokol / revizní zpráva — lze nahrát i k OZO záznamu */}
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                      {druh === 'revize' ? 'Revizní protokol' : 'Doklad o školení'}
+                    </div>
+                    <ProtokolUpload
+                      data={z as ProtokolPole}
+                      onUlozit={(zmeny) => uprav(z.id, zmeny as Partial<Polozka>)}
+                    />
+                  </div>
+
                   {/* Vlákno komentářů k této revizi/školení */}
                   <div className="mt-4 pt-4 border-t">
                     <VlaknoKomentaru
