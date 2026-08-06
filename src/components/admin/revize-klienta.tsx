@@ -28,6 +28,8 @@ import {
 } from 'lucide-react';
 import { PERIODY, popisPeriody, dopocitejDalsi, platnyTermin } from '@/lib/revize';
 import type { CiselnikRevize, RevizeKlienta as TypRevize } from '@/lib/revize';
+import ProtokolUpload from '@/components/protokol-upload';
+import type { ProtokolPole } from '@/lib/protokol';
 
 interface Props {
   klientId: string;
@@ -410,6 +412,16 @@ export default function RevizeKlienta({ klientId }: Props) {
                           Vrátit k automatickému výpočtu
                         </Button>
                       )}
+
+                      {/* Revizní protokol — nahrání / kontrola OZO */}
+                      <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+                        <Label className="text-xs font-medium">Revizní protokol</Label>
+                        <ProtokolUpload
+                          adminMode
+                          data={r as ProtokolPole}
+                          onUlozit={(zmeny) => uprav(r.id, zmeny as Partial<TypRevize>)}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
