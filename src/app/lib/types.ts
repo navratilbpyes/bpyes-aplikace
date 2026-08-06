@@ -13,6 +13,8 @@ export interface Klient {
   driveSlozkaUrl?: string;
   /** Odkaz na Freelo projekt klienta (úkoly). */
   freeloUrl?: string;
+  /** Plánované datum a čas příští návštěvy technika (ISO datetime). Zadává admin. */
+  dalsiNavstevaTechnika?: string | null;
   pracoviste: Pracoviste[];
   /** Pozice odpovědných osob (v UI „pozice“). */
   pozice?: Pozice[];
