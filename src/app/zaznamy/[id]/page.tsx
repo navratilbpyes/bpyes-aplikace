@@ -361,6 +361,13 @@ export default function RecordDetailPage() {
               font-size: 8px;
               color: #94a3b8;
             }
+            /* Číslování stránek — strana X z Y */
+            @bottom-center {
+              content: "Strana " counter(page) " z " counter(pages);
+              font-family: sans-serif;
+              font-size: 8px;
+              color: #94a3b8;
+            }
           }
         }
       `}} />
