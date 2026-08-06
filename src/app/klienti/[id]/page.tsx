@@ -55,6 +55,7 @@ import SkoleniKlienta from "@/components/admin/skoleni-klienta";
 import RevizeKlienta from "@/components/admin/revize-klienta";
 import DriveOdkazy from "@/components/admin/drive-odkazy";
 import CasovyPlan from "@/components/dashboard/casovy-plan";
+import NavstevaTechnika from "@/components/admin/navsteva-technika";
 
 
 export default function ClientDetailPage() {
@@ -812,6 +813,7 @@ export default function ClientDetailPage() {
             </TabsContent>
 
             <TabsContent value="plan" className="space-y-4">
+              <NavstevaTechnika klientId={klient.id} />
               <CasovyPlan klientId={klient.id} />
             </TabsContent>
             
