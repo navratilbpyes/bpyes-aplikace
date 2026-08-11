@@ -8,6 +8,7 @@ import {
   Building2, 
   ClipboardList,
   Wrench,
+  Flame,
   FileText,
   BookMarked,
   CalendarClock,
@@ -249,6 +250,11 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
             {!isAdmin && !isBasic && (
               <Link href="/moje-revize" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/moje-revize') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
                 <Wrench className="h-4 w-4" /> Moje revize a školení
+              </Link>
+            )}
+            {!isAdmin && !isBasic && userProfile.klientId && (
+              <Link href={`/pozarni-kniha/${userProfile.klientId}`} onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/pozarni-kniha') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
+                <Flame className="h-4 w-4" /> Požární kniha
               </Link>
             )}
 
