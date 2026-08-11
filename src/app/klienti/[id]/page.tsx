@@ -32,6 +32,7 @@ import {
   RotateCcw,
   Ban,
   ShieldCheck,
+  Flame,
   Trash2
 } from "lucide-react";
 import {
@@ -381,6 +382,12 @@ export default function ClientDetailPage() {
           <Button variant="outline" onClick={otevritPristup}>
             <KeyRound className="mr-2 h-4 w-4" />
             Vytvořit přístup
+          </Button>
+          <Button asChild variant="outline">
+            <Link href={`/pozarni-kniha/${klient.id}`}>
+              <Flame className="mr-2 h-4 w-4" />
+              Požární kniha
+            </Link>
           </Button>
           <Button asChild>
             <Link href={`/nova-kontrola?klient=${klient.id}`}>
