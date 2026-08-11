@@ -47,6 +47,8 @@ export interface Prohlidka {
   zdrojZaznamId?: string;
   /** číslo protokolu pro orientaci */
   zdrojCislo?: string;
+  /** mapování na řádek požární knihy (nepovinné) */
+  pozarniRadek?: string | null;
   stav: StavProhlidky;
   updatedAt: string;
 }
