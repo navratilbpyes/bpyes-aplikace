@@ -13,6 +13,8 @@ export interface CiselnikSkoleni {
   periodaMesice: number;
   /** kdo školení provádí — volný text (OZO, externí dodavatel, jméno) */
   provadi?: string;
+  /** mapování na řádek požární knihy (jen u PO školení) */
+  pozarniRadek?: string | null;
   stav: StavZaznamu;
 }
 
@@ -49,6 +51,8 @@ export interface SkoleniKlienta {
   protokolStav?: 'ceka' | 'videl' | 'odmitnuto' | null;
   /** důvod odmítnutí protokolu (vyplní OZO) */
   protokolDuvod?: string | null;
+  /** mapování na řádek požární knihy (snapshot z číselníku) */
+  pozarniRadek?: string | null;
 }
 
 /** Přičte měsíce k datu (ISO in, ISO out). */
