@@ -159,4 +159,22 @@
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+
+  /* --- Požární kniha: tiskne se jen .pozarni-kniha, zbytek skryt --- */
+  body:has(.pozarni-kniha) * { visibility: hidden; }
+  body:has(.pozarni-kniha) .pozarni-kniha,
+  body:has(.pozarni-kniha) .pozarni-kniha * { visibility: visible; }
+  body:has(.pozarni-kniha) .pozarni-kniha {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  body:has(.pozarni-kniha) .pozarni-kniha .no-print { display: none !important; }
+
+  /* karty knihy bez stínu, s jemným rámečkem, řádky se nelámou přes stránku */
+  body:has(.pozarni-kniha) .pozarni-kniha [class*="border"] {
+    box-shadow: none !important;
+  }
+  body:has(.pozarni-kniha) .pozarni-kniha tr { break-inside: avoid; }
 }
