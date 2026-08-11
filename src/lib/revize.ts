@@ -43,6 +43,8 @@ export interface CiselnikRevize {
   kdoProvadi?: string;
   /** typ lhůty pro výpočet termínu; chybí = 'klouzava' (zpětná kompatibilita) */
   typLhuty?: TypLhuty;
+  /** mapování na řádek požární knihy (jen u položek s oblastí PO) */
+  pozarniRadek?: string | null;
 }
 
 /** Revizní firma / technik u konkrétní revize. */
@@ -107,6 +109,8 @@ export interface RevizeKlienta {
   kdoProvadi?: string;
   /** typ lhůty pro výpočet termínu; chybí = 'klouzava' */
   typLhuty?: TypLhuty;
+  /** mapování na řádek požární knihy (snapshot z číselníku) */
+  pozarniRadek?: string | null;
 }
 
 /** Přičte měsíce k datu (ISO in, ISO out). Klouzavý výpočet. */
