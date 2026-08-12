@@ -48,15 +48,21 @@ export function nazevRadku(id: string): string {
   return POZARNI_RADKY.find((r) => r.id === id)?.nazev ?? id;
 }
 
-/** Volný záznam v požární knize (ruční zápis). */
+/** Volný záznam / provedení v požární knize. */
 export interface PozarniZaznam {
   id: string;
   /** ISO datum záznamu */
   datum: string;
   /** rok (pro členění knihy po letech) — odvozeno z data */
   rok: number;
-  /** obsah zjištění / nedostatky / odstranění */
-  obsah: string;
+  /** obsah zjištění / nedostatky / odstranění (u provedení nepovinné) */
+  obsah?: string;
+  /**
+   * Vazba na řádek roční tabulky:
+   *  - id řádku (POZARNI_RADKY) → ruční PROVEDENÍ navázané na činnost,
+   *  - null → obecný volný záznam (samostatná sekce).
+   */
+  radekId?: string | null;
   /** kdo záznam provedl */
   zadal: 'ozo' | 'klient';
   /** jméno toho, kdo provedl (pro tisk) */
@@ -64,17 +70,26 @@ export interface PozarniZaznam {
   stav: StavZaznamu;
 }
 
-/**
- * Jeden řádek roční tabulky po agregaci — název + poslední datum provedení
- * (z revize/školení/prohlídky s daným pozarniRadek) v daném roce.
- */
+/** Jedno provedení činnosti (řádek v tisku): datum + původ + kdo. */
+export interface Provedeni {
+  /** ISO datum */
+  datum: string;
+  /** zdroj: auto (z revize/školení/prohlídky) nebo ruční záznam */
+  puvod: 'auto' | 'rucni';
+  /** u auto: typ zdroje; u ručního: kdo zadal */
+  zadal?: 'ozo' | 'klient' | null;
+  zadalJmeno?: string | null;
+  /** id ručního záznamu (pro mazání); u auto chybí */
+  zaznamId?: string;
+  /** nepovinná poznámka u ručního provedení */
+  obsah?: string;
+}
+
+/** Řádek roční tabulky po agregaci: název + všechna provedení v daném roce. */
 export interface RadekTabulky {
   id: string;
   nazev: string;
-  /** ISO datum posledního provedení v daném roce, nebo null */
-  datumProvedeni: string | null;
-  /** zdroj (pro případný proklik/rozlišení) */
-  zdroj?: 'revize' | 'skoleni' | 'prohlidka' | null;
+  provedeni: Provedeni[];
 }
 
 /** Vstup pro agregaci — položka nesoucí pozarniRadek + datum provedení. */
@@ -85,23 +100,40 @@ export interface ZdrojovaPolozka {
 }
 
 /**
- * Sestaví roční tabulku: pro každý fixní řádek najde nejnovější datum provedení
- * z položek daného roku, které mají odpovídající pozarniRadek.
+ * Sestaví roční tabulku. Každý fixní řádek dostane SEZNAM provedení v daném roce:
+ *  - automatická (z revizí/školení/prohlídek s daným pozarniRadek, datum = posledniIso),
+ *  - ruční (záznamy s radekId == id řádku).
+ * Seřazeno vzestupně podle data.
  */
-export function sestavTabulku(polozky: ZdrojovaPolozka[], rok: number): RadekTabulky[] {
+export function sestavTabulku(
+  polozky: ZdrojovaPolozka[],
+  zaznamy: PozarniZaznam[],
+  rok: number,
+): RadekTabulky[] {
   return POZARNI_RADKY.map((radek) => {
-    let nejnovejsi: string | null = null;
-    let zdroj: RadekTabulky['zdroj'] = null;
+    const provedeni: Provedeni[] = [];
+
+    // automatická provedení
     for (const p of polozky) {
       if (p.pozarniRadek !== radek.id || !p.posledniIso) continue;
       const d = new Date(p.posledniIso);
       if (isNaN(d.getTime()) || d.getFullYear() !== rok) continue;
-      if (!nejnovejsi || d.getTime() > new Date(nejnovejsi).getTime()) {
-        nejnovejsi = p.posledniIso;
-        zdroj = p.typ;
-      }
+      provedeni.push({ datum: p.posledniIso, puvod: 'auto', zadal: 'ozo' });
     }
-    return { id: radek.id, nazev: radek.nazev, datumProvedeni: nejnovejsi, zdroj };
+
+    // ruční provedení navázaná na řádek
+    for (const z of zaznamy) {
+      if (z.radekId !== radek.id || z.stav === 'smazano') continue;
+      const d = new Date(z.datum);
+      if (isNaN(d.getTime()) || d.getFullYear() !== rok) continue;
+      provedeni.push({
+        datum: z.datum, puvod: 'rucni', zadal: z.zadal,
+        zadalJmeno: z.zadalJmeno, zaznamId: z.id, obsah: z.obsah,
+      });
+    }
+
+    provedeni.sort((a, b) => new Date(a.datum).getTime() - new Date(b.datum).getTime());
+    return { id: radek.id, nazev: radek.nazev, provedeni };
   });
 }
 
