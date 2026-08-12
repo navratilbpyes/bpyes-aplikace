@@ -89,6 +89,7 @@ export default function RevizeKlienta({ klientId }: Props) {
       lhutaText: zdroj.lhutaText ?? null,
       kdoProvadi: zdroj.kdoProvadi ?? null,
       typLhuty: zdroj.typLhuty ?? null,
+      pozarniRadek: zdroj.pozarniRadek ?? null,
       firmaNazev: null,
       firmaTelefon: null,
       firmaEmail: null,
