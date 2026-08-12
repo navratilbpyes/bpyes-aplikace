@@ -60,6 +60,7 @@ interface CiselnikPolozka {
   lhutaText?: string;
   kdoProvadi?: string;
   typLhuty?: 'klouzava' | 'kalendarni' | 'text';
+  pozarniRadek?: string | null;
 }
 
 export default function MojeRevizePage() {
@@ -104,7 +105,7 @@ export default function MojeRevizePage() {
           return {
             id: d.id, nazev: f.nazev, periodaMesice: f.periodaMesice,
             oblast: f.oblast, druhUkonu: f.druhUkonu, lhutaText: f.lhutaText,
-            kdoProvadi: f.kdoProvadi, typLhuty: f.typLhuty,
+            kdoProvadi: f.kdoProvadi, typLhuty: f.typLhuty, pozarniRadek: f.pozarniRadek,
           };
         }),
       );
@@ -140,8 +141,9 @@ export default function MojeRevizePage() {
               lhutaText: zdroj.lhutaText ?? null,
               kdoProvadi: zdroj.kdoProvadi ?? null,
               typLhuty: zdroj.typLhuty ?? null,
+              pozarniRadek: zdroj.pozarniRadek ?? null,
             }
-          : { provadi: null }),
+          : { provadi: null, pozarniRadek: zdroj.pozarniRadek ?? null }),
         poznamka: null,
         posledniIso: null,
         dalsiIso: null,
