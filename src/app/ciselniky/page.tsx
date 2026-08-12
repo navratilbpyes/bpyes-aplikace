@@ -26,6 +26,7 @@ import { PERIODY as PERIODY_SKOLENI, popisPeriody } from '@/lib/skoleni';
 import { PERIODY as PERIODY_REVIZE, generujLhutaText } from '@/lib/revize';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
 import type { CiselnikRevize, Oblast, TypLhuty } from '@/lib/revize';
+import { POZARNI_RADKY } from '@/lib/pozarni-kniha';
 
 const OBLASTI: Oblast[] = ['Elektro', 'Tlak', 'Zdvihací', 'PO', 'Ostatní'];
 const TYPY_LHUTY: { hodnota: TypLhuty; popis: string }[] = [
@@ -179,7 +180,7 @@ function SekceSkoleni() {
             {polozky.map((s) => (
               <div
                 key={s.id}
-                className="grid gap-2 py-3 sm:grid-cols-[1fr_180px_200px_auto] items-center"
+                className="grid gap-2 py-3 sm:grid-cols-[1fr_150px_160px_180px_auto] items-center"
               >
                 <Input
                   value={s.nazev}
@@ -203,6 +204,18 @@ function SekceSkoleni() {
                   placeholder="kdo provádí"
                   className="h-9"
                 />
+                <Select
+                  value={s.pozarniRadek ?? '__zadny__'}
+                  onValueChange={(v) => uprav(s.id, { pozarniRadek: v === '__zadny__' ? null : v })}
+                >
+                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Řádek PK…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__zadny__">— bez požární knihy —</SelectItem>
+                    {POZARNI_RADKY.map((pr) => (
+                      <SelectItem key={pr.id} value={pr.id} className="text-xs">{pr.nazev}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -415,6 +428,7 @@ function SekceRevize() {
                   <th className="text-left font-bold px-2 py-2">Druh úkonu</th>
                   <th className="text-left font-bold px-2 py-2 w-[200px]">Lhůta</th>
                   <th className="text-left font-bold px-2 py-2">Kdo provádí</th>
+                  <th className="text-left font-bold px-2 py-2 w-[180px]">Řádek požární knihy</th>
                   <th className="w-8"></th>
                 </tr>
               </thead>
@@ -464,6 +478,24 @@ function SekceRevize() {
                     </td>
                     <td className="px-2 py-2">
                       <Input value={r.kdoProvadi ?? ''} onChange={(e) => uprav(r.id, { kdoProvadi: e.target.value })} className="h-8 text-xs" />
+                    </td>
+                    <td className="px-2 py-2">
+                      {r.oblast === 'PO' ? (
+                        <Select
+                          value={r.pozarniRadek ?? '__zadny__'}
+                          onValueChange={(v) => uprav(r.id, { pozarniRadek: v === '__zadny__' ? null : v })}
+                        >
+                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__zadny__">— nemapováno —</SelectItem>
+                            {POZARNI_RADKY.map((pr) => (
+                              <SelectItem key={pr.id} value={pr.id} className="text-xs">{pr.nazev}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground/50">jen pro oblast PO</span>
+                      )}
                     </td>
                     <td className="px-2 py-2">
                       <Button variant="ghost" size="icon" onClick={() => smaz(r.id)}
