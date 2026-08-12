@@ -57,26 +57,33 @@ export default function PozarniKnihaPage() {
   const nacti = useCallback(async () => {
     setNacitam(true);
     try {
-      const [klDoc, revSnap, skolSnap, prohSnap, zaznSnap] = await Promise.all([
-        getDoc(doc(db, 'klienti', klientId)),
-        getDocs(query(collection(db, 'klienti', klientId, 'revize'), where('stav', '==', 'aktivni'))),
-        getDocs(query(collection(db, 'klienti', klientId, 'skoleni'), where('stav', '==', 'aktivni'))),
-        getDocs(query(collection(db, 'prohlidky'), where('klientId', '==', klientId))),
-        getDocs(collection(db, 'klienti', klientId, 'pozarniZaznamy')),
-      ]);
+      // Klient + záznamy knihy jsou kritické; revize/školení/prohlídky jsou
+      // doplněk (auto-provedení). Každý zdroj čteme zvlášť, aby selhání
+      // jednoho (např. práva na prohlídky) neshodilo celou knihu.
+      const nactiBezpecne = async <T,>(fn: () => Promise<T>, fallback: T): Promise<T> => {
+        try { return await fn(); } catch (e) { console.warn('Zdroj knihy nedostupný:', e); return fallback; }
+      };
 
+      const klDoc = await getDoc(doc(db, 'klienti', klientId));
       if (klDoc.exists()) setKlient({ id: klDoc.id, ...klDoc.data() } as Klient);
 
+      const [revSnap, skolSnap, prohSnap, zaznSnap] = await Promise.all([
+        nactiBezpecne(() => getDocs(query(collection(db, 'klienti', klientId, 'revize'), where('stav', '==', 'aktivni'))), null),
+        nactiBezpecne(() => getDocs(query(collection(db, 'klienti', klientId, 'skoleni'), where('stav', '==', 'aktivni'))), null),
+        nactiBezpecne(() => getDocs(query(collection(db, 'prohlidky'), where('klientId', '==', klientId))), null),
+        nactiBezpecne(() => getDocs(collection(db, 'klienti', klientId, 'pozarniZaznamy')), null),
+      ]);
+
       const zdrojove: ZdrojovaPolozka[] = [
-        ...revSnap.docs.map((d) => {
+        ...(revSnap?.docs ?? []).map((d) => {
           const f = d.data() as any;
           return { pozarniRadek: f.pozarniRadek ?? null, posledniIso: f.posledniIso ?? null, typ: 'revize' as const };
         }),
-        ...skolSnap.docs.map((d) => {
+        ...(skolSnap?.docs ?? []).map((d) => {
           const f = d.data() as any;
           return { pozarniRadek: f.pozarniRadek ?? null, posledniIso: f.posledniIso ?? null, typ: 'skoleni' as const };
         }),
-        ...prohSnap.docs.map((d) => {
+        ...(prohSnap?.docs ?? []).map((d) => {
           const f = d.data() as any;
           return { pozarniRadek: f.pozarniRadek ?? null, posledniIso: f.posledniIso ?? null, typ: 'prohlidka' as const };
         }),
@@ -84,7 +91,7 @@ export default function PozarniKnihaPage() {
       setZdroje(zdrojove);
 
       setZaznamy(
-        zaznSnap.docs
+        (zaznSnap?.docs ?? [])
           .map((d) => ({ id: d.id, ...d.data() }) as PozarniZaznam)
           .filter((z) => z.stav !== 'smazano')
           .sort((a, b) => new Date(b.datum).getTime() - new Date(a.datum).getTime()),
