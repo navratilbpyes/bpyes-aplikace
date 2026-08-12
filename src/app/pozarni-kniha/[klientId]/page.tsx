@@ -13,10 +13,10 @@
  *  - tisku přes @page (jako reporty).
  */
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import {
-  collection, addDoc, getDocs, getDoc, doc, query, where,
+  collection, addDoc, getDocs, getDoc, doc, updateDoc, query, where,
 } from 'firebase/firestore';
 import { db, useData } from '@/components/data-provider';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,10 +27,11 @@ import { Label } from '@/components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Printer, Plus, Flame, ShieldCheck, User } from 'lucide-react';
+import { Loader2, Printer, Plus, Flame, ShieldCheck, User, X, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
-  sestavTabulku, formatDatum, type ZdrojovaPolozka, type PozarniZaznam,
+  sestavTabulku, formatDatum, POZARNI_RADKY,
+  type ZdrojovaPolozka, type PozarniZaznam,
 } from '@/lib/pozarni-kniha';
 import type { Klient } from '@/app/lib/types';
 
@@ -47,10 +48,11 @@ export default function PozarniKnihaPage() {
   const [nacitam, setNacitam] = useState(true);
   const [rok, setRok] = useState(new Date().getFullYear());
 
-  // formulář volného záznamu
+  // inline přidávání provedení k řádku: id řádku → {datum, obsah}
+  const [radekForm, setRadekForm] = useState<Record<string, { datum: string; obsah: string }>>({});
+  // obecný volný záznam
   const [novyDatum, setNovyDatum] = useState('');
   const [novyObsah, setNovyObsah] = useState('');
-  const [uklada, setUklada] = useState(false);
 
   const nacti = useCallback(async () => {
     setNacitam(true);
@@ -96,9 +98,10 @@ export default function PozarniKnihaPage() {
 
   useEffect(() => { nacti(); }, [nacti]);
 
-  const tabulka = useMemo(() => sestavTabulku(zdroje, rok), [zdroje, rok]);
-  const zaznamyRoku = useMemo(
-    () => zaznamy.filter((z) => new Date(z.datum).getFullYear() === rok),
+  const tabulka = useMemo(() => sestavTabulku(zdroje, zaznamy, rok), [zdroje, zaznamy, rok]);
+  // obecné volné záznamy (bez vazby na řádek)
+  const volneZaznamy = useMemo(
+    () => zaznamy.filter((z) => !z.radekId && new Date(z.datum).getFullYear() === rok),
     [zaznamy, rok],
   );
 
@@ -112,27 +115,37 @@ export default function PozarniKnihaPage() {
     return [...set].sort((a, b) => b - a);
   }, [zaznamy, zdroje]);
 
-  async function pridejZaznam() {
-    if (!novyDatum || novyObsah.trim() === '') return;
-    setUklada(true);
+  /** Přidá záznam — buď provedení k řádku (radekId), nebo obecný volný záznam (null). */
+  async function pridej(datum: string, obsah: string, radekId: string | null) {
+    if (!datum) return;
+    // u obecného volného záznamu je obsah povinný; u provedení k řádku nepovinný
+    if (!radekId && obsah.trim() === '') return;
     try {
-      const iso = new Date(novyDatum + 'T00:00:00').toISOString();
+      const iso = new Date(datum + 'T00:00:00').toISOString();
       await addDoc(collection(db, 'klienti', klientId, 'pozarniZaznamy'), {
         datum: iso,
         rok: new Date(iso).getFullYear(),
-        obsah: novyObsah.trim(),
+        obsah: obsah.trim() || null,
+        radekId: radekId,
         zadal: isAdmin ? 'ozo' : 'klient',
         zadalJmeno: isAdmin ? 'OZO technik' : (klient?.nazev ?? 'Klient'),
         stav: 'aktivni',
       });
-      setNovyDatum('');
-      setNovyObsah('');
-      toast({ title: 'Záznam přidán' });
+      toast({ title: 'Uloženo' });
       nacti();
     } catch (e: any) {
       toast({ title: 'Nepodařilo se uložit', description: e?.message ?? '', variant: 'destructive' });
-    } finally {
-      setUklada(false);
+    }
+  }
+
+  /** Soft-delete ručního provedení / záznamu (jen admin). */
+  async function smaz(zaznamId: string) {
+    try {
+      await updateDoc(doc(db, 'klienti', klientId, 'pozarniZaznamy', zaznamId), { stav: 'smazano' });
+      setZaznamy((p) => p.filter((z) => z.id !== zaznamId));
+      toast({ title: 'Záznam smazán' });
+    } catch (e: any) {
+      toast({ title: 'Nepodařilo se smazat', description: e?.message ?? '', variant: 'destructive' });
     }
   }
 
@@ -206,7 +219,7 @@ export default function PozarniKnihaPage() {
           </CardContent>
         </Card>
 
-        {/* Roční tabulka činností */}
+        {/* Roční tabulka činností — plochá: každé provedení vlastní řádek */}
         <Card>
           <CardContent className="py-4">
             <div className="text-sm font-bold text-[#0F2038] mb-3">Přehled činností — rok {rok}</div>
@@ -214,33 +227,100 @@ export default function PozarniKnihaPage() {
               <thead>
                 <tr className="text-[11px] uppercase text-muted-foreground border-b-2 border-[#0F2038]">
                   <th className="text-left font-bold py-2 pr-2">Činnost</th>
-                  <th className="text-right font-bold py-2 pl-2 w-[130px]">Datum provedení</th>
+                  <th className="text-left font-bold py-2 px-2 w-[110px]">Datum</th>
+                  <th className="text-left font-bold py-2 px-2 w-[150px]">Provedl</th>
+                  <th className="w-8 no-print"></th>
                 </tr>
               </thead>
               <tbody>
-                {tabulka.map((r) => (
-                  <tr key={r.id} className="border-b last:border-0">
-                    <td className="py-2 pr-2 align-top">{r.nazev}</td>
-                    <td className={`py-2 pl-2 text-right align-top tabular-nums ${r.datumProvedeni ? 'font-semibold' : 'text-muted-foreground'}`}>
-                      {formatDatum(r.datumProvedeni)}
-                    </td>
-                  </tr>
-                ))}
+                {tabulka.map((r) => {
+                  const f = radekForm[r.id] ?? { datum: '', obsah: '' };
+                  const setF = (patch: Partial<{ datum: string; obsah: string }>) =>
+                    setRadekForm((s) => ({ ...s, [r.id]: { ...f, ...patch } }));
+                  return (
+                    <React.Fragment key={r.id}>
+                      {/* název činnosti + počet provedení */}
+                      <tr className="border-b bg-muted/30">
+                        <td colSpan={4} className="py-1.5 px-1 font-semibold text-[#0F2038]">
+                          {r.nazev}
+                          {r.provedeni.length > 0 && (
+                            <span className="ml-2 text-[11px] font-normal text-muted-foreground">
+                              ({r.provedeni.length}×)
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                      {/* provedení */}
+                      {r.provedeni.length === 0 ? (
+                        <tr className="border-b">
+                          <td></td>
+                          <td colSpan={3} className="py-1.5 px-2 text-muted-foreground text-xs">— žádné provedení v tomto roce —</td>
+                        </tr>
+                      ) : r.provedeni.map((p, i) => (
+                        <tr key={p.zaznamId ?? `auto-${i}`} className="border-b">
+                          <td></td>
+                          <td className="py-1.5 px-2 tabular-nums">{formatDatum(p.datum)}</td>
+                          <td className="py-1.5 px-2">
+                            <span className="inline-flex items-center gap-1 text-xs">
+                              {p.zadal === 'ozo'
+                                ? <ShieldCheck className="h-3 w-3 text-emerald-600" />
+                                : <User className="h-3 w-3 text-blue-600" />}
+                              {p.puvod === 'auto'
+                                ? 'automaticky (evidence)'
+                                : (p.zadalJmeno ?? (p.zadal === 'ozo' ? 'OZO' : 'Klient'))}
+                            </span>
+                            {p.obsah && <span className="block text-[11px] text-muted-foreground">{p.obsah}</span>}
+                          </td>
+                          <td className="no-print px-1">
+                            {isAdmin && p.puvod === 'rucni' && p.zaznamId && (
+                              <button onClick={() => smaz(p.zaznamId!)}
+                                className="text-muted-foreground hover:text-destructive" title="Smazat provedení">
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {/* inline přidání provedení k tomuto řádku (netiskne se) */}
+                      <tr className="border-b no-print">
+                        <td></td>
+                        <td className="py-1.5 px-2">
+                          <Input type="date" value={f.datum}
+                            onChange={(e) => setF({ datum: e.target.value })}
+                            className="h-8 text-xs" />
+                        </td>
+                        <td className="py-1.5 px-2">
+                          <Input value={f.obsah}
+                            onChange={(e) => setF({ obsah: e.target.value })}
+                            placeholder="poznámka (nepovinná)" className="h-8 text-xs" />
+                        </td>
+                        <td className="px-1">
+                          <button
+                            onClick={async () => { await pridej(f.datum, f.obsah, r.id); setF({ datum: '', obsah: '' }); }}
+                            disabled={!f.datum}
+                            className="text-[#0F2038] disabled:text-muted-foreground/40" title="Přidat provedení">
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
             <p className="text-[10px] text-muted-foreground mt-3 leading-snug">
-              K uvedeným činnostem jsou vyhotoveny samostatné záznamy uložené v dokumentaci požární ochrany.
-              Datum se načítá z evidovaných revizí, školení a prohlídek.
+              „automaticky (evidence)" = datum načtené z evidované revize / školení / prohlídky.
+              Ruční provedení lze přidat u každé činnosti; mazat je může jen OZO.
             </p>
           </CardContent>
         </Card>
 
-        {/* Volné záznamy */}
+        {/* Obecné volné záznamy (bez vazby na konkrétní činnost) */}
         <Card>
           <CardContent className="py-4">
             <div className="text-sm font-bold text-[#0F2038] mb-3">Volné záznamy — rok {rok}</div>
 
-            {zaznamyRoku.length === 0 ? (
+            {volneZaznamy.length === 0 ? (
               <p className="text-sm text-muted-foreground">Žádné volné záznamy pro tento rok.</p>
             ) : (
               <table className="w-full text-sm border-collapse">
@@ -248,11 +328,12 @@ export default function PozarniKnihaPage() {
                   <tr className="text-[11px] uppercase text-muted-foreground border-b-2 border-[#0F2038]">
                     <th className="text-left font-bold py-2 pr-2 w-[100px]">Datum</th>
                     <th className="text-left font-bold py-2 px-2">Obsah zjištění / nedostatky; odstranění</th>
-                    <th className="text-left font-bold py-2 pl-2 w-[130px]">Záznam provedl</th>
+                    <th className="text-left font-bold py-2 pl-2 w-[130px]">Provedl</th>
+                    <th className="w-8 no-print"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {zaznamyRoku.map((z) => (
+                  {volneZaznamy.map((z) => (
                     <tr key={z.id} className="border-b last:border-0 align-top">
                       <td className="py-2 pr-2 tabular-nums">{formatDatum(z.datum)}</td>
                       <td className="py-2 px-2 whitespace-pre-wrap">{z.obsah}</td>
@@ -264,13 +345,21 @@ export default function PozarniKnihaPage() {
                           {z.zadalJmeno ?? (z.zadal === 'ozo' ? 'OZO' : 'Klient')}
                         </span>
                       </td>
+                      <td className="no-print px-1">
+                        {isAdmin && (
+                          <button onClick={() => smaz(z.id)}
+                            className="text-muted-foreground hover:text-destructive" title="Smazat záznam">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
 
-            {/* Přidání záznamu — netiskne se */}
+            {/* Přidání volného záznamu — netiskne se */}
             <div className="no-print mt-4 pt-4 border-t space-y-2">
               <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Přidat volný záznam</div>
               <div className="grid gap-2 sm:grid-cols-[150px_1fr]">
@@ -288,9 +377,10 @@ export default function PozarniKnihaPage() {
                   />
                 </div>
               </div>
-              <Button onClick={pridejZaznam} disabled={uklada || !novyDatum || novyObsah.trim() === ''}>
-                {uklada ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                Přidat záznam
+              <Button
+                onClick={async () => { await pridej(novyDatum, novyObsah, null); setNovyDatum(''); setNovyObsah(''); }}
+                disabled={!novyDatum || novyObsah.trim() === ''}>
+                <Plus className="h-4 w-4 mr-2" /> Přidat záznam
               </Button>
             </div>
           </CardContent>
