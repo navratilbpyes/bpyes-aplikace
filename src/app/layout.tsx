@@ -182,6 +182,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
       pathname === '/' ||
       pathname.startsWith('/moje-revize') ||
       pathname.startsWith('/reporty') ||
+      pathname.startsWith('/pozarni-kniha') ||
       // detail konkrétního reportu (ne seznam /zaznamy), např. /zaznamy/abc123
       /^\/zaznamy\/[^/]+$/.test(pathname);
     if (!povoleno) {
