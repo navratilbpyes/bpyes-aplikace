@@ -133,6 +133,21 @@ service cloud.firestore {
         allow delete: if isAdmin();
       }
 
+      // --- pozarni kniha: volne zaznamy ---
+      // Append pattern: klient smi PRIDAT vlastni zaznam ke svemu klientId,
+      // oznaceny zadal == 'klient'. Needituje (audit stopa). Admin vse.
+      match /pozarniZaznamy/{docId} {
+        allow read: if isAdmin()
+          || (maProfil() && mujKlientId() == klientId);
+        allow create: if isAdmin()
+          || (jeAktivniKlient()
+              && mujKlientId() == klientId
+              && request.resource.data.zadal == 'klient'
+              && request.resource.data.stav == 'aktivni');
+        allow update: if isAdmin();   // klient needituje (append)
+        allow delete: if isAdmin();
+      }
+
       // vsechny ostatni podkolekce klienta — jen admin (jako dosud)
       match /{podkolekce}/{docId} {
         allow read: if isAdmin()
