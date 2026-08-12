@@ -81,6 +81,7 @@ export default function SkoleniKlienta({ klientId }: Props) {
       nazev: zdroj.nazev,
       periodaMesice: zdroj.periodaMesice,
       provadi: zdroj.provadi ?? null,
+      pozarniRadek: zdroj.pozarniRadek ?? null,
       poznamka: null,
       posledniIso: null,
       dalsiIso: null,
