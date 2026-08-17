@@ -393,11 +393,11 @@ export const CHECKLIST_PBOZP: ChecklistSection[] = [
       { id: '4', text: 'Stav pracovních prostředků / nářadí / strojů' },
       { id: '5', text: 'Dostatek světla na pracovišti' },
       { id: '6', text: 'Bezpečnostní značení' },
-      { id: '7', text: 'Skladování materiálu dle zásad' },
+      { id: '7', text: 'Skladování materiálu' },
       { id: '8', text: 'Manipulace a ukládání NCHLaS' },
       { id: '9', text: 'Lékárničky' },
       { id: '10', text: 'Volné únikové komunikace a východy' },
-      { id: '11', text: 'Volné únikové komunikace a východy' },
+      { id: '11', text: 'Volné přístupy k hlavním vypínačům a uzávěrům' },
     ],
   },
   {
