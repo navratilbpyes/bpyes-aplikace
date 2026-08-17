@@ -5,6 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+// Delší timeout — upload velké fotky přes hosting může trvat > 10s (default).
+export const maxDuration = 60;
+
 const HOSTING_URL = process.env.UPLOAD_HOSTING_URL || 'https://appbpyes.cz/fotky/upload.php';
 
 export async function POST(req: NextRequest) {
