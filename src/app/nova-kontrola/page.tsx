@@ -4,6 +4,10 @@ import { createEmptyDefect, prijemciKlienta, parsujTypoveZavady } from "@/lib/ko
 import { nactiCsv, stariZalohy } from "@/lib/csv-cache";
 import type { DefectFormState, TypickaZavada } from "@/lib/kontroly";
 import { compressImage, FOTO_NEDOSTATKU, nahrajFotky } from "@/lib/obrazky";
+import {
+  ulozKoncept, nactiKoncept, smazKoncept, maSmysluObnovit, stariKonceptu,
+  type KonceptKontroly,
+} from "@/lib/koncept-kontroly";
 import { STAVY, POradi_TLACITEK, paskaPro } from "@/lib/stavy";
 import { useData, db, auth } from "@/components/data-provider";
 import { Button } from "@/components/ui/button";
@@ -13,7 +17,7 @@ import {
   CheckCircle2, ChevronRight, ChevronLeft, Plus, X, AlertTriangle,
   Calendar as CalendarIcon, User as UserIcon, StickyNote, Camera,
   CheckSquare, Square, Filter, Loader2, Trash2, Send,
-  WifiOff,
+  WifiOff, RotateCcw,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -82,6 +86,10 @@ export default function NewInspectionPage() {
   const [revisionNumber, setRevisionNumber] = useState("0");
   const [isSaving, setIsSaving] = useState(false);
 
+  // Záloha rozpracované kontroly (localStorage). Nabídka obnovení při vstupu.
+  const [konceptKObnove, setKonceptKObnove] = useState<KonceptKontroly | null>(null);
+  const [obnovaResena, setObnovaResena] = useState(false);
+
   const selectedKlient = klienti.find(k => k.id === formData.klientId);
   const uniquePositions = useMemo(() => {
     if (!selectedKlient) return [];
@@ -106,6 +114,49 @@ export default function NewInspectionPage() {
       .map((o: any) => ({ jmeno: o.jmeno ?? '', funkce: o.pozice || o.funkce || '' }))
       .filter((o) => o.jmeno);
   }, [selectedKlient]);
+
+  // Při vstupu na stránku: je uložená rozpracovaná kontrola? Nabídni obnovení.
+  useEffect(() => {
+    const k = nactiKoncept();
+    if (maSmysluObnovit(k)) setKonceptKObnove(k);
+    setObnovaResena(true); // od teď smí auto-ukládání běžet
+  }, []);
+
+  // Auto-ukládání: po každé změně obsahu tiše zálohuj (bez fotek).
+  // Běží až po vyřešení případné obnovy, ať nepřepíšeme zálohu prázdným stavem.
+  useEffect(() => {
+    if (!obnovaResena) return;
+    if (konceptKObnove) return; // dokud uživatel nerozhodl o obnově, neukládej
+    // ukládej jen když už něco reálně vzniká (klient nebo obsah)
+    const neconi = !!formData.klientId
+      || Object.keys(checklist).length > 0
+      || Object.keys(pointDefects).length > 0
+      || customPoints.length > 0;
+    if (!neconi) return;
+    ulozKoncept({
+      step, formData, checklist, pointDefects,
+      customPoints, disabledSections, filterPosition,
+    });
+  }, [obnovaResena, konceptKObnove, step, formData, checklist, pointDefects, customPoints, disabledSections, filterPosition]);
+
+  function obnovKoncept() {
+    const k = konceptKObnove;
+    if (!k) return;
+    setFormData(k.formData);
+    setChecklist(k.checklist || {});
+    setPointDefects(k.pointDefects || {});
+    setCustomPoints(k.customPoints || []);
+    setDisabledSections(k.disabledSections || []);
+    setFilterPosition(k.filterPosition || 'all');
+    setStep(k.step || 1);
+    setKonceptKObnove(null); // od teď zase běží auto-ukládání
+    window.scrollTo(0, 0);
+  }
+
+  function zahodKoncept() {
+    smazKoncept();
+    setKonceptKObnove(null);
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -388,6 +439,7 @@ export default function NewInspectionPage() {
       
       // ZDE JE ZMĚNA: Uložíme ID reportu do stavu a ukážeme modal pro odeslání e-mailu
       setJustSavedRecordId(sanitizedRecord.id);
+      smazKoncept(); // úspěšně uloženo do cloudu → záloha už není potřeba
       setJustSavedRecordCislo(klientskeCislo);
       const prijemci = prijemciKlienta(selectedKlient);
       const maHlavni = prijemci.some(p => p.hlavni);
@@ -738,6 +790,25 @@ export default function NewInspectionPage() {
       )}
 
       <div className="flex flex-col gap-4">
+        {konceptKObnove && (
+          <div className="p-4 rounded-xl border border-[#2F5FD0]/30 bg-[#2F5FD0]/5 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+            <div className="flex items-start gap-3">
+              <RotateCcw className="h-5 w-5 text-[#2F5FD0] mt-0.5 shrink-0" />
+              <div className="text-sm">
+                <div className="font-bold text-[#0F2038]">Máte rozpracovanou kontrolu</div>
+                <div className="text-muted-foreground">
+                  Uložená {stariKonceptu(konceptKObnove.ulozenoIso)}. Obnovit rozpracovaná data?
+                  <span className="block text-xs mt-0.5">Pozn.: fotky se nezálohují, ty bude nutné přidat znovu.</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button size="sm" onClick={obnovKoncept} className="bg-[#2F5FD0] hover:bg-[#2547a0]">Obnovit</Button>
+              <Button size="sm" variant="ghost" onClick={zahodKoncept} className="text-muted-foreground">Zahodit</Button>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-between items-center"><h1 className="text-3xl font-bold tracking-tight">Nová kontrola</h1>{step > 1 && <div className="flex items-center gap-3 w-48"><span className="text-xs font-bold text-muted-foreground uppercase">{progressPercent}%</span><Progress value={progressPercent} className="h-2" /></div>}</div>
         <div className="flex items-center gap-2">{[1, 2, 3].map((i) => (<div key={i} className="flex items-center gap-2"><div className={cn("h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold", step === i ? "bg-primary text-white" : step > i ? "bg-muted text-muted-foreground" : "bg-green-100 text-green-700")}>{step > i ? <CheckCircle2 className="h-5 w-5" /> : i}</div>{i < 3 && <div className={cn("h-px w-8 bg-muted", step > i && "bg-green-200")} />}</div>))}<span className="ml-4 text-sm font-medium text-muted-foreground">{step === 1 ? "Výběr klienta a typu" : step === 2 ? "Kontrolní list" : "Shrnutí"}</span></div>
       </div>
