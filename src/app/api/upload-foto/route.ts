@@ -71,9 +71,10 @@ export async function POST(req: NextRequest) {
     const fileName = (file as File).name || 'foto.jpg';
     forward.append('file', file, fileName);
 
-    // Timeout řízení pomocí AbortControlleru (45s abort)
+    // Timeout na volání hostingu. Drží se mírně nad klientským timeoutem (15s),
+    // aby request neblokoval PHP proces na Wedosu déle, než je nutné.
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     let res: Response;
     try {
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
     } catch (fetchError: any) {
       if (fetchError.name === 'AbortError') {
         return NextResponse.json(
-          { success: false, error: 'Připojení k cílovému hostingu vypršelo (Timeout 45s).' },
+          { success: false, error: 'Připojení k cílovému hostingu vypršelo (Timeout 20s).' },
           { status: 504 }
         );
       }
