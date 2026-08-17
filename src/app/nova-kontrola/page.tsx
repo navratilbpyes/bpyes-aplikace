@@ -457,7 +457,7 @@ export default function NewInspectionPage() {
               <SelectTrigger className="bg-white h-10"><SelectValue placeholder="Vyberte pozici" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="Zaměstnavatel / provozovatel">Zaměstnavatel / provozovatel</SelectItem>
-                {uniquePositions.map((pozice: string) => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}
+                {uniquePositions.filter((pozice: string) => pozice !== 'Zaměstnavatel / provozovatel').map((pozice: string) => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}
                 <SelectItem value="manual">-- Zadat manuálně --</SelectItem>
               </SelectContent>
             </Select>
