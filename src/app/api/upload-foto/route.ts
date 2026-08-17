@@ -1,148 +1,145 @@
-// src/app/api/upload-foto/route.ts
-// Bezpecne nahrani fotky: appka posle fotku sem (na vlastni server), tento endpoint
-// prida tajny klic a preposle ji na hosting (appbpyes.cz/fotky/upload.php).
-// Tajny klic je jen v env promenne UPLOAD_SECRET, nikdy se nedostane do prohlizece.
+const MAX_DIMENSION = 1920; // Max rozlišení Full HD
+const JPEG_QUALITY = 0.75;  // Vysoká kvalita přiměřená pro revize
+const HOSTING_DIRECT_URL = 'https://appbpyes.cz/fotky/upload.php';
 
-import { NextRequest, NextResponse } from 'next/server';
-
-// Prodloužení časového limitu (vyžaduje Vercel Pro; u plánu Hobby platí pevný limit 10 s).
-export const maxDuration = 60;
-export const dynamic = 'force-dynamic';
-
-const HOSTING_URL = process.env.UPLOAD_HOSTING_URL || 'https://appbpyes.cz/fotky/upload.php';
-
-// Limity pro Vercel Serverless Functions (Vercel má pevný limit těla požadavku 4.5 MB)
-const MAX_FILE_SIZE_BYTES = 4.5 * 1024 * 1024;
-const ALLOWED_MIME_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'image/heic',
-  'image/heif'
-];
-
-export async function POST(req: NextRequest) {
-  // Kontrola přítomnosti tajného klíče
-  const secret = process.env.UPLOAD_SECRET;
-  if (!secret) {
-    console.error('Chybí UPLOAD_SECRET v env proměnných.');
-    return NextResponse.json(
-      { success: false, error: 'Server není správně nakonfigurován (chybí tajný klíč).' },
-      { status: 500 }
-    );
+/**
+ * Zkomprimuje obrázek v prohlížeči před odesláním.
+ * Zmenší soubor z 10–15 MB na cca 250–400 KB během okamžiku.
+ */
+export async function zkomprimovatFotku(
+  file: File,
+  maxWidthOrHeight = MAX_DIMENSION,
+  quality = JPEG_QUALITY
+): Promise<File> {
+  // Pokud soubor není obrázek nebo je už menší než 300 KB, neupravujeme ho
+  if (!file.type.startsWith('image/') || file.size < 300 * 1024) {
+    return file;
   }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      let { width, height } = img;
+
+      // Zmenšení rozměrů při zachování poměru stran
+      if (width > maxWidthOrHeight || height > maxWidthOrHeight) {
+        if (width > height) {
+          height = Math.round((height * maxWidthOrHeight) / width);
+          width = maxWidthOrHeight;
+        } else {
+          width = Math.round((width * maxWidthOrHeight) / height);
+          height = maxWidthOrHeight;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        return resolve(file); // Fallback na původní soubor, pokud Canvas API selže
+      }
+
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            return resolve(file);
+          }
+
+          const newFileName = file.name.replace(/\.[^/.]+$/, '') + '.jpg';
+          const compressedFile = new File([blob], newFileName, {
+            type: 'image/jpeg',
+            lastModified: Date.now(),
+          });
+
+          console.log(
+            `Fotka zkomprimována: ${(file.size / 1024 / 1024).toFixed(2)} MB -> ${(
+              compressedFile.size /
+              1024 /
+              1024
+            ).toFixed(2)} MB`
+          );
+
+          resolve(compressedFile);
+        },
+        'image/jpeg',
+        quality
+      );
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(file); // Při chybě načtení obrázku vrátíme původní soubor
+    };
+
+    img.src = objectUrl;
+  });
+}
+
+/**
+ * Hlavní funkce pro nahrání fotky z frontendu.
+ * 1. Zkomprimuje fotku na ~300 KB v prohlížeči.
+ * 2. Zkusí odeslat přes Vercel API (/api/upload-foto).
+ * 3. Pokud Vercel API selže (např. 504 Timeout z WEDOSu), automaticky provede přímý upload na appbpyes.cz.
+ */
+export async function nahratFotku(file: File): Promise<string> {
+  // Krok 1: Komprese fotky v mobilu/prohlížeči
+  const zkomprimovanaFotka = await zkomprimovatFotku(file);
+
+  const formData = new FormData();
+  formData.append('file', zkomprimovanaFotka, zkomprimovanaFotka.name);
+
+  // Krok 2: Pokus o upload přes Vercel API
+  try {
+    const res = await fetch('/api/upload-foto', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.url) {
+        return data.url;
+      }
+    }
+    
+    console.warn(`Vercel API vrátil status ${res.status}, zkouším přímý upload na hosting...`);
+  } catch (err) {
+    console.warn('Vercel API nedostupné nebo selhalo, přecházím na přímý upload:', err);
+  }
+
+  // Krok 3: Fallback – přímý upload na WEDOS (využívá váš nakonfigurovaný CORS v PHP)
+  const directFormData = new FormData();
+  directFormData.append('file', zkomprimovanaFotka, zkomprimovanaFotka.name);
+
+  const directRes = await fetch(HOSTING_DIRECT_URL, {
+    method: 'POST',
+    body: directFormData,
+  });
+
+  if (!directRes.ok) {
+    throw new Error(`Přímý upload na hosting selhal se statusem ${directRes.status}`);
+  }
+
+  const directRaw = await directRes.text();
+  let directData: any;
 
   try {
-    const formData = await req.formData();
-    const file = formData.get('file');
-
-    if (!file || !(file instanceof Blob)) {
-      return NextResponse.json(
-        { success: false, error: 'Chybí platný soubor v požadavku.' },
-        { status: 400 }
-      );
-    }
-
-    // Validation 1: Kontrola velikosti kvůli Vercel 4.5MB Serverless Body limitu
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      const sizeMb = (file.size / 1024 / 1024).toFixed(2);
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Soubor je příliš velký (${sizeMb} MB). Maximální povolená velikost přes API je 4.5 MB. Zkomprimujte fotku v prohlížeči před odesláním.`,
-        },
-        { status: 413 }
-      );
-    }
-
-    // Validation 2: Kontrola typu MIME
-    if (file.type && !ALLOWED_MIME_TYPES.includes(file.type)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Nepodporovaný typ souboru (${file.type}). Povoleny jsou pouze obrázky (JPEG, PNG, WebP, GIF).`,
-        },
-        { status: 400 }
-      );
-    }
-
-    const forward = new FormData();
-    const fileName = (file as File).name || 'foto.jpg';
-    forward.append('file', file, fileName);
-
-    // Timeout řízení pomocí AbortControlleru (45s abort)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
-
-    let res: Response;
-    try {
-      res = await fetch(HOSTING_URL, {
-        method: 'POST',
-        headers: {
-          'X-Upload-Secret': secret,
-          // WEDOS blokuje požadavky bez běžného User-Agenta (ochrana proti botům)
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
-          'Accept': 'application/json, text/plain, */*',
-          'Accept-Language': 'cs-CZ,cs;q=0.9',
-          'Referer': 'https://appbpyes.cz/',
-        },
-        body: forward,
-        signal: controller.signal,
-      });
-    } catch (fetchError: any) {
-      if (fetchError.name === 'AbortError') {
-        return NextResponse.json(
-          { success: false, error: 'Připojení k cílovému hostingu vypršelo (Timeout 45s).' },
-          { status: 504 }
-        );
-      }
-      throw fetchError;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-
-    const raw = await res.text();
-    let data: any;
-
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      console.error(
-        'Hosting nevrátil platný JSON. Status:',
-        res.status,
-        'Odpověď (prvních 500 zn.):',
-        raw.slice(0, 500)
-      );
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Hosting vrátil neočekávanou odpověď (status ${res.status}). Skript na hostingu mohl selhat.`,
-          debug: process.env.NODE_ENV === 'development' ? raw.slice(0, 300) : undefined,
-        },
-        { status: 502 }
-      );
-    }
-
-    if (!res.ok || !data.success) {
-      console.error('Hosting upload selhal:', data);
-      return NextResponse.json(
-        { success: false, error: data.error || 'Nahrání na hosting selhalo.' },
-        { status: res.status >= 400 && res.status < 600 ? res.status : 502 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      url: data.url,
-      size: file.size,
-    });
-  } catch (e: any) {
-    console.error('Chyba při zpracování nahrávání fotky:', e);
-    return NextResponse.json(
-      { success: false, error: 'Vnitřní chyba serveru při zpracování fotky.' },
-      { status: 500 }
-    );
+    directData = JSON.parse(directRaw);
+  } catch {
+    throw new Error('Hosting vrátil neplatnou odpověď (ne-JSON).');
   }
+
+  if (!directData.success || !directData.url) {
+    throw new Error(directData.error || 'Nahrání na hosting selhalo.');
+  }
+
+  return directData.url;
 }
