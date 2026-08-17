@@ -100,21 +100,101 @@ function dataUrlNaBlob(dataUrl: string): Blob {
 }
 
 /**
+ * Zmenší fotku před uploadem: omezí delší stranu na MAX_STRANA px a překóduje
+ * do JPEG q0.8. Fotka z telefonu (5–8 MB) tím spadne na cca 300–600 KB, takže
+ * upload je rychlý a nespadne na timeout (504). Průhlednost/PNG se překlopí do
+ * JPEG (u fotek závad nevadí). Když se cokoli nepovede, vrátí původní blob.
+ */
+const MAX_STRANA = 1600;
+async function zmensiFotku(dataUrl: string): Promise<Blob> {
+  const original = dataUrlNaBlob(dataUrl);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = reject;
+      i.src = dataUrl;
+    });
+    const scale = Math.min(1, MAX_STRANA / Math.max(img.width, img.height));
+    // když je fotka menší než limit a už je JPEG, nemá smysl překódovat
+    if (scale === 1 && original.type === 'image/jpeg' && original.size < 1_500_000) {
+      return original;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return original;
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.8),
+    );
+    return blob && blob.size > 0 ? blob : original;
+  } catch {
+    return original; // fallback — radši nahrát velké než nenahrát nic
+  }
+}
+
+/**
  * Nahraje jednu fotku na hosting a vrati jeji URL.
  * Kdyz uz je vstup URL (drive nahrana), vrati ji beze zmeny.
- * Kdyz je to base64, posle ji na /api/upload-foto a vrati vysledne URL.
+ * Kdyz je to base64, zmensi ji a posle na /api/upload-foto.
+ *
+ * Hosting (Wedos) obcas jeden request odmitne nebo zablokuje (limit soubeznych
+ * PHP procesu) — projevi se to jako 504 po dlouhem cekani. Proto ma kazdy pokus
+ * vlastni timeout (nevisi minuty) a pri selhani se upload nekolikrat zopakuje.
  */
-export async function nahrajFotku(fotka: string): Promise<string> {
-  if (jeUrl(fotka)) return fotka; // uz nahrana, nic nedelej
+const FOTO_TIMEOUT_MS = 30_000;
+const FOTO_POKUSY = 3;
 
-  const blob = dataUrlNaBlob(fotka);
+async function jedenPokusUpload(blob: Blob): Promise<string> {
   const fd = new FormData();
   fd.append('file', blob, 'foto.jpg');
 
-  const res = await fetch('/api/upload-foto', { method: 'POST', body: fd });
-  const data = await res.json();
-  if (!data.success) throw new Error(data.error || 'Nahrani fotky selhalo.');
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), FOTO_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch('/api/upload-foto', { method: 'POST', body: fd, signal: ctrl.signal });
+  } finally {
+    clearTimeout(t);
+  }
+
+  // Hosting/proxy muze pri chybe vratit HTML nebo prazdnou odpoved (ne JSON) —
+  // napr. 504 timeout. Cteme text a parsujeme opatrne.
+  const raw = await res.text();
+  let data: any;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error(res.status === 504 ? 'timeout' : `status ${res.status}`);
+  }
+  if (!res.ok || !data?.success) throw new Error(data?.error || 'Nahrání fotky selhalo.');
   return data.url as string;
+}
+
+export async function nahrajFotku(fotka: string): Promise<string> {
+  if (jeUrl(fotka)) return fotka; // uz nahrana, nic nedelej
+
+  const blob = await zmensiFotku(fotka);
+  let posledniChyba: any;
+  for (let pokus = 1; pokus <= FOTO_POKUSY; pokus++) {
+    try {
+      return await jedenPokusUpload(blob);
+    } catch (e: any) {
+      posledniChyba = e;
+      if (pokus < FOTO_POKUSY) {
+        // krátká rostoucí pauza mezi pokusy (odlehčí zahlcenému hostingu)
+        await new Promise((r) => setTimeout(r, 800 * pokus));
+      }
+    }
+  }
+  const t = posledniChyba?.message === 'timeout' || posledniChyba?.name === 'AbortError';
+  throw new Error(
+    t
+      ? 'Nahrávání fotky opakovaně vypršelo. Zkuste to prosím znovu.'
+      : (posledniChyba?.message || 'Nahrání fotky selhalo.'),
+  );
 }
 
 /** Nahraje pole fotek (mix URL a base64) a vrati pole URL. */
