@@ -4,6 +4,7 @@ import { createEmptyDefect, prijemciKlienta, parsujTypoveZavady } from "@/lib/ko
 import { nactiCsv, stariZalohy } from "@/lib/csv-cache";
 import type { DefectFormState, TypickaZavada } from "@/lib/kontroly";
 import { compressImage, FOTO_NEDOSTATKU, nahrajFotky } from "@/lib/obrazky";
+import FotoZona from "@/components/nova-kontrola/foto-zona";
 import {
   ulozKoncept, nactiKoncept, smazKoncept, maSmysluObnovit, stariKonceptu,
   type KonceptKontroly,
@@ -518,17 +519,10 @@ export default function NewInspectionPage() {
         </div>
 
         <div className="pt-2">
-          <div className="relative inline-block">
-            <Button variant="outline" size="sm" className="text-muted-foreground cursor-pointer"><Camera className="h-4 w-4 mr-2" /> Přidat fotodokumentaci</Button>
-            <Input type="file" accept="image/*" multiple className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
-              onChange={async (e) => {
-                const files = Array.from(e.target.files || []) as File[]; if (files.length === 0) return;
-                const newPhotos: string[] = [];
-                for (const file of files) { const compressed = await compressImage(file, FOTO_NEDOSTATKU); newPhotos.push(compressed); }
-                updateFn('foto', [...(def.foto || []), ...newPhotos]);
-              }}
-            />
-          </div>
+          <FotoZona
+            label="Přidat fotodokumentaci"
+            onFotky={(nove) => updateFn('foto', [...(def.foto || []), ...nove])}
+          />
           {def.foto && def.foto.length > 0 && (
             <div className="flex flex-wrap gap-3 mt-4 bg-muted/20 p-3 rounded-md border border-dashed">
               {def.foto.map((photoStr, photoIdx) => (
@@ -590,21 +584,13 @@ export default function NewInspectionPage() {
               />
             </div>
 
-            <div className="flex flex-wrap gap-3 items-center">
-              <Button asChild variant="outline" size="sm" className="cursor-pointer h-8">
-                <label>
-                  <Camera className="h-3.5 w-3.5 mr-2" /> Přidat foto
-                  <input type="file" accept="image/*" multiple className="hidden" onChange={async (e) => {
-                    const files = Array.from(e.target.files || []) as File[];
-                    if (files.length === 0) return;
-                    const nove: string[] = [];
-                    for (const f of files) nove.push(await compressImage(f, FOTO_NEDOSTATKU));
-                    setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], doporuceniFoto: [...(prev[point.id]?.doporuceniFoto || []), ...nove] }}));
-                    e.target.value = '';
-                  }} />
-                </label>
-              </Button>
-
+            <div className="space-y-3">
+              <FotoZona
+                label="Přidat foto"
+                maly
+                onFotky={(nove) => setChecklist(prev => ({ ...prev, [point.id]: { ...prev[point.id], doporuceniFoto: [...(prev[point.id]?.doporuceniFoto || []), ...nove] }}))}
+              />
+              <div className="flex flex-wrap gap-3 items-center">
               {(state.doporuceniFoto || []).map((photoStr: string, idx: number) => (
                 <div key={idx} className="relative inline-block">
                   <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow z-10" onClick={() => {
@@ -613,6 +599,7 @@ export default function NewInspectionPage() {
                   <img src={photoStr} alt="Doporučení" className="h-24 w-auto object-cover rounded shadow-sm border border-slate-200" />
                 </div>
               ))}
+              </div>
             </div>
           </div>
         )}
