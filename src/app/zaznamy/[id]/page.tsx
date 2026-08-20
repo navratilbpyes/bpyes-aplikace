@@ -217,7 +217,15 @@ export default function RecordDetailPage() {
 
   const uniquePositionsInRecord = useMemo(() => {
     if (!record?.kontrolniBody) return [];
-    const positions = record.kontrolniBody.filter((kb: any) => kb.hodnoceni === 'N' && kb.odpovednaOsoba).map((kb: any) => kb.odpovednaOsoba);
+    const positions: string[] = [];
+    // osoby z bodů (starší data / bod bez rozpadu na víc závad)
+    record.kontrolniBody
+      .filter((kb: any) => kb.hodnoceni === 'N' && kb.odpovednaOsoba)
+      .forEach((kb: any) => positions.push(kb.odpovednaOsoba));
+    // osoby z jednotlivých závad (víc nedostatků pod bodem, každý svou osobu)
+    (record.zavady || [])
+      .filter((z: any) => z.odpovednaOsoba)
+      .forEach((z: any) => positions.push(z.odpovednaOsoba));
     return Array.from(new Set(positions)) as string[];
   }, [record]);
 
@@ -257,7 +265,17 @@ export default function RecordDetailPage() {
       const sec = kb.sekce || "Ostatní";
       if (visibleSections[sec] === false) return false;
       if (onlyDefects && kb.hodnoceni !== 'N') return false;
-      if (filterPosition !== "all" && kb.hodnoceni === 'N' && kb.odpovednaOsoba !== filterPosition) return false;
+      if (filterPosition !== "all" && kb.hodnoceni === 'N') {
+        // Bod má vyhovět, pokud vybraná osoba je buď na bodu, nebo na
+        // NĚKTERÉM z jeho nedostatků (bod může mít víc závad s různými osobami).
+        const zavadyBodu = (record.zavady || []).filter(
+          (z: any) => String(z.bodKontroly) === String(kb.bod)
+        );
+        const osobaSedi = zavadyBodu.length > 0
+          ? zavadyBodu.some((z: any) => z.odpovednaOsoba === filterPosition)
+          : kb.odpovednaOsoba === filterPosition;
+        if (!osobaSedi) return false;
+      }
       return true;
     });
   }, [record, visibleSections, onlyDefects, filterPosition]);
@@ -859,11 +877,16 @@ export default function RecordDetailPage() {
                                     const nedostatkyBodu = (record.zavady || []).filter(
                                       (z: any) => String(z.bodKontroly) === String(kb.bod)
                                     );
-                                    const seznam = nedostatkyBodu.length > 0 ? nedostatkyBodu : [{
+                                    let seznam: any[] = nedostatkyBodu.length > 0 ? nedostatkyBodu : [{
                                       navrhOpatreni: kb.navrhOpatreni, lokalizace: kb.lokalizace,
                                       terminOdstraneni: kb.terminOdstraneni, bezOdkladu: kb.bezOdkladu,
                                       odpovednaOsoba: kb.odpovednaOsoba, foto: kb.foto, popis: kb.popis,
                                     }];
+                                    // Při filtru podle osoby ukaž jen nedostatky té osoby.
+                                    if (filterPosition !== "all") {
+                                      const jen = seznam.filter((z: any) => z.odpovednaOsoba === filterPosition);
+                                      if (jen.length > 0) seznam = jen;
+                                    }
                                     return seznam.map((z: any, zi: number) => (
                                       <div key={zi} className="space-y-3">
                                         {seznam.length > 1 && (
