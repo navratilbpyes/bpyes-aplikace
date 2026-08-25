@@ -36,7 +36,13 @@ function generujHeslo(): string {
 function NastavitHesloInner() {
   const params = useSearchParams();
   const router = useRouter();
+  // Dva režimy:
+  //  - oobCode: Firebase reset/pozvánka (3-lite flow) → accounts:resetPassword
+  //  - token: starší vlastní token flow (zpětná kompatibilita)
+  // Firebase může poslat kód jako ?oobCode= (přímo) i uvnitř mode=resetPassword.
+  const oobCode = params.get('oobCode') ?? '';
   const token = params.get('token') ?? '';
+  const maOdkaz = !!oobCode || !!token;
 
   const [heslo, setHeslo] = useState('');
   const [heslo2, setHeslo2] = useState('');
@@ -84,17 +90,25 @@ function NastavitHesloInner() {
       setChyba('Hesla se neshodují.');
       return;
     }
-    if (!token) {
+    if (!maOdkaz) {
       setChyba('Chybí platný odkaz. Otevřete prosím odkaz z e-mailu.');
       return;
     }
     setOdesilani(true);
     try {
-      const res = await fetch('/api/nastavit-heslo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, heslo }),
-      });
+      // oobCode → Firebase reset flow (nová, spolehlivá cesta bez CREDENTIAL_TOO_OLD)
+      // token   → starší vlastní flow (zpětná kompatibilita)
+      const res = oobCode
+        ? await fetch('/api/nastavit-heslo-oob', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ oobCode, heslo }),
+          })
+        : await fetch('/api/nastavit-heslo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, heslo }),
+          });
       const data = await res.json();
       if (!res.ok || !data.success) {
         setChyba(data.error ?? 'Něco se nepovedlo.');
