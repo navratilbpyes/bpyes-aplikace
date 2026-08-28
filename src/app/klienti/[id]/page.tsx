@@ -67,6 +67,8 @@ export default function ClientDetailPage() {
   const [isAresLoading, setIsAresLoading] = useState(false);
   const searchParams = useSearchParams();
   const tabZUrl = searchParams.get("tab") ?? "pracoviste";
+  const [tab, setTab] = useState(tabZUrl);
+  useEffect(() => { setTab(tabZUrl); }, [tabZUrl]);
 
   // Vytvoření klientského přístupu
   const [showPristupModal, setShowPristupModal] = useState(false);
@@ -485,7 +487,7 @@ export default function ClientDetailPage() {
 
         {/* Right Column - Tabs */}
         <div className="lg:col-span-2">
-          <Tabs defaultValue={tabZUrl} className="space-y-6">
+          <Tabs value={tab} onValueChange={setTab} className="space-y-6">
             <TabsList className="w-full justify-start h-auto p-1 bg-secondary flex-wrap">
               <TabsTrigger value="pracoviste" className="px-6 py-2">Pracoviště</TabsTrigger>
               <TabsTrigger value="plan" className="px-6 py-2">Časový plán</TabsTrigger>
