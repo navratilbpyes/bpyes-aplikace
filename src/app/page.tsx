@@ -30,22 +30,27 @@ export default function Dashboard() {
     const kRevizi: any[] = [];
     
     zaznamy.forEach(z => {
-      if (z.stav !== 'uzavreny' && z.kontrolniBody) {
-        z.kontrolniBody.forEach((kb: any) => {
-          if (kb.hodnoceni === 'N' && kb.vyresenoKlientem) {
-            kRevizi.push({
-              zaznamId: z.id,
-              cisloZpravy: z.cislo,
-              revize: z.revize || 0,
-              klientNazev: z.klientNazev || klienti.find(k => k.id === z.klientId)?.nazev || 'Neznámý klient',
-              bod: kb.bod,
-              otazka: kb.otazka || kb.popis,
-              datum: kb.datumVyreseniKlientem,
-              jmeno: kb.jmenoVyresitele
-            });
-          }
+      if (z.stav === 'uzavreny' || !z.kontrolniBody) return;
+      const zavady: any[] = (z as any).zavady || [];
+      z.kontrolniBody.forEach((kb: any) => {
+        if (kb.hodnoceni !== 'N') return;
+        // Stav vyreseni zije na zavade; u starsich dat na bodu.
+        const nedostatky = zavady.filter((v: any) => String(v.bodKontroly) === String(kb.bod));
+        const zdroje: any[] = nedostatky.length > 0 ? nedostatky : [kb];
+        zdroje.forEach((src: any) => {
+          if (!src.vyresenoKlientem || src.overenoOzo) return;
+          kRevizi.push({
+            zaznamId: z.id,
+            cisloZpravy: z.cislo,
+            revize: z.revize || 0,
+            klientNazev: z.klientNazev || klienti.find(k => k.id === z.klientId)?.nazev || 'Neznámý klient',
+            bod: kb.bod,
+            otazka: src.popis || kb.otazka || kb.popis,
+            datum: src.datumVyreseniKlientem,
+            jmeno: src.jmenoVyresitele,
+          });
         });
-      }
+      });
     });
     return kRevizi.sort((a, b) => new Date(b.datum).getTime() - new Date(a.datum).getTime());
   }, [zaznamy, klienti, isAdmin]);
@@ -181,7 +186,7 @@ export default function Dashboard() {
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="text-xs text-emerald-700 bg-emerald-100 px-2 py-1 rounded border border-emerald-200 truncate max-w-[120px]">Od: <span className="font-bold">{zavada.jmeno}</span></div>
-                          <Button size="sm" variant="outline" className="h-7 text-xs font-bold border-emerald-300 text-emerald-700 hover:bg-emerald-100" onClick={() => router.push(`/upravit-zaznam/${zavada.zaznamId}`)}><Eye className="h-3 w-3 mr-1.5" /> Revidovat</Button>
+                          <Button size="sm" variant="outline" className="h-7 text-xs font-bold border-emerald-300 text-emerald-700 hover:bg-emerald-100" onClick={() => router.push(`/zaznamy/${zavada.zaznamId}`)}><Eye className="h-3 w-3 mr-1.5" /> Revidovat</Button>
                         </div>
                       </div>
                     ))}
