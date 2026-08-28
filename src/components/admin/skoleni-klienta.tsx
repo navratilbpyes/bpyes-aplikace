@@ -30,6 +30,8 @@ import {
 import { cn } from '@/app/lib/utils';
 import { PERIODY, popisPeriody, dopocitejDalsi, platnyTermin } from '@/lib/skoleni';
 import type { CiselnikSkoleni, SkoleniKlienta as TypSkoleni } from '@/lib/skoleni';
+import ProtokolUpload from '@/components/protokol-upload';
+import type { ProtokolPole } from '@/lib/protokol';
 
 interface Props {
   klientId: string;
@@ -336,6 +338,17 @@ export default function SkoleniKlienta({ klientId }: Props) {
                             className="h-9"
                           />
                         </div>
+                      </div>
+
+                      {/* Doklad o školení — nahrání / kontrola OZO */}
+                      <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+                        <Label className="text-xs font-medium">Doklad o školení</Label>
+                        <ProtokolUpload
+                          klientId={klientId}
+                          adminMode
+                          data={s as ProtokolPole}
+                          onUlozit={(zmeny) => uprav(s.id, zmeny as Partial<TypSkoleni>)}
+                        />
                       </div>
 
                       {s.dalsiRucne && (
