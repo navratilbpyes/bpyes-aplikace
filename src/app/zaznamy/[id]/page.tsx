@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/app/lib/utils";
+import DotazNalezu from "@/components/dotazy/dotaz-nalezu";
 import { doc, deleteDoc, getDoc } from "firebase/firestore";
 
 const TEXTS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRiXWE13sHgXwCiFobHGpI3zvKR8nIOnzLtLxWdK7kyn2c4BhZDOwOf5ulUycMyfF1xJXonFSTG88JS/pub?gid=1978510431&single=true&output=csv";
@@ -954,6 +955,16 @@ export default function RecordDetailPage() {
                                               ))}
                                             </div>
                                           </div>
+                                        )}
+
+                                        {/* Dotazy k tomuto nedostatku — píše klient, odpovídá OZO */}
+                                        {record.klientId && (
+                                          <DotazNalezu
+                                            klientId={record.klientId}
+                                            zaznamId={record.id}
+                                            zavadaId={zid ?? `bod_${kb.bod}`}
+                                            zavadaPopis={z.popis || kb.otazka || kb.popis}
+                                          />
                                         )}
 
                                         {!isAdmin && (
