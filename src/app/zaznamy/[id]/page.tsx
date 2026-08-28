@@ -173,29 +173,34 @@ export default function RecordDetailPage() {
     } catch (error) { setIsDeleting(false); }
   };
 
-  const handleConfirmResolve = async (bodId: string | number) => {
+  /** Uloží vyřešení: buď na konkrétní závadu (zavadaId), nebo na bod (starší data). */
+  const zapisVyreseni = (bodId: string | number, zavadaId: string | null, data: any) => {
     if (!record) return;
-    if (!resolveData.jmeno.trim()) { toast({ title: "Chybí jméno", description: "Zadejte jméno.", variant: "destructive" }); return; }
-    const updatedBody = record.kontrolniBody.map((kb: any) => {
-      if ((kb.id || kb.bod) === bodId) {
-        return { ...kb, vyresenoKlientem: true, datumVyreseniKlientem: resolveData.datum, jmenoVyresitele: resolveData.jmeno, poznamkaKlienta: resolveData.poznamka, fotoVyreseni: resolveData.foto };
-      }
-      return kb;
-    });
-    try {
-      setZaznamy((prev: any[]) => prev.map(z => z.id === record.id ? { ...z, kontrolniBody: updatedBody } : z));
-      setResolvingBod(null);
-      toast({ title: "Závada odstraněna" });
-    } catch (e) { toast({ title: "Chyba uložení", variant: "destructive" }); }
+    const patch: any = zavadaId
+      ? { zavady: (record.zavady || []).map((z: any) => (z.id === zavadaId ? { ...z, ...data } : z)) }
+      : { kontrolniBody: record.kontrolniBody.map((kb: any) => ((kb.id || kb.bod) === bodId ? { ...kb, ...data } : kb)) };
+    setZaznamy((prev: any[]) => prev.map((z) => (z.id === record.id ? { ...z, ...patch } : z)));
   };
 
-  const handleCancelResolve = async (bodId: string | number) => {
+  const handleConfirmResolve = async (bodId: string | number, zavadaId: string | null = null) => {
     if (!record) return;
-    const updatedBody = record.kontrolniBody.map((kb: any) => {
-      if ((kb.id || kb.bod) === bodId) { return { ...kb, vyresenoKlientem: false, datumVyreseniKlientem: null, jmenoVyresitele: null, poznamkaKlienta: null, fotoVyreseni: [] }; }
-      return kb;
+    if (!resolveData.jmeno.trim()) { toast({ title: "Chybí jméno", description: "Zadejte jméno.", variant: "destructive" }); return; }
+    zapisVyreseni(bodId, zavadaId, {
+      vyresenoKlientem: true,
+      datumVyreseniKlientem: resolveData.datum,
+      jmenoVyresitele: resolveData.jmeno,
+      poznamkaKlienta: resolveData.poznamka,
+      fotoVyreseni: resolveData.foto,
     });
-    setZaznamy((prev: any[]) => prev.map(z => z.id === record.id ? { ...z, kontrolniBody: updatedBody } : z));
+    setResolvingBod(null);
+    toast({ title: "Závada odstraněna" });
+  };
+
+  const handleCancelResolve = async (bodId: string | number, zavadaId: string | null = null) => {
+    zapisVyreseni(bodId, zavadaId, {
+      vyresenoKlientem: false, datumVyreseniKlientem: null, jmenoVyresitele: null,
+      poznamkaKlienta: null, fotoVyreseni: [],
+    });
     toast({ title: "Zrušeno" });
   };
 
@@ -850,7 +855,10 @@ export default function RecordDetailPage() {
                         {items.map((kb: any) => {
                           const isDefect = kb.hodnoceni === 'N';
                           const bodId = kb.id || kb.bod;
-                          const isResolvedByClient = !!kb.vyresenoKlientem;
+                          const nedostatkyBodu = (record.zavady || []).filter((z: any) => String(z.bodKontroly) === String(kb.bod));
+                          const isResolvedByClient = nedostatkyBodu.length > 0
+                            ? nedostatkyBodu.every((z: any) => z.vyresenoKlientem)
+                            : !!kb.vyresenoKlientem;
 
                           return (
                             <div key={bodId} className={cn("p-5 transition-colors", isDefect ? "bg-white" : "bg-slate-50/30")}>
@@ -874,21 +882,24 @@ export default function RecordDetailPage() {
                               {isDefect && (
                                 <div className="ml-10 space-y-4">
                                   {(() => {
-                                    const nedostatkyBodu = (record.zavady || []).filter(
-                                      (z: any) => String(z.bodKontroly) === String(kb.bod)
-                                    );
                                     let seznam: any[] = nedostatkyBodu.length > 0 ? nedostatkyBodu : [{
+                                      __kb: true,
                                       navrhOpatreni: kb.navrhOpatreni, lokalizace: kb.lokalizace,
                                       terminOdstraneni: kb.terminOdstraneni, bezOdkladu: kb.bezOdkladu,
                                       odpovednaOsoba: kb.odpovednaOsoba, foto: kb.foto, popis: kb.popis,
                                     }];
-                                    // Při filtru podle osoby ukaž jen nedostatky té osoby.
                                     if (filterPosition !== "all") {
                                       const jen = seznam.filter((z: any) => z.odpovednaOsoba === filterPosition);
                                       if (jen.length > 0) seznam = jen;
                                     }
-                                    return seznam.map((z: any, zi: number) => (
-                                      <div key={zi} className="space-y-3">
+                                    return seznam.map((z: any, zi: number) => {
+                                      const zid: string | null = z.__kb ? null : z.id;
+                                      const klic = zid ? `${bodId}|${zid}` : String(bodId);
+                                      // Stav vyřešení žije na závadě; u starých dat bez rozpadu na bodě.
+                                      const src: any = zid ? z : kb;
+                                      const vyreseno = !!src.vyresenoKlientem;
+                                      return (
+                                      <div key={klic} className="space-y-3">
                                         {seznam.length > 1 && (
                                           <div className="text-[11px] font-bold text-red-700 uppercase tracking-wide">Nedostatek {zi + 1} z {seznam.length}</div>
                                         )}
@@ -912,91 +923,89 @@ export default function RecordDetailPage() {
                                             </div>
                                           </div>
                                         )}
-                                      </div>
-                                    ));
-                                  })()}
 
-                                  {!isAdmin && (
-                                    <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 mt-4 shadow-sm">
-                                      {isResolvedByClient ? (
-                                         <div className="space-y-3 bg-white p-4 rounded-lg border border-blue-50">
-                                           <div className="flex items-center gap-2 text-emerald-700 font-bold text-sm mb-2"><CheckCircle2 className="h-5 w-5" /> Závada byla nahlášena jako odstraněná</div>
-                                           <div className="grid grid-cols-2 gap-4 text-sm">
-                                             <div><span className="text-xs text-slate-500 block">Nahlásil(a):</span> <span className="font-bold">{kb.jmenoVyresitele}</span></div>
-                                             <div><span className="text-xs text-slate-500 block">Datum odstranění:</span> <span className="font-bold">{kb.datumVyreseniKlientem ? new Date(kb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</span></div>
-                                           </div>
-                                           {kb.poznamkaKlienta && <div className="pt-2 border-t border-slate-100"><span className="text-xs text-slate-500 block mb-1">Poznámka k řešení:</span><p className="text-sm italic text-slate-700">{kb.poznamkaKlienta}</p></div>}
-                                           {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
-                                             <div className="pt-3 border-t border-slate-100 flex gap-2">
-                                               {kb.fotoVyreseni.map((f: string, i: number) => (
-                                                 <img key={i} src={f} onClick={() => setFullscreenImage(f)} className="h-16 w-16 object-cover rounded border cursor-zoom-in hover:opacity-80" />
-                                               ))}
-                                             </div>
-                                           )}
-                                           <Button variant="ghost" size="sm" onClick={() => handleCancelResolve(bodId)} className="text-red-600 hover:text-red-700 hover:bg-red-50 mt-2 p-0 h-auto font-bold text-xs">Vrátit závadu zpět do řešení</Button>
-                                         </div>
-                                      ) : (
-                                        resolvingBod === bodId ? (
-                                          <div className="bg-white p-4 rounded-lg border border-blue-200 shadow-lg animate-in slide-in-from-top-2">
-                                            <h5 className="font-bold text-blue-900 mb-4 text-sm">Nahlášení odstranění závady</h5>
-                                            <div className="space-y-4">
-                                              <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-1.5"><Label className="text-xs font-bold text-slate-700">Kdy bylo odstraněno?</Label><Input type="date" value={resolveData.datum} onChange={e => setResolveData(p => ({...p, datum: e.target.value}))} className="h-9" /></div>
-                                                <div className="space-y-1.5"><Label className="text-xs font-bold text-slate-700">Vaše jméno</Label><Input value={resolveData.jmeno} onChange={e => setResolveData(p => ({...p, jmeno: e.target.value}))} placeholder="Jan Novák" className="h-9" /></div>
-                                              </div>
-                                              <div className="space-y-1.5"><Label className="text-xs font-bold text-slate-700">Doplňující komentář</Label><Textarea value={resolveData.poznamka} onChange={e => setResolveData(p => ({...p, poznamka: e.target.value}))} placeholder="Jak byla závada odstraněna..." className="min-h-[60px] text-sm" /></div>
-                                              <div className="space-y-1.5">
-                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-2"><Camera className="h-4 w-4 text-blue-600" /> Nahrát fotodůkaz (volitelně)</Label>
-                                                <Input type="file" accept="image/*" multiple onChange={async (e) => {
-                                                    const files = Array.from(e.target.files || []); if (files.length === 0) return;
-                                                    const newPhotos: string[] = []; for (const f of files) newPhotos.push(await compressImage(f, FOTO_NEDOSTATKU));
-                                                    setResolveData(p => ({...p, foto: [...p.foto, ...newPhotos]}));
-                                                }} className="h-9 cursor-pointer text-xs" />
-                                                {resolveData.foto.length > 0 && (
-                                                  <div className="flex gap-2 mt-2 p-2 bg-slate-50 rounded border border-dashed">
-                                                    {resolveData.foto.map((f, i) => (
-                                                      <div key={i} className="relative group">
-                                                         <img src={f} className="h-12 w-12 object-cover rounded shadow-sm border" />
-                                                         <button onClick={() => setResolveData(p => ({...p, foto: p.foto.filter((_, idx) => idx !== i)}))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 shadow"><X className="h-3 w-3" /></button>
-                                                      </div>
+                                        {!isAdmin && (
+                                          <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 shadow-sm">
+                                            {vyreseno ? (
+                                              <div className="space-y-3 bg-white p-4 rounded-lg border border-blue-50">
+                                                <div className="flex items-center gap-2 text-emerald-700 font-bold text-sm mb-2"><CheckCircle2 className="h-5 w-5" /> Závada byla nahlášena jako odstraněná</div>
+                                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                                  <div><span className="text-xs text-slate-500 block">Nahlásil(a):</span> <span className="font-bold">{src.jmenoVyresitele}</span></div>
+                                                  <div><span className="text-xs text-slate-500 block">Datum odstranění:</span> <span className="font-bold">{src.datumVyreseniKlientem ? new Date(src.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</span></div>
+                                                </div>
+                                                {src.poznamkaKlienta && <div className="pt-2 border-t border-slate-100"><span className="text-xs text-slate-500 block mb-1">Poznámka k řešení:</span><p className="text-sm italic text-slate-700">{src.poznamkaKlienta}</p></div>}
+                                                {src.fotoVyreseni && src.fotoVyreseni.length > 0 && (
+                                                  <div className="pt-3 border-t border-slate-100 flex gap-2">
+                                                    {src.fotoVyreseni.map((f: string, i: number) => (
+                                                      <img key={i} src={f} onClick={() => setFullscreenImage(f)} className="h-16 w-16 object-cover rounded border cursor-zoom-in hover:opacity-80" />
                                                     ))}
                                                   </div>
                                                 )}
+                                                <Button variant="ghost" size="sm" onClick={() => handleCancelResolve(bodId, zid)} className="text-red-600 hover:text-red-700 hover:bg-red-50 mt-2 p-0 h-auto font-bold text-xs">Vrátit závadu zpět do řešení</Button>
                                               </div>
-                                              <div className="flex gap-2 pt-2 border-t border-slate-100">
-                                                <Button size="sm" onClick={() => handleConfirmResolve(bodId)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold">Odeslat</Button>
-                                                <Button size="sm" variant="ghost" onClick={() => setResolvingBod(null)}>Zrušit</Button>
+                                            ) : resolvingBod === klic ? (
+                                              <div className="bg-white p-4 rounded-lg border border-blue-200 shadow-lg animate-in slide-in-from-top-2">
+                                                <h5 className="font-bold text-blue-900 mb-4 text-sm">Nahlášení odstranění závady</h5>
+                                                <div className="space-y-4">
+                                                  <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-1.5"><Label className="text-xs font-bold text-slate-700">Kdy bylo odstraněno?</Label><Input type="date" value={resolveData.datum} onChange={e => setResolveData(p => ({...p, datum: e.target.value}))} className="h-9" /></div>
+                                                    <div className="space-y-1.5"><Label className="text-xs font-bold text-slate-700">Vaše jméno</Label><Input value={resolveData.jmeno} onChange={e => setResolveData(p => ({...p, jmeno: e.target.value}))} placeholder="Jan Novák" className="h-9" /></div>
+                                                  </div>
+                                                  <div className="space-y-1.5"><Label className="text-xs font-bold text-slate-700">Doplňující komentář</Label><Textarea value={resolveData.poznamka} onChange={e => setResolveData(p => ({...p, poznamka: e.target.value}))} placeholder="Jak byla závada odstraněna..." className="min-h-[60px] text-sm" /></div>
+                                                  <div className="space-y-1.5">
+                                                    <Label className="text-xs font-bold text-slate-700 flex items-center gap-2"><Camera className="h-4 w-4 text-blue-600" /> Nahrát fotodůkaz (volitelně)</Label>
+                                                    <Input type="file" accept="image/*" multiple onChange={async (e) => {
+                                                        const files = Array.from(e.target.files || []); if (files.length === 0) return;
+                                                        const newPhotos: string[] = []; for (const f of files) newPhotos.push(await compressImage(f, FOTO_NEDOSTATKU));
+                                                        setResolveData(p => ({...p, foto: [...p.foto, ...newPhotos]}));
+                                                    }} className="h-9 cursor-pointer text-xs" />
+                                                    {resolveData.foto.length > 0 && (
+                                                      <div className="flex gap-2 mt-2 p-2 bg-slate-50 rounded border border-dashed">
+                                                        {resolveData.foto.map((f, i) => (
+                                                          <div key={i} className="relative group">
+                                                            <img src={f} className="h-12 w-12 object-cover rounded shadow-sm border" />
+                                                            <button onClick={() => setResolveData(p => ({...p, foto: p.foto.filter((_, idx) => idx !== i)}))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 shadow"><X className="h-3 w-3" /></button>
+                                                          </div>
+                                                        ))}
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                  <div className="flex gap-2 pt-2 border-t border-slate-100">
+                                                    <Button size="sm" onClick={() => handleConfirmResolve(bodId, zid)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold">Odeslat</Button>
+                                                    <Button size="sm" variant="ghost" onClick={() => setResolvingBod(null)}>Zrušit</Button>
+                                                  </div>
+                                                </div>
                                               </div>
+                                            ) : (
+                                              <Button onClick={() => { setResolvingBod(klic); setResolveData({ datum: new Date().toISOString().split('T')[0], jmeno: '', poznamka: '', foto: [] }); }} size="sm" className="bg-white text-blue-700 border-blue-200 hover:bg-blue-50 font-bold shadow-sm">
+                                                Odstranil(a) jsem tento nedostatek
+                                              </Button>
+                                            )}
+                                          </div>
+                                        )}
+
+                                        {isAdmin && vyreseno && (
+                                          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 shadow-sm">
+                                            <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm mb-3"><CheckCircle2 className="h-5 w-5" /> Klient nahlásil odstranění nedostatku</div>
+                                            <div className="bg-white p-3 rounded-lg border border-emerald-100 space-y-3 text-sm">
+                                              <div className="grid grid-cols-2 gap-4">
+                                                <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Nahlásil</span><span className="font-bold">{src.jmenoVyresitele}</span></div>
+                                                <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Dne</span><span className="font-bold">{src.datumVyreseniKlientem ? new Date(src.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</span></div>
+                                              </div>
+                                              {src.poznamkaKlienta && <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Komentář</span><p className="italic text-slate-700">{src.poznamkaKlienta}</p></div>}
+                                              {src.fotoVyreseni && src.fotoVyreseni.length > 0 && (
+                                                <div className="pt-2 border-t border-slate-50 flex gap-2">
+                                                  {src.fotoVyreseni.map((f: string, i: number) => (
+                                                    <img key={i} src={f} onClick={() => setFullscreenImage(f)} className="h-16 w-16 object-cover rounded border cursor-zoom-in hover:opacity-80" />
+                                                  ))}
+                                                </div>
+                                              )}
                                             </div>
                                           </div>
-                                        ) : (
-                                          <Button onClick={() => { setResolvingBod(bodId); setResolveData({ datum: new Date().toISOString().split('T')[0], jmeno: '', poznamka: '', foto: [] }); }} size="sm" className="bg-white text-blue-700 border-blue-200 hover:bg-blue-50 font-bold shadow-sm">
-                                             Odstranil(a) jsem tuto závadu
-                                          </Button>
-                                        )
-                                      )}
-                                    </div>
-                                  )}
-
-                                  {isAdmin && isResolvedByClient && (
-                                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mt-4 shadow-sm">
-                                       <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm mb-3"><CheckCircle2 className="h-5 w-5" /> Klient nahlásil odstranění závady</div>
-                                       <div className="bg-white p-3 rounded-lg border border-emerald-100 space-y-3 text-sm">
-                                          <div className="grid grid-cols-2 gap-4">
-                                            <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Nahlásil</span><span className="font-bold">{kb.jmenoVyresitele}</span></div>
-                                            <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Dne</span><span className="font-bold">{kb.datumVyreseniKlientem ? new Date(kb.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</span></div>
-                                          </div>
-                                          {kb.poznamkaKlienta && <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Komentář</span><p className="italic text-slate-700">{kb.poznamkaKlienta}</p></div>}
-                                          {kb.fotoVyreseni && kb.fotoVyreseni.length > 0 && (
-                                             <div className="pt-2 border-t border-slate-50 flex gap-2">
-                                               {kb.fotoVyreseni.map((f: string, i: number) => (
-                                                 <img key={i} src={f} onClick={() => setFullscreenImage(f)} className="h-16 w-16 object-cover rounded border cursor-zoom-in hover:opacity-80" />
-                                               ))}
-                                             </div>
-                                          )}
-                                       </div>
-                                    </div>
-                                  )}
+                                        )}
+                                      </div>);
+                                    });
+                                  })()}
 
                                 </div>
                               )}
