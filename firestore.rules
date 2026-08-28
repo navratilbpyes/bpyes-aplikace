@@ -157,10 +157,16 @@ service cloud.firestore {
     }
 
     // ---------- zaznamy (kontroly/protokoly) ----------
-    match /zaznamy/{zaznamId} {
+        match /zaznamy/{zaznamId} {
       allow read: if isAdmin()
         || (maProfil() && resource.data.klientId == mujKlientId());
-      allow create, update, delete: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (jeAktivniKlient()
+            && resource.data.klientId == mujKlientId()
+            && request.resource.data.klientId == resource.data.klientId
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['zavady', 'kontrolniBody']));
     }
 
     // ---------- prohlidky ----------
