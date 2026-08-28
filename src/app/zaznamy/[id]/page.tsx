@@ -195,6 +195,8 @@ export default function RecordDetailPage() {
       fotoVyreseni: resolveData.foto,
       overenoOzo: null,
       poznamkaOzo: null,
+      odstraneno: true,
+      datumOdstraneni: resolveData.datum ? new Date(resolveData.datum).toISOString() : new Date().toISOString(),
     });
     setResolvingBod(null);
     toast({ title: "Závada odstraněna" });
@@ -206,8 +208,6 @@ export default function RecordDetailPage() {
       overenoOzo: 'potvrzeno',
       datumOvereniOzo: new Date().toISOString(),
       poznamkaOzo: null,
-      odstraneno: true,
-      datumOdstraneni: new Date().toISOString(),
     });
     toast({ title: "Odstranění potvrzeno" });
   };
@@ -230,7 +230,7 @@ export default function RecordDetailPage() {
   const handleCancelResolve = async (bodId: string | number, zavadaId: string | null = null) => {
     zapisVyreseni(bodId, zavadaId, {
       vyresenoKlientem: false, datumVyreseniKlientem: null, jmenoVyresitele: null,
-      poznamkaKlienta: null, fotoVyreseni: [],
+      poznamkaKlienta: null, fotoVyreseni: [], odstraneno: false, datumOdstraneni: null,
     });
     toast({ title: "Zrušeno" });
   };
