@@ -130,6 +130,12 @@ export interface Zavada {
   odstraneno?: boolean;
   datumOdstraneni?: string;
   foto?: string[];
+  /** klientem nahlášené odstranění — per nedostatek */
+  vyresenoKlientem?: boolean;
+  datumVyreseniKlientem?: string | null;
+  jmenoVyresitele?: string | null;
+  poznamkaKlienta?: string | null;
+  fotoVyreseni?: string[];
 }
 
 export interface AuditorConfig {
