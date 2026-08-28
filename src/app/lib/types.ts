@@ -114,6 +114,10 @@ export interface KontrolniBod {
   jmenoVyresitele?: string;
   poznamkaKlienta?: string;
   fotoVyreseni?: string[];
+  /** verdikt OZO nad hlášením klienta */
+  overenoOzo?: 'potvrzeno' | 'vraceno' | null;
+  datumOvereniOzo?: string | null;
+  poznamkaOzo?: string | null;
 }
 
 export interface Zavada {
