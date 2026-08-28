@@ -12,7 +12,7 @@ import { useParams, useRouter } from "next/navigation";
 import { 
   ChevronLeft, Printer, Building, MapPin, FileText,
   Loader2, Edit, ChevronDown, CheckCircle2, Clock, X, Camera,
-  Trash2, Send
+  Trash2, Send, ShieldCheck, Undo2
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -64,6 +64,8 @@ export default function RecordDetailPage() {
   const [isPreparingPdf, setIsPreparingPdf] = useState(false);
   const [resolvingBod, setResolvingBod] = useState<string | number | null>(null);
   const [resolveData, setResolveData] = useState({ datum: '', jmeno: '', poznamka: '', foto: [] as string[] });
+  const [vracimKlic, setVracimKlic] = useState<string | null>(null);
+  const [duvodVraceni, setDuvodVraceni] = useState('');
   
   const [auditorConfig, setAuditorConfig] = useState<AuditorConfig | null>(null);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
@@ -191,9 +193,38 @@ export default function RecordDetailPage() {
       jmenoVyresitele: resolveData.jmeno,
       poznamkaKlienta: resolveData.poznamka,
       fotoVyreseni: resolveData.foto,
+      overenoOzo: null,
+      poznamkaOzo: null,
     });
     setResolvingBod(null);
     toast({ title: "Závada odstraněna" });
+  };
+
+  /** OZO potvrdí odstranění — nedostatek se uzavře a zmizí z časového plánu. */
+  const handleOverit = async (bodId: string | number, zavadaId: string | null = null) => {
+    zapisVyreseni(bodId, zavadaId, {
+      overenoOzo: 'potvrzeno',
+      datumOvereniOzo: new Date().toISOString(),
+      poznamkaOzo: null,
+      odstraneno: true,
+      datumOdstraneni: new Date().toISOString(),
+    });
+    toast({ title: "Odstranění potvrzeno" });
+  };
+
+  /** OZO vrátí k dopracování — hlášení klienta se ruší, důvod se uloží. */
+  const handleVratit = async (bodId: string | number, zavadaId: string | null = null) => {
+    zapisVyreseni(bodId, zavadaId, {
+      overenoOzo: 'vraceno',
+      datumOvereniOzo: new Date().toISOString(),
+      poznamkaOzo: duvodVraceni.trim() || null,
+      vyresenoKlientem: false,
+      odstraneno: false,
+      datumOdstraneni: null,
+    });
+    setVracimKlic(null);
+    setDuvodVraceni('');
+    toast({ title: "Vráceno k dopracování" });
   };
 
   const handleCancelResolve = async (bodId: string | number, zavadaId: string | null = null) => {
@@ -898,6 +929,7 @@ export default function RecordDetailPage() {
                                       // Stav vyřešení žije na závadě; u starých dat bez rozpadu na bodě.
                                       const src: any = zid ? z : kb;
                                       const vyreseno = !!src.vyresenoKlientem;
+                                      const overeni: 'potvrzeno' | 'vraceno' | null = src.overenoOzo ?? null;
                                       return (
                                       <div key={klic} className="space-y-3">
                                         {seznam.length > 1 && (
@@ -928,7 +960,11 @@ export default function RecordDetailPage() {
                                           <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 shadow-sm">
                                             {vyreseno ? (
                                               <div className="space-y-3 bg-white p-4 rounded-lg border border-blue-50">
-                                                <div className="flex items-center gap-2 text-emerald-700 font-bold text-sm mb-2"><CheckCircle2 className="h-5 w-5" /> Závada byla nahlášena jako odstraněná</div>
+                                                <div className="flex items-center gap-2 font-bold text-sm mb-2">
+                                                  {overeni === 'potvrzeno'
+                                                    ? <><ShieldCheck className="h-5 w-5 text-emerald-700" /> <span className="text-emerald-700">Odstranění potvrzeno technikem OZO</span></>
+                                                    : <><Clock className="h-5 w-5 text-amber-600" /> <span className="text-amber-700">Nahlášeno — čeká na ověření technikem OZO</span></>}
+                                                </div>
                                                 <div className="grid grid-cols-2 gap-4 text-sm">
                                                   <div><span className="text-xs text-slate-500 block">Nahlásil(a):</span> <span className="font-bold">{src.jmenoVyresitele}</span></div>
                                                   <div><span className="text-xs text-slate-500 block">Datum odstranění:</span> <span className="font-bold">{src.datumVyreseniKlientem ? new Date(src.datumVyreseniKlientem).toLocaleDateString('cs-CZ') : '-'}</span></div>
@@ -941,7 +977,9 @@ export default function RecordDetailPage() {
                                                     ))}
                                                   </div>
                                                 )}
-                                                <Button variant="ghost" size="sm" onClick={() => handleCancelResolve(bodId, zid)} className="text-red-600 hover:text-red-700 hover:bg-red-50 mt-2 p-0 h-auto font-bold text-xs">Vrátit závadu zpět do řešení</Button>
+                                                {overeni !== 'potvrzeno' && (
+                                                  <Button variant="ghost" size="sm" onClick={() => handleCancelResolve(bodId, zid)} className="text-red-600 hover:text-red-700 hover:bg-red-50 mt-2 p-0 h-auto font-bold text-xs">Vrátit závadu zpět do řešení</Button>
+                                                )}
                                               </div>
                                             ) : resolvingBod === klic ? (
                                               <div className="bg-white p-4 rounded-lg border border-blue-200 shadow-lg animate-in slide-in-from-top-2">
@@ -977,16 +1015,28 @@ export default function RecordDetailPage() {
                                                 </div>
                                               </div>
                                             ) : (
-                                              <Button onClick={() => { setResolvingBod(klic); setResolveData({ datum: new Date().toISOString().split('T')[0], jmeno: '', poznamka: '', foto: [] }); }} size="sm" className="bg-white text-blue-700 border-blue-200 hover:bg-blue-50 font-bold shadow-sm">
-                                                Odstranil(a) jsem tento nedostatek
-                                              </Button>
+                                              <div className="space-y-3">
+                                                {overeni === 'vraceno' && (
+                                                  <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                                                    <div className="flex items-center gap-2 text-red-800 font-bold text-sm"><Undo2 className="h-4 w-4" /> Technik OZO vrátil hlášení k dopracování</div>
+                                                    {src.poznamkaOzo && <p className="mt-1 text-sm text-red-900">{src.poznamkaOzo}</p>}
+                                                  </div>
+                                                )}
+                                                <Button onClick={() => { setResolvingBod(klic); setResolveData({ datum: new Date().toISOString().split('T')[0], jmeno: '', poznamka: '', foto: [] }); }} size="sm" className="bg-white text-blue-700 border-blue-200 hover:bg-blue-50 font-bold shadow-sm">
+                                                  Odstranil(a) jsem tento nedostatek
+                                                </Button>
+                                              </div>
                                             )}
                                           </div>
                                         )}
 
                                         {isAdmin && vyreseno && (
-                                          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 shadow-sm">
-                                            <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm mb-3"><CheckCircle2 className="h-5 w-5" /> Klient nahlásil odstranění nedostatku</div>
+                                          <div className={cn("border rounded-xl p-4 shadow-sm", overeni === 'potvrzeno' ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200")}>
+                                            <div className={cn("flex items-center gap-2 font-bold text-sm mb-3", overeni === 'potvrzeno' ? "text-emerald-800" : "text-amber-800")}>
+                                              {overeni === 'potvrzeno'
+                                                ? <><ShieldCheck className="h-5 w-5" /> Odstranění potvrzeno</>
+                                                : <><Clock className="h-5 w-5" /> Klient nahlásil odstranění — čeká na vaše ověření</>}
+                                            </div>
                                             <div className="bg-white p-3 rounded-lg border border-emerald-100 space-y-3 text-sm">
                                               <div className="grid grid-cols-2 gap-4">
                                                 <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block mb-0.5">Nahlásil</span><span className="font-bold">{src.jmenoVyresitele}</span></div>
@@ -1001,6 +1051,39 @@ export default function RecordDetailPage() {
                                                 </div>
                                               )}
                                             </div>
+
+                                            {overeni === 'potvrzeno' ? (
+                                              <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
+                                                <span className="text-xs text-emerald-800">
+                                                  Potvrzeno {src.datumOvereniOzo ? new Date(src.datumOvereniOzo).toLocaleDateString('cs-CZ') : ''}
+                                                </span>
+                                                <Button size="sm" variant="ghost" className="h-7 text-xs text-slate-600" onClick={() => setVracimKlic(klic)}>
+                                                  <Undo2 className="h-3.5 w-3.5 mr-1.5" /> Zrušit potvrzení
+                                                </Button>
+                                              </div>
+                                            ) : vracimKlic === klic ? (
+                                              <div className="mt-3 space-y-2 rounded-lg border border-red-200 bg-red-50/60 p-3">
+                                                <Textarea
+                                                  placeholder="Důvod vrácení — co je potřeba dodělat…"
+                                                  value={duvodVraceni}
+                                                  onChange={(e) => setDuvodVraceni(e.target.value)}
+                                                  className="min-h-[60px] text-sm bg-white"
+                                                />
+                                                <div className="flex gap-2">
+                                                  <Button size="sm" variant="destructive" onClick={() => handleVratit(bodId, zid)}>Vrátit k dopracování</Button>
+                                                  <Button size="sm" variant="ghost" onClick={() => { setVracimKlic(null); setDuvodVraceni(''); }}>Zrušit</Button>
+                                                </div>
+                                              </div>
+                                            ) : (
+                                              <div className="mt-3 flex gap-2 flex-wrap">
+                                                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold" onClick={() => handleOverit(bodId, zid)}>
+                                                  <ShieldCheck className="h-4 w-4 mr-1.5" /> Potvrdit odstranění
+                                                </Button>
+                                                <Button size="sm" variant="outline" className="border-red-300 text-red-700 hover:bg-red-50" onClick={() => { setVracimKlic(klic); setDuvodVraceni(''); }}>
+                                                  <Undo2 className="h-4 w-4 mr-1.5" /> Vrátit k dopracování
+                                                </Button>
+                                              </div>
+                                            )}
                                           </div>
                                         )}
                                       </div>);
