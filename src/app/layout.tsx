@@ -208,7 +208,8 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
       {/* LEVÝ NAVIGAČNÍ PANEL (Desktop i Mobilní vysouvací verze) */}
       <aside className={cn(
         "w-64 bg-slate-900 text-slate-300 flex flex-col justify-between border-r border-slate-800 print:hidden shrink-0",
-        "fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 shadow-2xl md:shadow-none",
+        "fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none",
+        "md:sticky md:top-0 md:bottom-auto md:h-screen md:self-start md:overflow-y-auto md:translate-x-0",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="p-6 space-y-6">
