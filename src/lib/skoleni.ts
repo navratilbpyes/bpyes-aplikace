@@ -16,6 +16,16 @@ export interface CiselnikSkoleni {
   /** mapování na řádek požární knihy (jen u PO školení) */
   pozarniRadek?: string | null;
   stav: StavZaznamu;
+  /** metadata z lhůtníku (doplňuje import) */
+  kod?: string;
+  oblast?: string;
+  predpis?: string;
+  lhutaText?: string;
+  /** 'predpis' = lhůtu nelze prodloužit, 'zamestnavatel' = doporučení */
+  zdrojLhuty?: 'predpis' | 'zamestnavatel';
+  /** doklad s vlastní platností (průkaz, osvědčení) */
+  doklad?: boolean;
+  poznamka?: string | null;
 }
 
 /**
