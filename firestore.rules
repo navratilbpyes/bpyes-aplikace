@@ -240,5 +240,14 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if isAdmin();
     }
+
+    match /ciselnikCinnosti/{id} {
+      allow read: if maProfil();
+      allow write: if isAdmin();
+    }
+    match /ciselnikKategorii/{id} {
+      allow read: if maProfil();
+      allow write: if isAdmin();
+    }
   }
 }
