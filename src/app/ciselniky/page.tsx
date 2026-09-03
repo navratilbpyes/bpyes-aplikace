@@ -21,7 +21,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { GraduationCap, Wrench, Plus, X, Loader2 } from 'lucide-react';
+import { GraduationCap, Wrench, HardHat, Plus, X, Loader2 } from 'lucide-react';
+import SekceCinnosti from '@/components/ciselniky/sekce-cinnosti';
 import { PERIODY as PERIODY_SKOLENI, popisPeriody } from '@/lib/skoleni';
 import { PERIODY as PERIODY_REVIZE, generujLhutaText } from '@/lib/revize';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
@@ -54,6 +55,9 @@ export default function CiselnikyPage() {
           <TabsTrigger value="revize" className="px-6 py-2">
             <Wrench className="mr-2 h-4 w-4" /> Revize
           </TabsTrigger>
+          <TabsTrigger value="cinnosti" className="px-6 py-2">
+            <HardHat className="mr-2 h-4 w-4" /> Činnosti
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="skoleni">
@@ -62,6 +66,10 @@ export default function CiselnikyPage() {
 
         <TabsContent value="revize">
           <SekceRevize />
+        </TabsContent>
+
+        <TabsContent value="cinnosti">
+          <SekceCinnosti />
         </TabsContent>
       </Tabs>
     </div>
