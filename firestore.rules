@@ -104,6 +104,12 @@ service cloud.firestore {
         && protokolStavKlientOk();
     }
 
+    // Klient smi cist a zapisovat do podkolekce sveho klienta (osoby, pozice,
+    // udalosti). Data lidskych zdroju spravuje klient sam, OZO je jen kontroluje.
+    function klientSmiSpravovat(klientId) {
+      return jeAktivniKlient() && mujKlientId() == klientId;
+    }
+
     // ---------- klienti ----------
     match /klienti/{klientId} {
       allow read: if isAdmin()
@@ -148,7 +154,32 @@ service cloud.firestore {
         allow delete: if isAdmin();
       }
 
-      // vsechny ostatni podkolekce klienta — jen admin (jako dosud)
+      // --- lidske zdroje: osoby, pozice, zaznamy skoleni a prohlidek ---
+      // Mazani je soft-delete pres stav == 'smazano', proto klient nepotrebuje
+      // delete. Historie zmen zije v poli `log` uvnitr dokumentu.
+      match /osoby/{docId} {
+        allow read: if isAdmin()
+          || (maProfil() && mujKlientId() == klientId);
+        allow create, update: if isAdmin() || klientSmiSpravovat(klientId);
+        allow delete: if isAdmin();
+      }
+
+      match /pozice/{docId} {
+        allow read: if isAdmin()
+          || (maProfil() && mujKlientId() == klientId);
+        allow create, update: if isAdmin() || klientSmiSpravovat(klientId);
+        allow delete: if isAdmin();
+      }
+
+      match /udalosti/{docId} {
+        allow read: if isAdmin()
+          || (maProfil() && mujKlientId() == klientId);
+        allow create, update: if isAdmin() || klientSmiSpravovat(klientId);
+        allow delete: if isAdmin();
+      }
+
+      // vsechny ostatni podkolekce klienta — jen admin (jako dosud).
+      // MUSI zustat jako posledni match v tomto bloku.
       match /{podkolekce}/{docId} {
         allow read: if isAdmin()
           || (maProfil() && mujKlientId() == klientId);
@@ -157,7 +188,9 @@ service cloud.firestore {
     }
 
     // ---------- zaznamy (kontroly/protokoly) ----------
-        match /zaznamy/{zaznamId} {
+    // Klient hlasi odstraneni nedostatku — meni VYHRADNE pole zavady
+    // a kontrolniBody (stav vyreseni zije uvnitr nich).
+    match /zaznamy/{zaznamId} {
       allow read: if isAdmin()
         || (maProfil() && resource.data.klientId == mujKlientId());
       allow create, delete: if isAdmin();
@@ -190,6 +223,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     match /ciselnikFirem/{id} {
+      allow read: if maProfil();
+      allow write: if isAdmin();
+    }
+    // cinnosti nesou vazby na skoleni, zacvik a profesni riziko
+    match /ciselnikCinnosti/{id} {
+      allow read: if maProfil();
+      allow write: if isAdmin();
+    }
+    // periody prohlidek dle kategorie prace (vyhl. c. 79/2013 Sb.)
+    match /ciselnikKategorii/{id} {
       allow read: if maProfil();
       allow write: if isAdmin();
     }
@@ -239,15 +282,6 @@ service cloud.firestore {
       // komentare se needituji; mazat smi jen admin
       allow update: if false;
       allow delete: if isAdmin();
-    }
-
-    match /ciselnikCinnosti/{id} {
-      allow read: if maProfil();
-      allow write: if isAdmin();
-    }
-    match /ciselnikKategorii/{id} {
-      allow read: if maProfil();
-      allow write: if isAdmin();
     }
   }
 }
