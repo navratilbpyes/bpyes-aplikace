@@ -32,7 +32,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import {
   Users, Plus, Loader2, Upload, X, Briefcase, Grid3x3, Stethoscope, Search,
-  ChevronDown, ChevronRight, Pencil, Download, Printer, Trash2,
+  ChevronDown, ChevronRight, Pencil, Download, Printer, Trash2, GraduationCap,
 } from 'lucide-react';
 import type { Osoba, Pozice } from '@/lib/osoby';
 import {
@@ -41,6 +41,7 @@ import {
 } from '@/lib/osoby';
 import type { CiselnikCinnost, CiselnikKategorie, KodKategorie, ZarazeniFaktoru } from '@/lib/cinnosti';
 import EditorFaktoru from '@/components/ciselniky/editor-faktoru';
+import Napoveda from '@/components/ui/napoveda';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
 import SekceUdalosti from '@/components/zamestnanci/sekce-udalosti';
 import type { Udalost } from '@/lib/udalosti';
@@ -249,8 +250,11 @@ export default function ZamestnanciPage() {
           <TabsTrigger value="pozice" className="px-6 py-2">
             <Briefcase className="mr-2 h-4 w-4" /> Pozice
           </TabsTrigger>
-          <TabsTrigger value="udalosti" className="px-6 py-2">
-            <Stethoscope className="mr-2 h-4 w-4" /> Školení a prohlídky
+          <TabsTrigger value="skoleni" className="px-6 py-2">
+            <GraduationCap className="mr-2 h-4 w-4" /> Školení
+          </TabsTrigger>
+          <TabsTrigger value="prohlidky" className="px-6 py-2">
+            <Stethoscope className="mr-2 h-4 w-4" /> Prohlídky
           </TabsTrigger>
         </TabsList>
 
@@ -314,8 +318,9 @@ export default function ZamestnanciPage() {
         <TabsContent value="prehled">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">
+              <CardTitle className="text-base flex items-center gap-1.5">
                 {filtrovane.length} {filtrovane.length === 1 ? 'osoba' : filtrovane.length < 5 ? 'osoby' : 'osob'}
+                <Napoveda klic="osoby" />
               </CardTitle>
               <CardDescription>
                 Kategorie a perioda prohlídky se počítají z pozice a činností — nejkratší lhůta vyhrává.
@@ -413,8 +418,23 @@ export default function ZamestnanciPage() {
           />
         </TabsContent>
 
-        <TabsContent value="udalosti">
+        <TabsContent value="skoleni">
           <SekceUdalosti
+            rezim="skoleni"
+            klientId={vybranyKlient}
+            osoby={filtrovane}
+            skoleni={skoleni}
+            cinnosti={cinnosti}
+            kategorie={kategorie}
+            poziceKategorie={Object.fromEntries(
+              filtrovane.map((o) => [o.id, vypocet(o).kategorie]),
+            )}
+          />
+        </TabsContent>
+
+        <TabsContent value="prohlidky">
+          <SekceUdalosti
+            rezim="prohlidka"
             klientId={vybranyKlient}
             osoby={filtrovane}
             skoleni={skoleni}
@@ -689,7 +709,9 @@ function Matice({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Matice činností</CardTitle>
+        <CardTitle className="text-base flex items-center gap-1.5">
+          Matice činností <Napoveda klic="matice" />
+        </CardTitle>
         <CardDescription>
           Klikni do mřížky. Odebrání činnost ukončí k dnešku, nesmaže ji — historie zůstává.
           Barva ukazuje stav školení, která z činnosti plynou.
@@ -867,7 +889,9 @@ function SekcePozice({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Pracovní pozice</CardTitle>
+        <CardTitle className="text-base flex items-center gap-1.5">
+          Pracovní pozice <Napoveda klic="pozice" />
+        </CardTitle>
         <CardDescription>
           Kategorie práce určuje periodu prohlídky. „Vedoucí" je atribut pozice —
           z něj plynou školení vedoucích zaměstnanců dle § 103 ZP.
