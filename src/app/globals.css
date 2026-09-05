@@ -178,3 +178,21 @@
   }
   body:has(.pozarni-kniha) .pozarni-kniha tr { break-inside: avoid; }
 }
+
+/* ── Tisk přehledu zaměstnanců (Lidské zdroje) ── */
+@media print {
+  body:has(.zam-print) * { visibility: hidden; }
+  body:has(.zam-print) .zam-print,
+  body:has(.zam-print) .zam-print * { visibility: visible; }
+  body:has(.zam-print) .zam-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  /* řádky se nesmí lámat přes stránky */
+  .zam-print .grid { break-inside: avoid; }
+}
