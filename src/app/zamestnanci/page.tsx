@@ -39,11 +39,12 @@ import {
   celeJmeno, aktivniCinnosti, nactiOsoby, nactiPozice,
   parsujCsv, IMPORT_POLE, normalizujDatum,
 } from '@/lib/osoby';
-import type { CiselnikCinnost, CiselnikKategorie, KodKategorie } from '@/lib/cinnosti';
+import type { CiselnikCinnost, CiselnikKategorie, KodKategorie, ZarazeniFaktoru } from '@/lib/cinnosti';
+import EditorFaktoru from '@/components/ciselniky/editor-faktoru';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
 import SekceUdalosti from '@/components/zamestnanci/sekce-udalosti';
 import {
-  periodaProhlidky, popisPeriodyProhlidky, jeNad50, maProfesniRiziko,
+  periodaProhlidky, popisPeriodyProhlidky, jeNad50, maProfesniRiziko, nejvyssiKategorie,
 } from '@/lib/cinnosti';
 
 const KATEGORIE: KodKategorie[] = ['1', '2', '2R', '3', '4'];
@@ -127,7 +128,6 @@ export default function ZamestnanciPage() {
   /** Kategorie a perioda prohlídky se počítají, neukládají. */
   function vypocet(o: OsobaRadek) {
     const poz = (pozice[o.klientId] ?? []).find((p) => p.id === o.poziceId);
-    const kat = kategorie.find((k) => k.kod === poz?.kategorie);
     const jejiCinnosti = aktivniCinnosti(o)
       .map((p) => {
         const c = cinnostiMap[p.cinnostId];
@@ -139,9 +139,14 @@ export default function ZamestnanciPage() {
       })
       .filter((c): c is CiselnikCinnost => !!c);
     const nad50 = o.datumNarozeni ? jeNad50(o.datumNarozeni, new Date().toISOString()) : false;
+    // Kategorie = nejvyšší ze všech faktorů pozice i činností; starší souhrnná
+    // hodnota na pozici slouží jako fallback, dokud nejsou faktory vyplněné.
+    const zFaktoru = nejvyssiKategorie(poz?.faktory, ...jejiCinnosti.map((c) => c.faktory));
+    const vysledna = zFaktoru ?? poz?.kategorie ?? null;
+    const kat = kategorie.find((k) => k.kod === vysledna);
     return {
       pozice: poz,
-      kategorie: poz?.kategorie ?? null,
+      kategorie: vysledna,
       cinnosti: jejiCinnosti,
       perioda: periodaProhlidky(kat, jejiCinnosti, nad50),
       profesniRiziko: maProfesniRiziko(jejiCinnosti),
@@ -355,10 +360,7 @@ export default function ZamestnanciPage() {
             cinnosti={cinnosti}
             kategorie={kategorie}
             poziceKategorie={Object.fromEntries(
-              filtrovane.map((o) => [
-                o.id,
-                (pozice[o.klientId] ?? []).find((p) => p.id === o.poziceId)?.kategorie ?? null,
-              ]),
+              filtrovane.map((o) => [o.id, vypocet(o).kategorie]),
             )}
           />
         </TabsContent>
@@ -662,7 +664,15 @@ function SekcePozice({
               </div>
 
               {otevrena === p.id && (
-                <div className="ml-10 rounded-lg border bg-muted/20 p-4 space-y-3">
+                <div className="ml-10 rounded-lg border bg-muted/20 p-4 space-y-4">
+                  <div className="rounded border bg-background px-3 py-3">
+                    <EditorFaktoru
+                      faktory={p.faktory}
+                      onZmena={(nove) => uprav(p.id, { faktory: nove })}
+                      popis="Faktory prostředí na této pozici. K nim se přičtou faktory z činností osoby."
+                    />
+                  </div>
+
                   <div>
                     <Label className="text-xs font-semibold">Výchozí činnosti pozice</Label>
                     <p className="text-[11px] text-muted-foreground">
