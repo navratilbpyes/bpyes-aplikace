@@ -13,7 +13,7 @@
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/components/data-provider';
 import type { StavZaznamu } from './skoleni';
-import type { KodKategorie } from './cinnosti';
+import type { KodKategorie, ZarazeniFaktoru } from './cinnosti';
 
 /** Přiřazení činnosti osobě. Datované — historie povinností musí zůstat. */
 export interface PrirazeniCinnosti {
@@ -50,8 +50,13 @@ export interface Pozice {
   nazev: string;
   /** vedoucí zaměstnanec — atribut pozice, ne osoby (§ 103 ZP) */
   jeVedouci?: boolean;
-  /** kategorie práce dle rozhodnutí KHS nebo vlastního zařazení */
+  /**
+   * Souhrnná kategorie — zůstává kvůli starším datům.
+   * Nová kategorizace se zadává po faktorech níže; výsledná je nejvyšší z obojího.
+   */
   kategorie?: KodKategorie | null;
+  /** kategorizace rizikových faktorů prostředí na této pozici */
+  faktory?: ZarazeniFaktoru[];
   /** činnosti předvyplněné novým osobám na této pozici */
   vychoziCinnosti?: string[];
   stav: StavZaznamu;
