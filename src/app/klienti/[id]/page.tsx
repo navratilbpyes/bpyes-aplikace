@@ -47,6 +47,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import SekcePls from "@/components/klienti/sekce-pls";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -493,6 +494,7 @@ export default function ClientDetailPage() {
               <TabsTrigger value="plan" className="px-6 py-2">Časový plán</TabsTrigger>
               <TabsTrigger value="osoby" className="px-6 py-2">Kontaktní osoby</TabsTrigger>
               <TabsTrigger value="pozice" className="px-6 py-2">Odpovědné osoby</TabsTrigger>
+              <TabsTrigger value="pls" className="px-6 py-2">Poskytovatelé PLS</TabsTrigger>
               <TabsTrigger value="zaznamy" className="px-6 py-2">Záznamy kontrol</TabsTrigger>
               <TabsTrigger value="prohlidky" className="px-6 py-2">Prověrky a PPP</TabsTrigger>
               <TabsTrigger value="skoleni" className="px-6 py-2">Školení</TabsTrigger>
@@ -747,6 +749,10 @@ export default function ClientDetailPage() {
                   </>
                 );
               })()}
+            </TabsContent>
+
+            <TabsContent value="pls" className="space-y-4">
+              <SekcePls klientId={klient.id} />
             </TabsContent>
 
             <TabsContent value="zaznamy" className="space-y-4">
