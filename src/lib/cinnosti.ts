@@ -22,6 +22,56 @@ import type { StavZaznamu } from './skoleni';
 /** Kategorie práce podle zákona č. 258/2000 Sb. */
 export type KodKategorie = '1' | '2' | '2R' | '3' | '4';
 
+/**
+ * Rizikové faktory pracovních podmínek dle přílohy č. 1 vyhlášky č. 432/2003 Sb.
+ * Kategorizace se dělá na faktor, ne na pracovní pozici jako celek — jeden
+ * zaměstnanec může být kategorie 2 pro hluk a 3 pro vibrace.
+ */
+export const RIZIKOVE_FAKTORY: { kod: string; nazev: string }[] = [
+  { kod: 'hluk', nazev: 'Hluk' },
+  { kod: 'vibrace', nazev: 'Vibrace' },
+  { kod: 'prach', nazev: 'Prach' },
+  { kod: 'chemicke', nazev: 'Chemické látky' },
+  { kod: 'aerosoly', nazev: 'Aerosoly s převážně dráždivým účinkem' },
+  { kod: 'fyzickaZatez', nazev: 'Fyzická zátěž' },
+  { kod: 'pracovniPoloha', nazev: 'Pracovní poloha' },
+  { kod: 'zrakovaZatez', nazev: 'Zraková zátěž' },
+  { kod: 'psychickaZatez', nazev: 'Psychická zátěž' },
+  { kod: 'tepelnaZatez', nazev: 'Zátěž teplem' },
+  { kod: 'chlad', nazev: 'Zátěž chladem' },
+  { kod: 'neionizujici', nazev: 'Neionizující záření a elektromagnetické pole' },
+  { kod: 'ionizujici', nazev: 'Ionizující záření' },
+  { kod: 'biologicke', nazev: 'Biologické činitele' },
+  { kod: 'tlakVzduchu', nazev: 'Zvýšený tlak vzduchu' },
+];
+
+/** Zařazení jednoho faktoru do kategorie. */
+export interface ZarazeniFaktoru {
+  kod: string;
+  kategorie: KodKategorie;
+  /** číslo a datum rozhodnutí KHS, případně odkaz na protokol měření */
+  poznamka?: string | null;
+}
+
+const PORADI: KodKategorie[] = ['1', '2', '2R', '3', '4'];
+
+/**
+ * Výsledná kategorie ze seznamu faktorů = nejvyšší z nich.
+ * 2R (riziková práce kategorie 2) se pro účely lhůt řadí nad 2.
+ */
+export function nejvyssiKategorie(
+  ...skupiny: (ZarazeniFaktoru[] | undefined)[]
+): KodKategorie | null {
+  let nej = -1;
+  for (const s of skupiny) {
+    for (const f of s ?? []) {
+      const i = PORADI.indexOf(f.kategorie);
+      if (i > nej) nej = i;
+    }
+  }
+  return nej >= 0 ? PORADI[nej] : null;
+}
+
 /** Položka číselníku činností (globální katalog). */
 export interface CiselnikCinnost {
   id: string;
@@ -39,6 +89,8 @@ export interface CiselnikCinnost {
   prohlidkaNad50?: number | null;
   /** rozsah odborných vyšetření — text se přenáší do F006 */
   odbornaVysetreni?: string | null;
+  /** kategorizace rizikových faktorů, které z činnosti plynou */
+  faktory?: ZarazeniFaktoru[];
   poznamka?: string | null;
   stav: StavZaznamu;
 }
