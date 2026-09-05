@@ -20,7 +20,8 @@ import {
   Lock,
   User as UserIcon,
   Menu,
-  X
+  X,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -183,6 +184,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
       pathname.startsWith('/moje-revize') ||
       pathname.startsWith('/reporty') ||
       pathname.startsWith('/pozarni-kniha') ||
+      pathname.startsWith('/zamestnanci') ||
       // detail konkrétního reportu (ne seznam /zaznamy), např. /zaznamy/abc123
       /^\/zaznamy\/[^/]+$/.test(pathname);
     if (!povoleno) {
@@ -254,6 +256,11 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
                 <Wrench className="h-4 w-4" /> Moje revize a školení
               </Link>
             )}
+            {!isAdmin && !isBasic && (
+              <Link href="/zamestnanci" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/zamestnanci') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
+                <Users className="h-4 w-4" /> Lidské zdroje
+              </Link>
+            )}
             {!isAdmin && !isBasic && userProfile.klientId && (
               <Link href={`/pozarni-kniha/${userProfile.klientId}`} onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/pozarni-kniha') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
                 <Flame className="h-4 w-4" /> Požární kniha
@@ -267,6 +274,10 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
                 </Link>
                 <Link href="/klienti" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/klienti') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
                   <Building2 className="h-4 w-4" /> Klienti
+                </Link>
+
+                <Link href="/zamestnanci" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/zamestnanci') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
+                  <Users className="h-4 w-4" /> Lidské zdroje
                 </Link>
 
                 <Link href="/dotazy" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/dotazy') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
