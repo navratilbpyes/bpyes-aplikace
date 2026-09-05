@@ -30,6 +30,7 @@ import {
   Loader2, GraduationCap, Stethoscope, History, Users, Check,
 } from 'lucide-react';
 import type { Osoba } from '@/lib/osoby';
+import Napoveda from '@/components/ui/napoveda';
 import { celeJmeno, aktivniCinnosti } from '@/lib/osoby';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
 import type { CiselnikCinnost, CiselnikKategorie } from '@/lib/cinnosti';
@@ -48,7 +49,7 @@ const BARVA: Record<string, string> = {
 };
 
 export default function SekceUdalosti({
-  klientId, osoby, skoleni, cinnosti, kategorie, poziceKategorie,
+  klientId, osoby, skoleni, cinnosti, kategorie, poziceKategorie, rezim,
 }: {
   klientId: string | null;
   osoby: Osoba[];
@@ -57,11 +58,11 @@ export default function SekceUdalosti({
   kategorie: CiselnikKategorie[];
   /** mapa osobaId → kód kategorie z její pozice */
   poziceKategorie: Record<string, string | null>;
+  rezim: 'skoleni' | 'prohlidka';
 }) {
   const { toast } = useToast();
   const [udalosti, setUdalosti] = useState<Udalost[]>([]);
   const [nacitam, setNacitam] = useState(true);
-  const [rezim, setRezim] = useState<'skoleni' | 'prohlidka'>('skoleni');
   const [temaId, setTemaId] = useState<string>('');
   const [historie, setHistorie] = useState<{ osoba: Osoba; zaznamy: Udalost[] } | null>(null);
 
@@ -132,24 +133,18 @@ export default function SekceUdalosti({
     <div className="space-y-6">
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Školení a lékařské prohlídky</CardTitle>
+          <CardTitle className="text-base flex items-center gap-1.5">
+            {rezim === 'skoleni' ? 'Školení a zácviky' : 'Lékařské prohlídky'}
+            <Napoveda klic={rezim === 'skoleni' ? 'skoleni' : 'prohlidky'} />
+          </CardTitle>
           <CardDescription>
-            Termín se počítá od data konkrétní osoby, ne od firemního termínu.
-            Každá změna se ukládá do historie.
+            {rezim === 'skoleni'
+              ? 'Termín se počítá od data konkrétní osoby, ne od firemního termínu. Každá změna se ukládá do historie.'
+              : 'Perioda běží od data vydání posudku a vychází z kategorie práce a činností s profesním rizikem.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-2 sm:grid-cols-[200px_1fr_auto] items-end">
-            <div className="space-y-1">
-              <Label className="text-xs">Zobrazit</Label>
-              <Select value={rezim} onValueChange={(v) => { setRezim(v as any); setTemaId(''); }}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="skoleni">Školení a zácviky</SelectItem>
-                  <SelectItem value="prohlidka">Lékařské prohlídky</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto] items-end">
             {rezim === 'skoleni' ? (
               <div className="space-y-1">
                 <Label className="text-xs">Téma školení</Label>
