@@ -24,7 +24,8 @@ import {
 } from '@/components/ui/select';
 import { Plus, X, Loader2, ChevronDown, ChevronRight, Stethoscope } from 'lucide-react';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
-import type { CiselnikCinnost, CiselnikKategorie } from '@/lib/cinnosti';
+import type { CiselnikCinnost, CiselnikKategorie, ZarazeniFaktoru } from '@/lib/cinnosti';
+import EditorFaktoru from '@/components/ciselniky/editor-faktoru';
 import {
   PERIODY_PROHLIDKY, VYCHOZI_KATEGORIE, popisPeriodyProhlidky,
 } from '@/lib/cinnosti';
@@ -276,6 +277,14 @@ export default function SekceCinnosti() {
                               </div>
                             </>
                           )}
+                        </div>
+
+                        <div className="rounded border bg-background px-3 py-3">
+                          <EditorFaktoru
+                            faktory={c.faktory}
+                            onZmena={(nove) => uprav(c.id, { faktory: nove })}
+                            popis="Faktory, které plynou přímo z této činnosti (např. vibrace u křovinořezu). Sčítají se s faktory pozice."
+                          />
                         </div>
 
                         <div className="space-y-1">
