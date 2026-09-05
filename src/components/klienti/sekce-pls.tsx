@@ -29,6 +29,7 @@ import {
   Plus, Loader2, Stethoscope, Pencil, Trash2, Phone, Mail, MapPin, FileText,
 } from 'lucide-react';
 import type { StavZaznamu } from '@/lib/skoleni';
+import Napoveda from '@/components/ui/napoveda';
 
 export interface Poskytovatel {
   id: string;
@@ -152,7 +153,7 @@ export default function SekcePls({ klientId }: { klientId: string }) {
   return (
     <>
       <div className="flex justify-between items-center">
-        <h3 className="font-bold">Poskytovatelé pracovnělékařských služeb ({polozky.length})</h3>
+        <h3 className="font-bold flex items-center gap-1.5">Poskytovatelé pracovnělékařských služeb ({polozky.length}) <Napoveda klic="pls" /></h3>
         <Button size="sm" variant="outline" onClick={otevriNovy}>
           <Plus className="mr-2 h-4 w-4" /> Přidat poskytovatele
         </Button>
