@@ -43,6 +43,8 @@ import type { CiselnikCinnost, CiselnikKategorie, KodKategorie, ZarazeniFaktoru 
 import EditorFaktoru from '@/components/ciselniky/editor-faktoru';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
 import SekceUdalosti from '@/components/zamestnanci/sekce-udalosti';
+import type { Udalost } from '@/lib/udalosti';
+import { nactiUdalosti, posledni, dalsiTermin, formatDatum } from '@/lib/udalosti';
 import {
   periodaProhlidky, popisPeriodyProhlidky, jeNad50, maProfesniRiziko, nejvyssiKategorie,
 } from '@/lib/cinnosti';
@@ -65,6 +67,7 @@ export default function ZamestnanciPage() {
   const [cinnosti, setCinnosti] = useState<CiselnikCinnost[]>([]);
   const [kategorie, setKategorie] = useState<CiselnikKategorie[]>([]);
   const [skoleni, setSkoleni] = useState<CiselnikSkoleni[]>([]);
+  const [udalosti, setUdalosti] = useState<Record<string, Udalost[]>>({});
   const [nacitam, setNacitam] = useState(true);
 
   // filtry
@@ -103,8 +106,10 @@ export default function ZamestnanciPage() {
           klient: k,
           osoby: await nactiOsoby(k.id),
           pozice: await nactiPozice(k.id),
+          udalosti: await nactiUdalosti(k.id),
         })),
       );
+      setUdalosti(Object.fromEntries(davky.map((d) => [d.klient.id, d.udalosti])));
       setOsoby(
         davky.flatMap((d) =>
           d.osoby.map((o) => ({ ...o, klientId: d.klient.id, klientNazev: d.klient.nazev })),
@@ -402,6 +407,8 @@ export default function ZamestnanciPage() {
             klientId={vybranyKlient}
             osoby={filtrovane}
             cinnosti={cinnosti}
+            skoleni={skoleni}
+            udalosti={vybranyKlient ? udalosti[vybranyKlient] ?? [] : []}
             poZmene={nacti}
           />
         </TabsContent>
@@ -574,16 +581,66 @@ function DialogUpravaOsoby({
 
 /* ─────────────────────────  MATICE  ───────────────────────── */
 
+const PRAH_KLIC = 'auditflow.matice.prah';
+
 function Matice({
-  klientId, osoby, cinnosti, poZmene,
+  klientId, osoby, cinnosti, skoleni, udalosti, poZmene,
 }: {
   klientId: string | null;
   osoby: OsobaRadek[];
   cinnosti: CiselnikCinnost[];
+  skoleni: CiselnikSkoleni[];
+  udalosti: Udalost[];
   poZmene: () => void;
 }) {
   const [uklada, setUklada] = useState<string | null>(null);
   const [lokalni, setLokalni] = useState<Record<string, string[]>>({});
+  /** za kolik měsíců dopředu se termín považuje za blížící se */
+  const [prah, setPrah] = useState(3);
+
+  useEffect(() => {
+    const ulozeny = typeof window !== 'undefined' ? window.localStorage.getItem(PRAH_KLIC) : null;
+    if (ulozeny) setPrah(Number(ulozeny));
+  }, []);
+
+  function zmenPrah(v: string) {
+    setPrah(Number(v));
+    if (typeof window !== 'undefined') window.localStorage.setItem(PRAH_KLIC, v);
+  }
+
+  const skoleniMap = useMemo(
+    () => Object.fromEntries(skoleni.map((s) => [s.id, s])),
+    [skoleni],
+  );
+
+  /**
+   * Stav buňky = nejhorší stav ze všech školení, která z činnosti plynou.
+   * Termín se počítá z data konkrétní osoby, ne z firemního termínu.
+   */
+  function stavBunky(osobaId: string, c: CiselnikCinnost): { stav: 'ok' | 'blizi' | 'po' | 'chybi'; popis: string } {
+    const ids = c.skoleniIds ?? [];
+    if (ids.length === 0) return { stav: 'ok', popis: 'bez navázaného školení' };
+    const hranice = new Date();
+    hranice.setMonth(hranice.getMonth() + prah);
+    const dnes = new Date().toISOString();
+    let nejhorsi: 'ok' | 'blizi' | 'po' | 'chybi' = 'ok';
+    const popisy: string[] = [];
+    for (const id of ids) {
+      const tema = skoleniMap[id];
+      if (!tema) continue;
+      const p = posledni(udalosti, osobaId, 'skoleni', id);
+      const dalsi = dalsiTermin(p, tema.periodaMesice);
+      let st: 'ok' | 'blizi' | 'po' | 'chybi';
+      if (!p || !dalsi) st = 'chybi';
+      else if (dalsi < dnes) st = 'po';
+      else if (dalsi < hranice.toISOString()) st = 'blizi';
+      else st = 'ok';
+      popisy.push(`${tema.nazev}: ${st === 'chybi' ? 'bez záznamu' : formatDatum(dalsi)}`);
+      const poradi = { ok: 0, blizi: 1, chybi: 2, po: 3 } as const;
+      if (poradi[st] > poradi[nejhorsi]) nejhorsi = st;
+    }
+    return { stav: nejhorsi, popis: popisy.join('\n') };
+  }
 
   useEffect(() => {
     setLokalni(Object.fromEntries(
@@ -635,7 +692,28 @@ function Matice({
         <CardTitle className="text-base">Matice činností</CardTitle>
         <CardDescription>
           Klikni do mřížky. Odebrání činnost ukončí k dnešku, nesmaže ji — historie zůstává.
+          Barva ukazuje stav školení, která z činnosti plynou.
         </CardDescription>
+        <div className="flex items-end gap-4 flex-wrap pt-2">
+          <div className="space-y-1">
+            <Label className="text-xs">Upozorňovat</Label>
+            <Select value={String(prah)} onValueChange={zmenPrah}>
+              <SelectTrigger className="h-8 w-[190px] text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1 měsíc dopředu</SelectItem>
+                <SelectItem value="3">3 měsíce dopředu</SelectItem>
+                <SelectItem value="6">6 měsíců dopředu</SelectItem>
+                <SelectItem value="12">12 měsíců dopředu</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground pb-1.5">
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded border border-blue-600 bg-blue-600" /> v pořádku</span>
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded border border-amber-600 bg-amber-500" /> blíží se termín</span>
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded border border-red-700 bg-red-600" /> po lhůtě</span>
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded border border-slate-500 bg-slate-400" /> bez záznamu</span>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="overflow-x-auto">
         {osoby.length === 0 || cinnosti.length === 0 ? (
@@ -670,6 +748,13 @@ function Matice({
                   {cinnosti.map((c) => {
                     const ma = (lokalni[o.id] ?? []).includes(c.id);
                     const klic = `${o.id}-${c.id}`;
+                    const info = ma ? stavBunky(o.id, c) : null;
+                    const barva = !ma
+                      ? 'border-slate-300'
+                      : info!.stav === 'po' ? 'border-red-700 bg-red-600'
+                      : info!.stav === 'blizi' ? 'border-amber-600 bg-amber-500'
+                      : info!.stav === 'chybi' ? 'border-slate-500 bg-slate-400'
+                      : 'border-blue-600 bg-blue-600';
                     return (
                       <td key={c.id} className="border-b p-0 text-center">
                         <button
@@ -677,9 +762,9 @@ function Matice({
                           onClick={() => prepni(o, c.id)}
                           disabled={uklada === klic}
                           className="h-9 w-8 flex items-center justify-center hover:bg-blue-50"
-                          title={`${celeJmeno(o)} — ${c.nazev}`}
+                          title={`${celeJmeno(o)} — ${c.nazev}${info ? `\n${info.popis}` : ''}`}
                         >
-                          <span className={`h-4 w-4 rounded border ${ma ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`} />
+                          <span className={`h-4 w-4 rounded border ${barva}`} />
                         </button>
                       </td>
                     );
