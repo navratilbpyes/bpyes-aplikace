@@ -32,7 +32,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import {
   Users, Plus, Loader2, Upload, X, Briefcase, Grid3x3, Stethoscope, Search,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Pencil, Download, Printer, Trash2,
 } from 'lucide-react';
 import type { Osoba, Pozice } from '@/lib/osoby';
 import {
@@ -72,6 +72,7 @@ export default function ZamestnanciPage() {
   const [fPozice, setFPozice] = useState('vse');
   const [fCinnost, setFCinnost] = useState('vse');
   const [hledani, setHledani] = useState('');
+  const [upravovana, setUpravovana] = useState<OsobaRadek | null>(null);
 
   const dostupniKlienti = useMemo(
     () => (isAdmin ? klienti : klienti.filter((k) => k.id === userProfile?.klientId)),
@@ -171,6 +172,35 @@ export default function ZamestnanciPage() {
 
   const vybranyKlient = fKlient !== 'vse' ? fKlient : null;
 
+  /** Export aktuálně vyfiltrovaného seznamu. BOM kvůli diakritice v Excelu. */
+  function exportCsv() {
+    const hlavicka = ['Klient', 'Příjmení', 'Jméno', 'Datum narození', 'Osobní číslo',
+      'Pozice', 'Vedoucí', 'Kategorie', 'Činnosti', 'Perioda prohlídky', 'Nástup'];
+    const radky = filtrovane.map((o) => {
+      const v = vypocet(o);
+      return [
+        o.klientNazev, o.prijmeni, o.jmeno,
+        o.datumNarozeni ? new Date(o.datumNarozeni).toLocaleDateString('cs-CZ') : '',
+        o.osobniCislo ?? '',
+        v.pozice?.nazev ?? '',
+        v.pozice?.jeVedouci ? 'ano' : '',
+        v.kategorie ?? '',
+        v.cinnosti.map((c) => c.nazev).join(', '),
+        popisPeriodyProhlidky(v.perioda),
+        o.datumNastupu ? new Date(o.datumNastupu).toLocaleDateString('cs-CZ') : '',
+      ];
+    });
+    const csv = [hlavicka, ...radky]
+      .map((r) => r.map((b) => `"${String(b).replace(/"/g, '""')}"`).join(';'))
+      .join('\r\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `zamestnanci-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -183,7 +213,13 @@ export default function ZamestnanciPage() {
             zácviky a periody lékařských prohlídek.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={exportCsv} disabled={filtrovane.length === 0}>
+            <Download className="mr-2 h-4 w-4" /> CSV
+          </Button>
+          <Button variant="outline" onClick={() => window.print()} disabled={filtrovane.length === 0}>
+            <Printer className="mr-2 h-4 w-4" /> PDF
+          </Button>
           <DialogImport
             klientId={vybranyKlient}
             pozice={vybranyKlient ? pozice[vybranyKlient] ?? [] : []}
@@ -280,7 +316,15 @@ export default function ZamestnanciPage() {
                 Kategorie a perioda prohlídky se počítají z pozice a činností — nejkratší lhůta vyhrává.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="zam-print">
+              <div className="print-only mb-4">
+                <p className="text-lg font-bold">Přehled zaměstnanců</p>
+                <p className="text-xs">
+                  {fKlient === 'vse' ? 'všichni klienti' : dostupniKlienti.find((k) => k.id === fKlient)?.nazev}
+                  {' · '}{new Date().toLocaleDateString('cs-CZ')}
+                  {' · '}{filtrovane.length} osob
+                </p>
+              </div>
               {nacitam ? (
                 <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" /> Načítám…
@@ -325,14 +369,24 @@ export default function ZamestnanciPage() {
                             </span>
                           ))}
                         </div>
-                        <div className="text-right text-xs whitespace-nowrap">
-                          <div className="flex items-center justify-end gap-1.5 font-medium">
-                            <Stethoscope className="h-3.5 w-3.5 text-slate-400" />
-                            {popisPeriodyProhlidky(v.perioda)}
+                        <div className="flex items-start gap-2">
+                          <div className="text-right text-xs whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5 font-medium">
+                              <Stethoscope className="h-3.5 w-3.5 text-slate-400" />
+                              {popisPeriodyProhlidky(v.perioda)}
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">
+                              kat. {v.kategorie ?? '—'}{v.profesniRiziko ? ' · profesní riziko' : ''}
+                            </p>
                           </div>
-                          <p className="text-[10px] text-muted-foreground">
-                            kat. {v.kategorie ?? '—'}{v.profesniRiziko ? ' · profesní riziko' : ''}
-                          </p>
+                          <Button
+                            variant="ghost" size="icon"
+                            className="h-7 w-7 no-print"
+                            title="Upravit"
+                            onClick={() => setUpravovana(o)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                       </div>
                     );
@@ -375,7 +429,146 @@ export default function ZamestnanciPage() {
           />
         </TabsContent>
       </Tabs>
+
+      <DialogUpravaOsoby
+        osoba={upravovana}
+        pozice={upravovana ? pozice[upravovana.klientId] ?? [] : []}
+        zavri={() => setUpravovana(null)}
+        poHotovo={() => { setUpravovana(null); nacti(); }}
+      />
     </div>
+  );
+}
+
+/* ─────────────────────────  ÚPRAVA OSOBY  ───────────────────────── */
+
+function DialogUpravaOsoby({
+  osoba, pozice, zavri, poHotovo,
+}: {
+  osoba: OsobaRadek | null;
+  pozice: Pozice[];
+  zavri: () => void;
+  poHotovo: () => void;
+}) {
+  const { toast } = useToast();
+  const [f, setF] = useState({ jmeno: '', prijmeni: '', datumNarozeni: '', osobniCislo: '', poziceId: '', datumNastupu: '', datumUkonceni: '', poznamka: '' });
+  const [uklada, setUklada] = useState(false);
+
+  const naDatum = (iso?: string | null) => (iso ? iso.split('T')[0] : '');
+
+  useEffect(() => {
+    if (!osoba) return;
+    setF({
+      jmeno: osoba.jmeno ?? '',
+      prijmeni: osoba.prijmeni ?? '',
+      datumNarozeni: naDatum(osoba.datumNarozeni),
+      osobniCislo: osoba.osobniCislo ?? '',
+      poziceId: osoba.poziceId ?? '',
+      datumNastupu: naDatum(osoba.datumNastupu),
+      datumUkonceni: naDatum(osoba.datumUkonceni),
+      poznamka: osoba.poznamka ?? '',
+    });
+  }, [osoba]);
+
+  async function uloz() {
+    if (!osoba) return;
+    setUklada(true);
+    try {
+      await updateDoc(doc(db, 'klienti', osoba.klientId, 'osoby', osoba.id), {
+        jmeno: f.jmeno.trim(),
+        prijmeni: f.prijmeni.trim(),
+        datumNarozeni: f.datumNarozeni ? new Date(f.datumNarozeni).toISOString() : null,
+        osobniCislo: f.osobniCislo.trim() || null,
+        poziceId: f.poziceId || null,
+        datumNastupu: f.datumNastupu ? new Date(f.datumNastupu).toISOString() : null,
+        datumUkonceni: f.datumUkonceni ? new Date(f.datumUkonceni).toISOString() : null,
+        poznamka: f.poznamka.trim() || null,
+      });
+      toast({ title: 'Uloženo' });
+      poHotovo();
+    } catch (e: any) {
+      toast({ title: 'Uložení selhalo', description: e?.message ?? '', variant: 'destructive' });
+    } finally {
+      setUklada(false);
+    }
+  }
+
+  /** Soft-delete — záznamy školení a prohlídek zůstávají kvůli historii. */
+  async function smaz() {
+    if (!osoba) return;
+    if (!confirm(`Odebrat ${celeJmeno(osoba)} z evidence? Záznamy školení a prohlídek zůstanou uložené.`)) return;
+    setUklada(true);
+    try {
+      await updateDoc(doc(db, 'klienti', osoba.klientId, 'osoby', osoba.id), { stav: 'smazano' });
+      toast({ title: 'Odebráno z evidence' });
+      poHotovo();
+    } finally {
+      setUklada(false);
+    }
+  }
+
+  return (
+    <Dialog open={!!osoba} onOpenChange={(o) => !o && zavri()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{osoba ? celeJmeno(osoba) : ''}</DialogTitle>
+          <DialogDescription>
+            Činnosti se přiřazují v matici. Datum ukončení spustí výstupní prohlídku.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label className="text-xs">Příjmení</Label>
+            <Input value={f.prijmeni} onChange={(e) => setF({ ...f, prijmeni: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Jméno</Label>
+            <Input value={f.jmeno} onChange={(e) => setF({ ...f, jmeno: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Datum narození</Label>
+            <Input type="date" value={f.datumNarozeni} onChange={(e) => setF({ ...f, datumNarozeni: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Osobní číslo</Label>
+            <Input value={f.osobniCislo} onChange={(e) => setF({ ...f, osobniCislo: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Pozice</Label>
+            <Select value={f.poziceId || '__zadna__'} onValueChange={(v) => setF({ ...f, poziceId: v === '__zadna__' ? '' : v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__zadna__">— bez pozice —</SelectItem>
+                {pozice.map((p) => <SelectItem key={p.id} value={p.id}>{p.nazev}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Datum nástupu</Label>
+            <Input type="date" value={f.datumNastupu} onChange={(e) => setF({ ...f, datumNastupu: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Datum ukončení</Label>
+            <Input type="date" value={f.datumUkonceni} onChange={(e) => setF({ ...f, datumUkonceni: e.target.value })} />
+          </div>
+          <div className="space-y-1 sm:col-span-2">
+            <Label className="text-xs">Poznámka</Label>
+            <Input value={f.poznamka} onChange={(e) => setF({ ...f, poznamka: e.target.value })} />
+          </div>
+        </div>
+        <DialogFooter className="sm:justify-between">
+          <Button variant="ghost" onClick={smaz} disabled={uklada} className="text-destructive hover:text-destructive">
+            <Trash2 className="mr-2 h-4 w-4" /> Odebrat z evidence
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={zavri}>Zrušit</Button>
+            <Button onClick={uloz} disabled={uklada || !f.prijmeni.trim()}>
+              {uklada && <Loader2 className="h-4 w-4 animate-spin mr-2" />} Uložit
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
