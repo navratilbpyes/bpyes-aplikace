@@ -171,6 +171,13 @@ service cloud.firestore {
         allow delete: if isAdmin();
       }
 
+      match /pls/{docId} {
+        allow read: if isAdmin()
+          || (maProfil() && mujKlientId() == klientId);
+        allow create, update: if isAdmin() || klientSmiSpravovat(klientId);
+        allow delete: if isAdmin();
+      }
+
       match /udalosti/{docId} {
         allow read: if isAdmin()
           || (maProfil() && mujKlientId() == klientId);
