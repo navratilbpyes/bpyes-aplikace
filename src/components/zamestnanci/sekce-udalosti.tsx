@@ -259,6 +259,8 @@ function DialogHromadny({
   const [druh, setDruh] = useState<DruhProhlidky>('periodicka');
   const [zaver, setZaver] = useState<ZaverProhlidky>('zpusobily');
   const [provedl, setProvedl] = useState('');
+  const [platnostDo, setPlatnostDo] = useState('');
+  const [cisloDokladu, setCisloDokladu] = useState('');
   const [poznamka, setPoznamka] = useState('');
   const [doKdy, setDoKdy] = useState('');
   const [vybrani, setVybrani] = useState<Set<string>>(new Set());
@@ -303,7 +305,8 @@ function DialogHromadny({
             : null,
           druhProhlidky: rezim === 'prohlidka' ? druh : null,
           zaver: rezim === 'prohlidka' ? zaver : null,
-          platnostDo: null,
+          platnostDo: platnostDo ? new Date(platnostDo).toISOString() : null,
+          cisloDokladu: cisloDokladu.trim() || null,
           provedl: provedl.trim() || null,
           poznamka: poznamka.trim() || null,
           stav: 'aktivni',
@@ -367,6 +370,22 @@ function DialogHromadny({
               <Input value={provedl} onChange={(e) => setProvedl(e.target.value)} className="h-9" />
             </div>
           </div>
+
+          {rezim === 'skoleni' && tema?.doklad && (
+            <div className="grid gap-3 sm:grid-cols-2 rounded-lg border bg-amber-50/40 p-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Platnost dokladu do</Label>
+                <Input type="date" value={platnostDo} onChange={(e) => setPlatnostDo(e.target.value)} className="h-9" />
+                <p className="text-[11px] text-muted-foreground">
+                  U průkazů a osvědčení se hlídá tohle datum, ne perioda.
+                </p>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Číslo dokladu</Label>
+                <Input value={cisloDokladu} onChange={(e) => setCisloDokladu(e.target.value)} className="h-9" />
+              </div>
+            </div>
+          )}
 
           {rezim === 'prohlidka' && (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -497,6 +516,12 @@ function DialogHistorie({
                 {u.zaver ? `${POPIS_ZAVERU[u.zaver]} · ` : ''}
                 {u.provedl ?? ''}
               </p>
+              {(u.platnostDo || u.cisloDokladu) && (
+                <p className="text-[11px] text-amber-800">
+                  {u.cisloDokladu ? `doklad č. ${u.cisloDokladu}` : 'doklad'}
+                  {u.platnostDo ? ` · platí do ${formatDatum(u.platnostDo)}` : ''}
+                </p>
+              )}
               {u.poznamka && <p className="text-xs italic">{u.poznamka}</p>}
               {(u.log ?? []).length > 1 && (
                 <div className="pt-1 border-t space-y-0.5">
