@@ -185,6 +185,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
       pathname.startsWith('/reporty') ||
       pathname.startsWith('/pozarni-kniha') ||
       pathname.startsWith('/zamestnanci') ||
+      pathname.startsWith('/moje-dotazy') ||
       // detail konkrétního reportu (ne seznam /zaznamy), např. /zaznamy/abc123
       /^\/zaznamy\/[^/]+$/.test(pathname);
     if (!povoleno) {
@@ -259,6 +260,16 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
             {!isAdmin && !isBasic && (
               <Link href="/zamestnanci" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/zamestnanci') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
                 <Users className="h-4 w-4" /> Lidské zdroje
+              </Link>
+            )}
+            {!isAdmin && !isBasic && (
+              <Link href="/zamestnanci" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/zamestnanci') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
+                <Users className="h-4 w-4" /> Lidské zdroje
+              </Link>
+            )}
+            {!isAdmin && !isBasic && (
+              <Link href="/moje-dotazy" onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors", pathname.startsWith('/moje-dotazy') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50 hover:text-white')}>
+                <MessageSquare className="h-4 w-4" /> Moje dotazy
               </Link>
             )}
             {!isAdmin && !isBasic && userProfile.klientId && (
