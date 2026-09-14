@@ -27,7 +27,7 @@ import { PERIODY as PERIODY_REVIZE, generujLhutaText } from '@/lib/revize';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
 import type { CiselnikRevize, Oblast, TypLhuty } from '@/lib/revize';
 import { POZARNI_RADKY } from '@/lib/pozarni-kniha';
-import { GraduationCap, Wrench, HardHat, Route, Plus, X, Loader2 } from 'lucide-react';
+import { IkonaSkoleni, Wrench, HardHat, Route, Plus, X, Loader2 } from 'lucide-react';
 import SekceUzly from '@/components/ciselniky/sekce-uzly';
 
 const OBLASTI: Oblast[] = ['Elektro', 'Tlak', 'Zdvihací', 'PO', 'Ostatní'];
@@ -51,7 +51,7 @@ export default function CiselnikyPage() {
       <Tabs defaultValue="skoleni" className="space-y-6">
         <TabsList className="w-full justify-start h-auto p-1 bg-secondary">
           <TabsTrigger value="skoleni" className="px-6 py-2">
-            <GraduationCap className="mr-2 h-4 w-4" /> Školení
+            <IkonaSkoleni className="mr-2 h-4 w-4" /> Školení
           </TabsTrigger>
           <TabsTrigger value="revize" className="px-6 py-2">
             <Wrench className="mr-2 h-4 w-4" /> Revize
