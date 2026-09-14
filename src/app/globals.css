@@ -196,3 +196,7 @@
   /* řádky se nesmí lámat přes stránky */
   .zam-print .grid { break-inside: avoid; }
 }
+
+/* skrytí posuvníku u vodorovně posouvatelných záložek na mobilu */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
