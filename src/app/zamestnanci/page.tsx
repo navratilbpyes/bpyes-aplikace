@@ -33,6 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   Users, Plus, Loader2, Upload, X, Briefcase, Grid3x3, Stethoscope, Search,
   ChevronDown, ChevronRight, Pencil, Download, Printer, Trash2, GraduationCap,
+  Check, AlertTriangle, RotateCw, Circle,
 } from 'lucide-react';
 import type { Osoba, Pozice } from '@/lib/osoby';
 import {
@@ -49,9 +50,9 @@ import type { CiselnikSkoleni } from '@/lib/skoleni';
 import SekceUdalosti from '@/components/zamestnanci/sekce-udalosti';
 import KartaOsoby from '@/components/zamestnanci/karta-osoby';
 import type { Udalost } from '@/lib/udalosti';
-import { nactiUdalosti, posledni, dalsiTermin, formatDatum } from '@/lib/udalosti';
+import { nactiUdalosti, posledni, dalsiTermin, formatDatum, nactiPrah, ulozPrah, PRAH_VYCHOZI } from '@/lib/udalosti';
 import type { CiselnikUzel } from '@/lib/uzly';
-import { nactiUzly } from '@/lib/uzly';
+import { nactiUzly, vyhodnotMapu, souhrnMapy } from '@/lib/uzly';
 
 const KATEGORIE: KodKategorie[] = ['1', '2', '2R', '3', '4'];
 
@@ -167,6 +168,17 @@ export default function ZamestnanciPage() {
       profesniRiziko: maProfesniRiziko(jejiCinnosti),
       nad50,
     };
+  }
+
+  const prah = typeof window !== 'undefined' ? nactiPrah() : PRAH_VYCHOZI;
+
+  /** Stav procesní mapy osoby — aby byl vidět bez rozklikávání. */
+  function souhrnOsoby(o: OsobaRadek) {
+    const v = vypocet(o);
+    return souhrnMapy(vyhodnotMapu(
+      uzly, o, v.cinnosti, udalosti[o.klientId] ?? [],
+      !!v.pozice?.jeVedouci, skoleni, v.perioda, prah,
+    ));
   }
 
   const filtrovane = useMemo(() => {
@@ -395,6 +407,7 @@ export default function ZamestnanciPage() {
                           ))}
                         </div>
                         <div className="flex items-start gap-2">
+                          <StavMapy souhrn={souhrnOsoby(o)} />
                           <div className="text-right text-xs whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1.5 font-medium">
                               <Stethoscope className="h-3.5 w-3.5 text-slate-400" />
@@ -479,6 +492,8 @@ export default function ZamestnanciPage() {
         cinnosti={otevrenaKarta ? vypocet(otevrenaKarta).cinnosti : []}
         udalosti={otevrenaKarta ? udalosti[otevrenaKarta.klientId] ?? [] : []}
         jeVedouci={!!(otevrenaKarta && vypocet(otevrenaKarta).pozice?.jeVedouci)}
+        skoleni={skoleni}
+        periodaProhlidky={otevrenaKarta ? vypocet(otevrenaKarta).perioda : undefined}
         zavri={() => setOtevrenaKarta(null)}
         poZmene={nacti}
       />
@@ -490,6 +505,28 @@ export default function ZamestnanciPage() {
         poHotovo={() => { setUpravovana(null); nacti(); }}
       />
     </div>
+  );
+}
+
+/* ─────────────────────────  STAV MAPY  ───────────────────────── */
+
+/** Odznak stavu procesní mapy v seznamu osob — bez nutnosti rozklikávat. */
+function StavMapy({ souhrn }: { souhrn: ReturnType<typeof souhrnMapy> }) {
+  const { stav, splneno, celkem, problemy } = souhrn;
+  const vzhled = {
+    ok: { tr: 'bg-emerald-50 text-emerald-700 border-emerald-200', ikona: <Check className="h-3 w-3" />, popis: 'vše v pořádku' },
+    blizi: { tr: 'bg-amber-50 text-amber-700 border-amber-200', ikona: <RotateCw className="h-3 w-3" />, popis: 'blíží se termín' },
+    po: { tr: 'bg-red-50 text-red-700 border-red-200', ikona: <AlertTriangle className="h-3 w-3" />, popis: 'po lhůtě' },
+    nekompletni: { tr: 'bg-slate-100 text-slate-600 border-slate-200', ikona: <Circle className="h-3 w-3" />, popis: 'chybí záznamy' },
+  }[stav];
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap ${vzhled.tr}`}
+      title={`Procesní mapa: ${vzhled.popis}${problemy > 0 ? ` — ${problemy} krok(ů) vyžaduje pozornost` : ''}`}
+    >
+      {vzhled.ikona}{splneno}/{celkem}
+    </span>
   );
 }
 
@@ -627,8 +664,6 @@ function DialogUpravaOsoby({
 
 /* ─────────────────────────  MATICE  ───────────────────────── */
 
-const PRAH_KLIC = 'auditflow.matice.prah';
-
 function Matice({
   klientId, osoby, cinnosti, skoleni, udalosti, poZmene,
 }: {
@@ -642,12 +677,9 @@ function Matice({
   const [uklada, setUklada] = useState<string | null>(null);
   const [lokalni, setLokalni] = useState<Record<string, string[]>>({});
   /** za kolik měsíců dopředu se termín považuje za blížící se */
-  const [prah, setPrah] = useState(3);
+  const [prah, setPrah] = useState(PRAH_VYCHOZI);
 
-  useEffect(() => {
-    const ulozeny = typeof window !== 'undefined' ? window.localStorage.getItem(PRAH_KLIC) : null;
-    if (ulozeny) setPrah(Number(ulozeny));
-  }, []);
+  useEffect(() => { setPrah(nactiPrah()); }, []);
 
   useEffect(() => {
     setLokalni(Object.fromEntries(
@@ -660,9 +692,11 @@ function Matice({
     [skoleni],
   );
 
+  /** Sdílené s procesní mapou — nastavení žije na jednom místě. */
   function zmenPrah(v: string) {
     setPrah(Number(v));
-    if (typeof window !== 'undefined') window.localStorage.setItem(PRAH_KLIC, v);
+    ulozPrah(Number(v));
+    poZmene();
   }
 
   /**
@@ -744,7 +778,7 @@ function Matice({
         </CardDescription>
         <div className="flex items-end gap-4 flex-wrap pt-2">
           <div className="space-y-1">
-            <Label className="text-xs">Upozorňovat</Label>
+            <Label className="text-xs">Upozorňovat (platí i pro procesní mapu)</Label>
             <Select value={String(prah)} onValueChange={zmenPrah}>
               <SelectTrigger className="h-8 w-[190px] text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
