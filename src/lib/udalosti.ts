@@ -51,8 +51,14 @@ export interface Udalost {
   datumPosudku?: string | null;
   druhProhlidky?: DruhProhlidky | null;
   zaver?: ZaverProhlidky | null;
-  /** platnost posudku, je-li uvedena přímo na posudku */
+  /**
+   * Konec platnosti. U posudku, je-li uveden přímo na něm; u průkazů
+   * a osvědčení (svářečský průkaz, profesní průkaz, doklad dle NV 194/2022)
+   * je to hlavní hlídaný údaj — platnost se nepočítá z periody.
+   */
   platnostDo?: string | null;
+  /** číslo průkazu nebo osvědčení */
+  cisloDokladu?: string | null;
   /** lektor, mentor nebo poskytovatel PLS */
   provedl?: string | null;
   poznamka?: string | null;
