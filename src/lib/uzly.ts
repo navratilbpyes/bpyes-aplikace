@@ -19,6 +19,8 @@ import type { CiselnikCinnost } from './cinnosti';
 import type { Osoba } from './osoby';
 import { aktivniCinnosti } from './osoby';
 import type { Udalost } from './udalosti';
+import { dalsiTermin, stavTerminu, PRAH_VYCHOZI } from './udalosti';
+import type { CiselnikSkoleni } from './skoleni';
 
 export type FazeUzlu = 'nastup' | 'provoz' | 'udalost' | 'ukonceni';
 
@@ -217,14 +219,48 @@ export async function nactiUzly(): Promise<CiselnikUzel[]> {
     .sort((a, b) => (a.poradi ?? 0) - (b.poradi ?? 0));
 }
 
-export type StavUzlu = 'splneno' | 'ceka' | 'nevztahuje';
+/**
+ * Stav uzlu.
+ * Nástup, události a ukončení jsou binární — vstupní školení se nekoná podruhé.
+ * Provoz je cyklus, a tam „splněno" nic neříká: rozhoduje termín dalšího.
+ */
+export type StavUzlu = 'splneno' | 'ceka' | 'ok' | 'blizi' | 'po' | 'chybi';
 
 export interface VyhodnocenyUzel {
   uzel: CiselnikUzel;
   stav: StavUzlu;
-  /** datum splnění, je-li známé */
+  /** datum posledního splnění */
   datum?: string | null;
-  detail?: string;
+  /** termín dalšího — jen u cyklických uzlů ve fázi Provoz */
+  dalsi?: string | null;
+  /** perioda v měsících, ze které se termín počítá */
+  perioda?: number;
+}
+
+/** Uzel vyžaduje pozornost — po lhůtě, nebo úplně bez záznamu. */
+export function jeProblem(v: VyhodnocenyUzel): boolean {
+  return v.stav === 'po' || v.stav === 'chybi'
+    || (v.uzel.faze === 'nastup' && v.stav === 'ceka');
+}
+
+/** Souhrn mapy pro seznam osob — nejhorší stav rozhoduje. */
+export function souhrnMapy(mapa: VyhodnocenyUzel[]): {
+  stav: 'ok' | 'blizi' | 'po' | 'nekompletni';
+  splneno: number;
+  celkem: number;
+  problemy: number;
+} {
+  const celkem = mapa.length;
+  const splneno = mapa.filter((m) => m.stav === 'splneno' || m.stav === 'ok' || m.stav === 'blizi').length;
+  const po = mapa.filter((m) => m.stav === 'po').length;
+  const chybi = mapa.filter((m) => jeProblem(m) && m.stav !== 'po').length;
+  const blizi = mapa.filter((m) => m.stav === 'blizi').length;
+  return {
+    stav: po > 0 ? 'po' : chybi > 0 ? 'nekompletni' : blizi > 0 ? 'blizi' : 'ok',
+    splneno,
+    celkem,
+    problemy: po + chybi,
+  };
 }
 
 /** Zobrazí se uzel této osobě? */
@@ -266,6 +302,11 @@ export function vyhodnotMapu(
   cinnosti: CiselnikCinnost[],
   udalosti: Udalost[],
   jeVedouci: boolean,
+  /** číselník školení — kvůli periodám u cyklických uzlů */
+  skoleni: CiselnikSkoleni[] = [],
+  /** perioda prohlídky osoby v měsících (počítá se z kategorie a činností) */
+  periodaProhlidkyMesicu?: number,
+  prahMesicu: number = PRAH_VYCHOZI,
 ): VyhodnocenyUzel[] {
   const mojeUdalosti = udalosti.filter((x) => x.osobaId === osoba.id);
   const rucni = (osoba as any).uzavreneUzly as Record<string, string> | undefined;
@@ -295,6 +336,28 @@ export function vyhodnotMapu(
         datum = z?.datumDo;
       } else {
         datum = rucni?.[u.id];
+      }
+
+      // Fáze Provoz je cyklus — nezajímá nás, že něco proběhlo, ale kdy je to zas.
+      if (u.faze === 'provoz') {
+        const perioda = u.uzavreni === 'prohlidkou'
+          ? (periodaProhlidkyMesicu ?? 0)
+          : (skoleni.find((s) => s.id === u.skoleniId)?.periodaMesice ?? 0);
+
+        const posledniZaznam = mojeUdalosti
+          .filter((x) => (u.uzavreni === 'prohlidkou'
+            ? x.typ === 'prohlidka' && (!u.druhProhlidky || x.druhProhlidky === u.druhProhlidky)
+            : x.typ === 'skoleni' && (!u.skoleniId || x.temaId === u.skoleniId)))
+          .sort((a, b) => (b.datum ?? '').localeCompare(a.datum ?? ''))[0];
+
+        const dalsi = dalsiTermin(posledniZaznam, perioda);
+        return {
+          uzel: u,
+          stav: stavTerminu(dalsi, prahMesicu) as StavUzlu,
+          datum: datum ?? null,
+          dalsi: dalsi ?? null,
+          perioda,
+        };
       }
 
       return {
