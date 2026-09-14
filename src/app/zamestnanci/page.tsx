@@ -228,18 +228,18 @@ export default function ZamestnanciPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-3 sm:p-4 md:p-8 max-w-7xl mx-auto space-y-4 md:space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Users className="h-7 w-7 text-blue-600" /> Lidské zdroje
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
+            <Users className="h-6 w-6 md:h-7 md:w-7 text-blue-600" /> Lidské zdroje
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs md:text-sm text-muted-foreground">
             Evidence osob, pozic a činností. Z činností vyplývají povinná školení,
             zácviky a periody lékařských prohlídek.
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto sm:flex-wrap">
           <Button variant="outline" onClick={exportCsv} disabled={filtrovane.length === 0}>
             <Download className="mr-2 h-4 w-4" /> CSV
           </Button>
@@ -260,20 +260,20 @@ export default function ZamestnanciPage() {
       </div>
 
       <Tabs defaultValue="prehled" className="space-y-6">
-        <TabsList className="w-full justify-start h-auto p-1 bg-secondary flex-wrap">
-          <TabsTrigger value="prehled" className="px-6 py-2">
+        <TabsList className="w-full justify-start h-auto p-1 bg-secondary overflow-x-auto flex-nowrap md:flex-wrap no-scrollbar">
+          <TabsTrigger value="prehled" className="px-3 md:px-6 py-2 shrink-0">
             <Users className="mr-2 h-4 w-4" /> Přehled
           </TabsTrigger>
-          <TabsTrigger value="matice" className="px-6 py-2">
+          <TabsTrigger value="matice" className="px-3 md:px-6 py-2 shrink-0">
             <Grid3x3 className="mr-2 h-4 w-4" /> Matice činností
           </TabsTrigger>
-          <TabsTrigger value="pozice" className="px-6 py-2">
+          <TabsTrigger value="pozice" className="px-3 md:px-6 py-2 shrink-0">
             <Briefcase className="mr-2 h-4 w-4" /> Pozice
           </TabsTrigger>
-          <TabsTrigger value="skoleni" className="px-6 py-2">
+          <TabsTrigger value="skoleni" className="px-3 md:px-6 py-2 shrink-0">
             <GraduationCap className="mr-2 h-4 w-4" /> Školení
           </TabsTrigger>
-          <TabsTrigger value="prohlidky" className="px-6 py-2">
+          <TabsTrigger value="prohlidky" className="px-3 md:px-6 py-2 shrink-0">
             <Stethoscope className="mr-2 h-4 w-4" /> Prohlídky
           </TabsTrigger>
         </TabsList>
@@ -374,7 +374,8 @@ export default function ZamestnanciPage() {
                     const v = vypocet(o);
                     return (
                       <div key={`${o.klientId}-${o.id}`} className="grid gap-2 py-3 md:grid-cols-[1.4fr_1fr_2fr_auto] items-start">
-                        <div>
+                        <div className="flex items-start justify-between gap-2 md:block">
+                          <div>
                           <button
                             type="button"
                             onClick={() => setOtevrenaKarta(o)}
@@ -387,6 +388,17 @@ export default function ZamestnanciPage() {
                             {o.osobniCislo ? `os. č. ${o.osobniCislo}` : ''}
                             {v.nad50 ? ' · nad 50 let' : ''}
                           </p>
+                          </div>
+                          {/* na mobilu stav vedle jména, na desktopu ve sloupci vpravo */}
+                          <div className="flex items-center gap-1 md:hidden">
+                            <StavMapy souhrn={souhrnOsoby(o)} />
+                            <Button
+                              variant="ghost" size="icon" className="h-7 w-7 no-print"
+                              title="Upravit" onClick={() => setUpravovana(o)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                         <div className="text-xs">
                           <p className="font-medium">{v.pozice?.nazev ?? '—'}</p>
@@ -406,9 +418,9 @@ export default function ZamestnanciPage() {
                             </span>
                           ))}
                         </div>
-                        <div className="flex items-start gap-2">
-                          <StavMapy souhrn={souhrnOsoby(o)} />
-                          <div className="text-right text-xs whitespace-nowrap">
+                        <div className="flex items-start gap-2 justify-between md:justify-end">
+                          <span className="hidden md:inline-flex"><StavMapy souhrn={souhrnOsoby(o)} /></span>
+                          <div className="text-left md:text-right text-xs whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1.5 font-medium">
                               <Stethoscope className="h-3.5 w-3.5 text-slate-400" />
                               {popisPeriodyProhlidky(v.perioda)}
@@ -419,7 +431,7 @@ export default function ZamestnanciPage() {
                           </div>
                           <Button
                             variant="ghost" size="icon"
-                            className="h-7 w-7 no-print"
+                            className="hidden md:inline-flex h-7 w-7 no-print"
                             title="Upravit"
                             onClick={() => setUpravovana(o)}
                           >
@@ -599,7 +611,7 @@ function DialogUpravaOsoby({
 
   return (
     <Dialog open={!!osoba} onOpenChange={(o) => !o && zavri()}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{osoba ? celeJmeno(osoba) : ''}</DialogTitle>
           <DialogDescription>
@@ -705,7 +717,11 @@ function Matice({
    */
   function stavBunky(osobaId: string, c: CiselnikCinnost): { stav: 'ok' | 'blizi' | 'po' | 'chybi'; popis: string } {
     const ids = c.skoleniIds ?? [];
-    if (ids.length === 0) return { stav: 'ok', popis: 'bez navázaného školení' };
+    // Činnost bez navázaného školení není „v pořádku" — jen se neví, co hlídat.
+    // Modrá by tvrdila, že je doloženo něco, co doloženo není.
+    if (ids.length === 0) {
+      return { stav: 'chybi', popis: 'Činnost nemá v číselníku navázané žádné školení — doplň vazbu v Číselníky → Činnosti.' };
+    }
     const hranice = new Date();
     hranice.setMonth(hranice.getMonth() + prah);
     const dnes = new Date().toISOString();
@@ -721,7 +737,7 @@ function Matice({
       else if (dalsi < dnes) st = 'po';
       else if (dalsi < hranice.toISOString()) st = 'blizi';
       else st = 'ok';
-      popisy.push(`${tema.nazev}: ${st === 'chybi' ? 'bez záznamu' : formatDatum(dalsi)}`);
+      popisy.push(`${tema.nazev}: ${st === 'chybi' ? 'NEDOLOŽENO — osoba nemá žádný záznam' : formatDatum(dalsi)}`);
       const poradi = { ok: 0, blizi: 1, chybi: 2, po: 3 } as const;
       if (poradi[st] > poradi[nejhorsi]) nejhorsi = st;
     }
@@ -793,11 +809,14 @@ function Matice({
             <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded border border-blue-600 bg-blue-600" /> v pořádku</span>
             <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded border border-amber-600 bg-amber-500" /> blíží se termín</span>
             <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded border border-red-700 bg-red-600" /> po lhůtě</span>
-            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded border border-slate-500 bg-slate-400" /> bez záznamu</span>
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded border border-slate-500 bg-slate-400" /> nedoloženo</span>
           </div>
         </div>
       </CardHeader>
       <CardContent className="overflow-x-auto">
+        <p className="md:hidden text-[11px] text-muted-foreground pb-2">
+          Tabulkou posuňte do stran.
+        </p>
         {osoby.length === 0 || cinnosti.length === 0 ? (
           <p className="py-8 text-sm text-muted-foreground">
             {cinnosti.length === 0 ? 'Číselník činností je prázdný.' : 'Žádné osoby k zobrazení.'}
@@ -806,10 +825,10 @@ function Matice({
           <table className="text-xs border-collapse">
             <thead>
               <tr>
-                <th className="sticky left-0 bg-background text-left p-2 border-b min-w-[180px]">Osoba</th>
+                <th className="sticky left-0 z-10 bg-background text-left p-2 border-b min-w-[130px] md:min-w-[180px]">Osoba</th>
                 {cinnosti.map((c) => (
                   <th key={c.id} className="border-b p-1 align-bottom">
-                    <div className="h-32 w-8 flex items-end justify-center">
+                    <div className="h-24 md:h-32 w-7 md:w-8 flex items-end justify-center">
                       <span
                         className="whitespace-nowrap text-[11px] font-medium"
                         style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
@@ -824,7 +843,7 @@ function Matice({
             <tbody>
               {osoby.map((o) => (
                 <tr key={o.id} className="hover:bg-muted/40">
-                  <td className="sticky left-0 bg-background p-2 border-b font-medium whitespace-nowrap">
+                  <td className="sticky left-0 z-10 bg-background p-2 border-b font-medium whitespace-nowrap text-[11px] md:text-xs">
                     {celeJmeno(o)}
                   </td>
                   {cinnosti.map((c) => {
@@ -843,7 +862,7 @@ function Matice({
                           type="button"
                           onClick={() => prepni(o, c.id)}
                           disabled={uklada === klic}
-                          className="h-9 w-8 flex items-center justify-center hover:bg-blue-50"
+                          className="h-10 w-7 md:h-9 md:w-8 flex items-center justify-center hover:bg-blue-50"
                           title={`${celeJmeno(o)} — ${c.nazev}${info ? `\n${info.popis}` : ''}`}
                         >
                           <span className={`h-4 w-4 rounded border ${barva}`} />
@@ -981,7 +1000,7 @@ function SekcePozice({
           <div className="divide-y border-t">
             {pozice.map((p) => (
               <div key={p.id} className="py-3 space-y-3">
-                <div className="grid gap-3 sm:grid-cols-[auto_1fr_140px_180px_auto] items-center">
+                <div className="grid grid-cols-[auto_1fr_auto] gap-2 sm:gap-3 sm:grid-cols-[auto_1fr_140px_180px_auto] items-center">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -998,9 +1017,10 @@ function SekcePozice({
                   />
                   <Select
                     value={p.kategorie ?? '__zadna__'}
+
                     onValueChange={(v) => uprav(p.id, { kategorie: v === '__zadna__' ? null : (v as KodKategorie) })}
                   >
-                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Kategorie…" /></SelectTrigger>
+                    <SelectTrigger className="col-span-2 sm:col-span-1 h-9 text-xs ml-10 sm:ml-0 w-[calc(100%-2.5rem)] sm:w-auto"><SelectValue placeholder="Kategorie…" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__zadna__">— nezařazeno —</SelectItem>
                       {KATEGORIE.map((k) => (
@@ -1008,7 +1028,7 @@ function SekcePozice({
                       ))}
                     </SelectContent>
                   </Select>
-                  <div className="flex items-center gap-2">
+                  <div className="col-span-2 sm:col-span-1 flex items-center gap-2 pl-10 sm:pl-0">
                     <Switch
                       checked={!!p.jeVedouci}
                       onCheckedChange={(v) => uprav(p.id, { jeVedouci: v })}
@@ -1026,7 +1046,7 @@ function SekcePozice({
                 </div>
 
                 {otevrena === p.id && (
-                  <div className="ml-10 rounded-lg border bg-muted/20 p-4 space-y-4">
+                  <div className="ml-0 sm:ml-10 rounded-lg border bg-muted/20 p-3 sm:p-4 space-y-4">
                     <div className="rounded border bg-background px-3 py-3">
                       <EditorFaktoru
                         faktory={p.faktory}
@@ -1135,7 +1155,7 @@ function DialogNovaOsoba({
       <Button onClick={() => setOtevreno(true)} disabled={!klientId}>
         <Plus className="mr-2 h-4 w-4" /> Přidat osobu
       </Button>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nová osoba</DialogTitle>
           <DialogDescription>
@@ -1270,7 +1290,7 @@ function DialogImport({
       <Button variant="outline" onClick={() => setOtevreno(true)} disabled={!klientId}>
         <Upload className="mr-2 h-4 w-4" /> Import CSV
       </Button>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Import osob z CSV</DialogTitle>
           <DialogDescription>
