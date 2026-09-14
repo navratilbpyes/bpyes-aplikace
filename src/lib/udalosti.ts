@@ -142,13 +142,29 @@ export function formatDatum(iso?: string | null): string {
   return new Date(iso).toLocaleDateString('cs-CZ');
 }
 
+/**
+ * Práh upozornění (kolik měsíců dopředu se termín považuje za blížící se).
+ * Drží se na jednom místě — sdílí ho matice činností i procesní mapa.
+ */
+export const PRAH_KLIC = 'auditflow.matice.prah';
+export const PRAH_VYCHOZI = 3;
+
+export function nactiPrah(): number {
+  if (typeof window === 'undefined') return PRAH_VYCHOZI;
+  const u = window.localStorage.getItem(PRAH_KLIC);
+  return u ? Number(u) : PRAH_VYCHOZI;
+}
+
+export function ulozPrah(mesicu: number): void {
+  if (typeof window !== 'undefined') window.localStorage.setItem(PRAH_KLIC, String(mesicu));
+}
+
 /** Barevné pásmo termínu pro plán: po lhůtě / blíží se / v pořádku. */
-export function stavTerminu(iso?: string): 'po' | 'blizi' | 'ok' | 'chybi' {
+export function stavTerminu(iso?: string | null, prahMesicu = PRAH_VYCHOZI): 'po' | 'blizi' | 'ok' | 'chybi' {
   if (!iso) return 'chybi';
   const dnes = new Date();
-  const t = new Date(iso);
-  const dnu = Math.round((t.getTime() - dnes.getTime()) / 86400000);
-  if (dnu < 0) return 'po';
-  if (dnu <= 90) return 'blizi';
-  return 'ok';
+  if (iso < dnes.toISOString()) return 'po';
+  const hranice = new Date();
+  hranice.setMonth(hranice.getMonth() + prahMesicu);
+  return iso < hranice.toISOString() ? 'blizi' : 'ok';
 }
