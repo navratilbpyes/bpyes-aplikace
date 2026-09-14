@@ -21,19 +21,21 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import {
   Check, Circle, ChevronDown, ChevronRight, FileText, Loader2, Stethoscope, GraduationCap,
+  AlertTriangle, RotateCw,
 } from 'lucide-react';
 import type { Osoba } from '@/lib/osoby';
 import { celeJmeno } from '@/lib/osoby';
 import type { CiselnikCinnost } from '@/lib/cinnosti';
 import type { Udalost } from '@/lib/udalosti';
-import { formatDatum, POPIS_DRUHU, POPIS_ZAVERU } from '@/lib/udalosti';
+import { formatDatum, POPIS_DRUHU, POPIS_ZAVERU, nactiPrah } from '@/lib/udalosti';
 import type { CiselnikUzel, VyhodnocenyUzel, FazeUzlu } from '@/lib/uzly';
-import { vyhodnotMapu, POPIS_FAZE } from '@/lib/uzly';
+import { vyhodnotMapu, POPIS_FAZE, souhrnMapy } from '@/lib/uzly';
+import type { CiselnikSkoleni } from '@/lib/skoleni';
 
 const FAZE: FazeUzlu[] = ['nastup', 'provoz', 'udalost', 'ukonceni'];
 
 export default function KartaOsoby({
-  osoba, klientId, uzly, cinnosti, udalosti, jeVedouci, zavri, poZmene,
+  osoba, klientId, uzly, cinnosti, udalosti, jeVedouci, skoleni, periodaProhlidky, zavri, poZmene,
 }: {
   osoba: Osoba | null;
   klientId: string | null;
@@ -41,6 +43,8 @@ export default function KartaOsoby({
   cinnosti: CiselnikCinnost[];
   udalosti: Udalost[];
   jeVedouci: boolean;
+  skoleni: CiselnikSkoleni[];
+  periodaProhlidky?: number;
   zavri: () => void;
   poZmene: () => void;
 }) {
@@ -48,10 +52,16 @@ export default function KartaOsoby({
   const [rozbaleny, setRozbaleny] = useState<string | null>(null);
   const [uklada, setUklada] = useState<string | null>(null);
 
+  const prah = nactiPrah();
+
   const mapa: VyhodnocenyUzel[] = useMemo(
-    () => (osoba ? vyhodnotMapu(uzly, osoba, cinnosti, udalosti, jeVedouci) : []),
-    [osoba, uzly, cinnosti, udalosti, jeVedouci],
+    () => (osoba
+      ? vyhodnotMapu(uzly, osoba, cinnosti, udalosti, jeVedouci, skoleni, periodaProhlidky, prah)
+      : []),
+    [osoba, uzly, cinnosti, udalosti, jeVedouci, skoleni, periodaProhlidky, prah],
   );
+
+  const souhrn = useMemo(() => souhrnMapy(mapa), [mapa]);
 
   const mojeUdalosti = useMemo(
     () => (osoba
@@ -81,16 +91,15 @@ export default function KartaOsoby({
     }
   }
 
-  const splneno = mapa.filter((m) => m.stav === 'splneno').length;
-
   return (
     <Dialog open={!!osoba} onOpenChange={(o) => !o && zavri()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{osoba ? celeJmeno(osoba) : ''}</DialogTitle>
           <DialogDescription>
-            {splneno} z {mapa.length} kroků splněno. Zobrazují se jen kroky,
-            které se této osoby týkají.
+            {souhrn.splneno} z {souhrn.celkem} kroků v pořádku
+            {souhrn.problemy > 0 ? ` · ${souhrn.problemy} vyžaduje pozornost` : ''}.
+            Zobrazují se jen kroky, které se této osoby týkají.
           </DialogDescription>
         </DialogHeader>
 
@@ -102,6 +111,11 @@ export default function KartaOsoby({
               <div key={faze} className="space-y-1">
                 <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
                   {POPIS_FAZE[faze]}
+                  {faze === 'provoz' && (
+                    <span className="ml-2 normal-case font-normal tracking-normal">
+                      termín dalšího
+                    </span>
+                  )}
                 </p>
                 <div className="rounded-lg border divide-y">
                   {vFazi.map((m) => {
@@ -116,14 +130,22 @@ export default function KartaOsoby({
                         >
                           <span
                             className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
-                              m.stav === 'splneno'
+                              m.stav === 'splneno' || m.stav === 'ok'
                                 ? 'border-emerald-600 bg-emerald-600 text-white'
-                                : 'border-slate-300 text-slate-300'
+                                : m.stav === 'blizi'
+                                  ? 'border-amber-500 bg-amber-500 text-white'
+                                  : m.stav === 'po'
+                                    ? 'border-red-600 bg-red-600 text-white'
+                                    : 'border-slate-300 text-slate-300'
                             }`}
                           >
-                            {m.stav === 'splneno'
+                            {m.stav === 'splneno' || m.stav === 'ok'
                               ? <Check className="h-3 w-3" />
-                              : <Circle className="h-2 w-2 fill-current" />}
+                              : m.stav === 'po'
+                                ? <AlertTriangle className="h-3 w-3" />
+                                : m.stav === 'blizi'
+                                  ? <RotateCw className="h-3 w-3" />
+                                  : <Circle className="h-2 w-2 fill-current" />}
                           </span>
                           <span className="flex-1 text-sm font-medium">{m.uzel.nazev}</span>
                           {m.uzel.formular && (
@@ -131,8 +153,28 @@ export default function KartaOsoby({
                               <FileText className="h-3 w-3" />{m.uzel.formular}
                             </span>
                           )}
-                          <span className={`text-xs whitespace-nowrap ${m.stav === 'splneno' ? 'text-emerald-700 font-medium' : 'text-muted-foreground'}`}>
-                            {m.stav === 'splneno' ? formatDatum(m.datum) : 'čeká'}
+                          <span className="text-xs whitespace-nowrap text-right">
+                            {m.uzel.faze === 'provoz' ? (
+                              <>
+                                <span className={
+                                  m.stav === 'po' ? 'text-red-700 font-bold'
+                                  : m.stav === 'blizi' ? 'text-amber-700 font-medium'
+                                  : m.stav === 'chybi' ? 'text-slate-400 italic'
+                                  : 'text-emerald-700 font-medium'
+                                }>
+                                  {m.stav === 'chybi' ? 'bez záznamu' : formatDatum(m.dalsi)}
+                                </span>
+                                {m.stav !== 'chybi' && (
+                                  <span className="block text-[10px] text-muted-foreground">
+                                    poslední {formatDatum(m.datum)}
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <span className={m.stav === 'splneno' ? 'text-emerald-700 font-medium' : 'text-muted-foreground'}>
+                                {m.stav === 'splneno' ? formatDatum(m.datum) : 'čeká'}
+                              </span>
+                            )}
                           </span>
                           {rozbaleno ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                         </button>
@@ -172,8 +214,9 @@ export default function KartaOsoby({
                               </div>
                             ) : (
                               <p className="text-[11px] text-muted-foreground">
-                                Uzavře se automaticky zápisem na záložce
-                                {m.uzel.uzavreni === 'prohlidkou' ? ' Prohlídky' : ' Školení'}.
+                                {m.uzel.faze === 'provoz'
+                                  ? `Opakuje se; termín se počítá od data poslední události této osoby${m.perioda ? ` (perioda ${m.perioda} měsíců)` : ''}. Nový záznam přidáte na záložce ${m.uzel.uzavreni === 'prohlidkou' ? 'Prohlídky' : 'Školení'}.`
+                                  : `Uzavře se automaticky zápisem na záložce ${m.uzel.uzavreni === 'prohlidkou' ? 'Prohlídky' : 'Školení'}.`}
                               </p>
                             )}
                           </div>
