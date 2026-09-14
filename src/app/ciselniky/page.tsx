@@ -21,7 +21,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { GraduationCap, Wrench, HardHat, Plus, X, Loader2 } from 'lucide-react';
 import SekceCinnosti from '@/components/ciselniky/sekce-cinnosti';
 import { PERIODY as PERIODY_SKOLENI, popisPeriody } from '@/lib/skoleni';
 import { PERIODY as PERIODY_REVIZE, generujLhutaText } from '@/lib/revize';
@@ -29,7 +28,6 @@ import type { CiselnikSkoleni } from '@/lib/skoleni';
 import type { CiselnikRevize, Oblast, TypLhuty } from '@/lib/revize';
 import { POZARNI_RADKY } from '@/lib/pozarni-kniha';
 import { GraduationCap, Wrench, HardHat, Route, Plus, X, Loader2 } from 'lucide-react';
-import SekceCinnosti from '@/components/ciselniky/sekce-cinnosti';
 import SekceUzly from '@/components/ciselniky/sekce-uzly';
 
 const OBLASTI: Oblast[] = ['Elektro', 'Tlak', 'Zdvihací', 'PO', 'Ostatní'];
