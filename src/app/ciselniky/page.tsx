@@ -28,6 +28,9 @@ import { PERIODY as PERIODY_REVIZE, generujLhutaText } from '@/lib/revize';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
 import type { CiselnikRevize, Oblast, TypLhuty } from '@/lib/revize';
 import { POZARNI_RADKY } from '@/lib/pozarni-kniha';
+import { GraduationCap, Wrench, HardHat, Route, Plus, X, Loader2 } from 'lucide-react';
+import SekceCinnosti from '@/components/ciselniky/sekce-cinnosti';
+import SekceUzly from '@/components/ciselniky/sekce-uzly';
 
 const OBLASTI: Oblast[] = ['Elektro', 'Tlak', 'Zdvihací', 'PO', 'Ostatní'];
 const TYPY_LHUTY: { hodnota: TypLhuty; popis: string }[] = [
@@ -58,6 +61,12 @@ export default function CiselnikyPage() {
           <TabsTrigger value="cinnosti" className="px-6 py-2">
             <HardHat className="mr-2 h-4 w-4" /> Činnosti
           </TabsTrigger>
+          <TabsTrigger value="cinnosti" className="px-6 py-2">
+            <HardHat className="mr-2 h-4 w-4" /> Činnosti
+          </TabsTrigger>
+          <TabsTrigger value="uzly" className="px-6 py-2">
+            <Route className="mr-2 h-4 w-4" /> Procesní mapa
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="skoleni">
@@ -71,6 +80,15 @@ export default function CiselnikyPage() {
         <TabsContent value="cinnosti">
           <SekceCinnosti />
         </TabsContent>
+
+        <TabsContent value="cinnosti">
+          <SekceCinnosti />
+        </TabsContent>
+
+        <TabsContent value="uzly">
+          <SekceUzly />
+        </TabsContent>
+        
       </Tabs>
     </div>
   );
