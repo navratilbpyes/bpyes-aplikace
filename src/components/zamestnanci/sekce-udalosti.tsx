@@ -144,7 +144,7 @@ export default function SekceUdalosti({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto] items-end">
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto] items-end [&>button]:w-full sm:[&>button]:w-auto">
             {rezim === 'skoleni' ? (
               <div className="space-y-1">
                 <Label className="text-xs">Téma školení</Label>
@@ -179,13 +179,13 @@ export default function SekceUdalosti({
             <p className="py-8 text-sm text-muted-foreground">Žádné osoby.</p>
           ) : (
             <div className="divide-y border-t text-sm">
-              <div className="grid grid-cols-[1.6fr_1fr_1fr_auto] gap-3 py-2 text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
+              <div className="hidden sm:grid grid-cols-[1.6fr_1fr_1fr_auto] gap-3 py-2 text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
                 <span>Osoba</span><span>Poslední</span><span>Termín dalšího</span><span />
               </div>
               {radky.map(({ osoba, posledniZ, dalsi, perioda, povinne }) => {
                 const st = stavTerminu(dalsi);
                 return (
-                  <div key={osoba.id} className="grid grid-cols-[1.6fr_1fr_1fr_auto] gap-3 py-2.5 items-center">
+                  <div key={osoba.id} className="grid grid-cols-[1fr_auto] sm:grid-cols-[1.6fr_1fr_1fr_auto] gap-x-3 gap-y-1 py-2.5 items-center">
                     <div>
                       <p className="font-medium">{celeJmeno(osoba)}</p>
                       {rezim === 'skoleni' && !povinne && (
@@ -198,14 +198,16 @@ export default function SekceUdalosti({
                         </p>
                       )}
                     </div>
-                    <span className="text-xs">{formatDatum(posledniZ?.datum)}</span>
-                    <span className={`text-xs ${BARVA[st]}`}>
+                    <span className="order-3 sm:order-none text-[11px] sm:text-xs text-muted-foreground sm:text-foreground">
+                      <span className="sm:hidden">poslední: </span>{formatDatum(posledniZ?.datum)}
+                    </span>
+                    <span className={`order-2 sm:order-none text-xs text-right sm:text-left ${BARVA[st]}`}>
                       {st === 'chybi' ? 'bez záznamu' : formatDatum(dalsi)}
                     </span>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7"
+                      className="order-4 sm:order-none h-7 w-7 justify-self-end"
                       title="Historie"
                       onClick={() => setHistorie({
                         osoba,
@@ -331,7 +333,7 @@ function DialogHromadny({
           ? <><GraduationCap className="mr-2 h-4 w-4" /> Zapsat školení</>
           : <><Stethoscope className="mr-2 h-4 w-4" /> Zapsat prohlídku</>}
       </Button>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>
             {rezim === 'skoleni' ? `Zápis školení — ${tema?.nazev ?? ''}` : 'Zápis lékařské prohlídky'}
@@ -469,7 +471,7 @@ function DialogHistorie({
 }) {
   return (
     <Dialog open={!!data} onOpenChange={(o) => !o && zavri()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>{data ? celeJmeno(data.osoba) : ''}</DialogTitle>
           <DialogDescription>
