@@ -5,7 +5,7 @@
  * Umístění: src/app/zamestnanci/page.tsx
  *
  * Admin vidí všechny klienty s filtrem, klient jen sebe.
- * Tři pohledy: Přehled (tabulka s filtry), Matice (osoby × činnosti), Pozice.
+ * Pohledy: Přehled, Matice činností, Pozice, Školení, Prohlídky.
  *
  * Perioda prohlídky se nikdy neukládá — počítá se z kategorie pozice
  * a z činností osoby (nejkratší vyhrává), aby změna v číselníku
@@ -39,16 +39,19 @@ import {
   celeJmeno, aktivniCinnosti, nactiOsoby, nactiPozice,
   parsujCsv, IMPORT_POLE, normalizujDatum,
 } from '@/lib/osoby';
-import type { CiselnikCinnost, CiselnikKategorie, KodKategorie, ZarazeniFaktoru } from '@/lib/cinnosti';
+import type { CiselnikCinnost, CiselnikKategorie, KodKategorie } from '@/lib/cinnosti';
+import {
+  periodaProhlidky, popisPeriodyProhlidky, jeNad50, maProfesniRiziko, nejvyssiKategorie,
+} from '@/lib/cinnosti';
 import EditorFaktoru from '@/components/ciselniky/editor-faktoru';
 import Napoveda from '@/components/ui/napoveda';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
 import SekceUdalosti from '@/components/zamestnanci/sekce-udalosti';
+import KartaOsoby from '@/components/zamestnanci/karta-osoby';
 import type { Udalost } from '@/lib/udalosti';
 import { nactiUdalosti, posledni, dalsiTermin, formatDatum } from '@/lib/udalosti';
-import {
-  periodaProhlidky, popisPeriodyProhlidky, jeNad50, maProfesniRiziko, nejvyssiKategorie,
-} from '@/lib/cinnosti';
+import type { CiselnikUzel } from '@/lib/uzly';
+import { nactiUzly } from '@/lib/uzly';
 
 const KATEGORIE: KodKategorie[] = ['1', '2', '2R', '3', '4'];
 
@@ -69,14 +72,18 @@ export default function ZamestnanciPage() {
   const [kategorie, setKategorie] = useState<CiselnikKategorie[]>([]);
   const [skoleni, setSkoleni] = useState<CiselnikSkoleni[]>([]);
   const [udalosti, setUdalosti] = useState<Record<string, Udalost[]>>({});
+  const [uzly, setUzly] = useState<CiselnikUzel[]>([]);
   const [nacitam, setNacitam] = useState(true);
+
+  // dialogy
+  const [upravovana, setUpravovana] = useState<OsobaRadek | null>(null);
+  const [otevrenaKarta, setOtevrenaKarta] = useState<OsobaRadek | null>(null);
 
   // filtry
   const [fKlient, setFKlient] = useState<string>(isAdmin ? 'vse' : (userProfile?.klientId ?? ''));
   const [fPozice, setFPozice] = useState('vse');
   const [fCinnost, setFCinnost] = useState('vse');
   const [hledani, setHledani] = useState('');
-  const [upravovana, setUpravovana] = useState<OsobaRadek | null>(null);
 
   const dostupniKlienti = useMemo(
     () => (isAdmin ? klienti : klienti.filter((k) => k.id === userProfile?.klientId)),
@@ -101,6 +108,7 @@ export default function ZamestnanciPage() {
           .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs')),
       );
       setKategorie(snapK.docs.map((d) => ({ id: d.id, ...d.data() }) as CiselnikKategorie));
+      setUzly(await nactiUzly());
 
       const davky = await Promise.all(
         dostupniKlienti.map(async (k) => ({
@@ -240,7 +248,7 @@ export default function ZamestnanciPage() {
       </div>
 
       <Tabs defaultValue="prehled" className="space-y-6">
-        <TabsList className="w-full justify-start h-auto p-1 bg-secondary">
+        <TabsList className="w-full justify-start h-auto p-1 bg-secondary flex-wrap">
           <TabsTrigger value="prehled" className="px-6 py-2">
             <Users className="mr-2 h-4 w-4" /> Přehled
           </TabsTrigger>
@@ -323,7 +331,8 @@ export default function ZamestnanciPage() {
                 <Napoveda klic="osoby" />
               </CardTitle>
               <CardDescription>
-                Kategorie a perioda prohlídky se počítají z pozice a činností — nejkratší lhůta vyhrává.
+                Klikni na jméno pro kartu osoby s procesní mapou. Kategorie a perioda
+                prohlídky se počítají z pozice a činností — nejkratší lhůta vyhrává.
               </CardDescription>
             </CardHeader>
             <CardContent className="zam-print">
@@ -354,7 +363,13 @@ export default function ZamestnanciPage() {
                     return (
                       <div key={`${o.klientId}-${o.id}`} className="grid gap-2 py-3 md:grid-cols-[1.4fr_1fr_2fr_auto] items-start">
                         <div>
-                          <p className="font-bold">{celeJmeno(o)}</p>
+                          <button
+                            type="button"
+                            onClick={() => setOtevrenaKarta(o)}
+                            className="font-bold text-left hover:underline"
+                          >
+                            {celeJmeno(o)}
+                          </button>
                           <p className="text-[11px] text-muted-foreground">
                             {isAdmin && fKlient === 'vse' ? `${o.klientNazev} · ` : ''}
                             {o.osobniCislo ? `os. č. ${o.osobniCislo}` : ''}
@@ -418,6 +433,16 @@ export default function ZamestnanciPage() {
           />
         </TabsContent>
 
+        <TabsContent value="pozice">
+          <SekcePozice
+            klientId={vybranyKlient}
+            pozice={vybranyKlient ? pozice[vybranyKlient] ?? [] : []}
+            cinnosti={cinnosti}
+            osoby={osoby.filter((o) => o.klientId === vybranyKlient)}
+            poZmene={nacti}
+          />
+        </TabsContent>
+
         <TabsContent value="skoleni">
           <SekceUdalosti
             rezim="skoleni"
@@ -445,17 +470,18 @@ export default function ZamestnanciPage() {
             )}
           />
         </TabsContent>
-
-        <TabsContent value="pozice">
-          <SekcePozice
-            klientId={vybranyKlient}
-            pozice={vybranyKlient ? pozice[vybranyKlient] ?? [] : []}
-            cinnosti={cinnosti}
-            osoby={osoby.filter((o) => o.klientId === vybranyKlient)}
-            poZmene={nacti}
-          />
-        </TabsContent>
       </Tabs>
+
+      <KartaOsoby
+        osoba={otevrenaKarta}
+        klientId={otevrenaKarta?.klientId ?? null}
+        uzly={uzly}
+        cinnosti={otevrenaKarta ? vypocet(otevrenaKarta).cinnosti : []}
+        udalosti={otevrenaKarta ? udalosti[otevrenaKarta.klientId] ?? [] : []}
+        jeVedouci={!!(otevrenaKarta && vypocet(otevrenaKarta).pozice?.jeVedouci)}
+        zavri={() => setOtevrenaKarta(null)}
+        poZmene={nacti}
+      />
 
       <DialogUpravaOsoby
         osoba={upravovana}
@@ -623,15 +649,21 @@ function Matice({
     if (ulozeny) setPrah(Number(ulozeny));
   }, []);
 
-  function zmenPrah(v: string) {
-    setPrah(Number(v));
-    if (typeof window !== 'undefined') window.localStorage.setItem(PRAH_KLIC, v);
-  }
+  useEffect(() => {
+    setLokalni(Object.fromEntries(
+      osoby.map((o) => [o.id, aktivniCinnosti(o).map((p) => p.cinnostId)]),
+    ));
+  }, [osoby]);
 
   const skoleniMap = useMemo(
     () => Object.fromEntries(skoleni.map((s) => [s.id, s])),
     [skoleni],
   );
+
+  function zmenPrah(v: string) {
+    setPrah(Number(v));
+    if (typeof window !== 'undefined') window.localStorage.setItem(PRAH_KLIC, v);
+  }
 
   /**
    * Stav buňky = nejhorší stav ze všech školení, která z činnosti plynou.
@@ -662,20 +694,6 @@ function Matice({
     return { stav: nejhorsi, popis: popisy.join('\n') };
   }
 
-  useEffect(() => {
-    setLokalni(Object.fromEntries(
-      osoby.map((o) => [o.id, aktivniCinnosti(o).map((p) => p.cinnostId)]),
-    ));
-  }, [osoby]);
-
-  if (!klientId) {
-    return (
-      <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
-        Matice se zobrazí po výběru konkrétního klienta.
-      </CardContent></Card>
-    );
-  }
-
   async function prepni(o: OsobaRadek, cinnostId: string) {
     const klic = `${o.id}-${cinnostId}`;
     setUklada(klic);
@@ -704,6 +722,14 @@ function Matice({
     } finally {
       setUklada(null);
     }
+  }
+
+  if (!klientId) {
+    return (
+      <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
+        Matice se zobrazí po výběru konkrétního klienta.
+      </CardContent></Card>
+    );
   }
 
   return (
@@ -817,14 +843,6 @@ function SekcePozice({
   const [otevrena, setOtevrena] = useState<string | null>(null);
   const [aplikuje, setAplikuje] = useState<string | null>(null);
 
-  if (!klientId) {
-    return (
-      <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
-        Pozice se spravují po výběru konkrétního klienta.
-      </CardContent></Card>
-    );
-  }
-
   async function pridej() {
     if (!nazev.trim() || !klientId) return;
     await addDoc(collection(db, 'klienti', klientId, 'pozice'), {
@@ -886,6 +904,14 @@ function SekcePozice({
     }
   }
 
+  if (!klientId) {
+    return (
+      <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
+        Pozice se spravují po výběru konkrétního klienta.
+      </CardContent></Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -921,105 +947,105 @@ function SekcePozice({
           <div className="divide-y border-t">
             {pozice.map((p) => (
               <div key={p.id} className="py-3 space-y-3">
-              <div className="grid gap-3 sm:grid-cols-[auto_1fr_140px_180px_auto] items-center">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
-                  onClick={() => setOtevrena(otevrena === p.id ? null : p.id)}
-                  title="Výchozí činnosti"
-                >
-                  {otevrena === p.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                </Button>
-                <Input
-                  value={p.nazev}
-                  onChange={(e) => uprav(p.id, { nazev: e.target.value })}
-                  className="h-9"
-                />
-                <Select
-                  value={p.kategorie ?? '__zadna__'}
-                  onValueChange={(v) => uprav(p.id, { kategorie: v === '__zadna__' ? null : (v as KodKategorie) })}
-                >
-                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Kategorie…" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__zadna__">— nezařazeno —</SelectItem>
-                    {KATEGORIE.map((k) => (
-                      <SelectItem key={k} value={k}>Kategorie {k}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={!!p.jeVedouci}
-                    onCheckedChange={(v) => uprav(p.id, { jeVedouci: v })}
+                <div className="grid gap-3 sm:grid-cols-[auto_1fr_140px_180px_auto] items-center">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    onClick={() => setOtevrena(otevrena === p.id ? null : p.id)}
+                    title="Kategorizace a výchozí činnosti"
+                  >
+                    {otevrena === p.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </Button>
+                  <Input
+                    value={p.nazev}
+                    onChange={(e) => uprav(p.id, { nazev: e.target.value })}
+                    className="h-9"
                   />
-                  <span className="text-xs text-muted-foreground">vedoucí zaměstnanec</span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => uprav(p.id, { stav: 'smazano' })}
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-
-              {otevrena === p.id && (
-                <div className="ml-10 rounded-lg border bg-muted/20 p-4 space-y-4">
-                  <div className="rounded border bg-background px-3 py-3">
-                    <EditorFaktoru
-                      faktory={p.faktory}
-                      onZmena={(nove) => uprav(p.id, { faktory: nove })}
-                      popis="Faktory prostředí na této pozici. K nim se přičtou faktory z činností osoby."
+                  <Select
+                    value={p.kategorie ?? '__zadna__'}
+                    onValueChange={(v) => uprav(p.id, { kategorie: v === '__zadna__' ? null : (v as KodKategorie) })}
+                  >
+                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Kategorie…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__zadna__">— nezařazeno —</SelectItem>
+                      {KATEGORIE.map((k) => (
+                        <SelectItem key={k} value={k}>Kategorie {k}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={!!p.jeVedouci}
+                      onCheckedChange={(v) => uprav(p.id, { jeVedouci: v })}
                     />
+                    <span className="text-xs text-muted-foreground">vedoucí zaměstnanec</span>
                   </div>
-
-                  <div>
-                    <Label className="text-xs font-semibold">Výchozí činnosti pozice</Label>
-                    <p className="text-[11px] text-muted-foreground">
-                      Nové osobě na této pozici se přiřadí samy. Např. svářeč = svařování + jeřábník + vazač.
-                    </p>
-                  </div>
-                  {cinnosti.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Číselník činností je prázdný.</p>
-                  ) : (
-                    <div className="max-h-56 overflow-y-auto rounded border bg-background divide-y">
-                      {cinnosti.map((c) => {
-                        const vybrano = (p.vychoziCinnosti ?? []).includes(c.id);
-                        return (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => prepniVychozi(p, c.id)}
-                            className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-muted ${vybrano ? 'bg-blue-50/60 font-medium' : ''}`}
-                          >
-                            <span className={`h-3.5 w-3.5 shrink-0 rounded border ${vybrano ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`} />
-                            <span className="flex-1">{c.nazev}</span>
-                            {c.profesniRiziko && (
-                              <span className="text-[10px] text-amber-700">profesní riziko</span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={aplikuje === p.id || (p.vychoziCinnosti ?? []).length === 0}
-                      onClick={() => aplikujNaStavajici(p)}
-                    >
-                      {aplikuje === p.id && <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />}
-                      Doplnit stávajícím osobám
-                    </Button>
-                    <span className="text-[11px] text-muted-foreground">
-                      {osoby.filter((o) => o.poziceId === p.id).length} osob na pozici · pouze přidává, nic neodebírá
-                    </span>
-                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => uprav(p.id, { stav: 'smazano' })}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-              )}
+
+                {otevrena === p.id && (
+                  <div className="ml-10 rounded-lg border bg-muted/20 p-4 space-y-4">
+                    <div className="rounded border bg-background px-3 py-3">
+                      <EditorFaktoru
+                        faktory={p.faktory}
+                        onZmena={(nove) => uprav(p.id, { faktory: nove })}
+                        popis="Faktory prostředí na této pozici. K nim se přičtou faktory z činností osoby."
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-semibold">Výchozí činnosti pozice</Label>
+                      <p className="text-[11px] text-muted-foreground">
+                        Nové osobě na této pozici se přiřadí samy. Např. svářeč = svařování + jeřábník + vazač.
+                      </p>
+                    </div>
+                    {cinnosti.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Číselník činností je prázdný.</p>
+                    ) : (
+                      <div className="max-h-56 overflow-y-auto rounded border bg-background divide-y">
+                        {cinnosti.map((c) => {
+                          const vybrano = (p.vychoziCinnosti ?? []).includes(c.id);
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => prepniVychozi(p, c.id)}
+                              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-muted ${vybrano ? 'bg-blue-50/60 font-medium' : ''}`}
+                            >
+                              <span className={`h-3.5 w-3.5 shrink-0 rounded border ${vybrano ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`} />
+                              <span className="flex-1">{c.nazev}</span>
+                              {c.profesniRiziko && (
+                                <span className="text-[10px] text-amber-700">profesní riziko</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={aplikuje === p.id || (p.vychoziCinnosti ?? []).length === 0}
+                        onClick={() => aplikujNaStavajici(p)}
+                      >
+                        {aplikuje === p.id && <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />}
+                        Doplnit stávajícím osobám
+                      </Button>
+                      <span className="text-[11px] text-muted-foreground">
+                        {osoby.filter((o) => o.poziceId === p.id).length} osob na pozici · pouze přidává, nic neodebírá
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -1181,6 +1207,7 @@ function DialogImport({
           osobniCislo: hod('osobniCislo') || null,
           poziceId: poz?.id ?? null,
           datumNastupu: normalizujDatum(hod('datumNastupu')),
+          // výchozí činnosti pozice se doplní tlačítkem na záložce Pozice
           cinnosti: [],
           stav: 'aktivni',
         });
