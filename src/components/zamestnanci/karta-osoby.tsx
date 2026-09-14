@@ -93,7 +93,7 @@ export default function KartaOsoby({
 
   return (
     <Dialog open={!!osoba} onOpenChange={(o) => !o && zavri()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>{osoba ? celeJmeno(osoba) : ''}</DialogTitle>
           <DialogDescription>
@@ -126,7 +126,7 @@ export default function KartaOsoby({
                         <button
                           type="button"
                           onClick={() => setRozbaleny(rozbaleno ? null : m.uzel.id)}
-                          className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/40"
+                          className="flex w-full items-center gap-2 sm:gap-3 px-2.5 sm:px-3 py-2.5 text-left hover:bg-muted/40"
                         >
                           <span
                             className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
@@ -147,7 +147,7 @@ export default function KartaOsoby({
                                   ? <RotateCw className="h-3 w-3" />
                                   : <Circle className="h-2 w-2 fill-current" />}
                           </span>
-                          <span className="flex-1 text-sm font-medium">{m.uzel.nazev}</span>
+                          <span className="flex-1 text-[13px] sm:text-sm font-medium leading-tight">{m.uzel.nazev}</span>
                           {m.uzel.formular && (
                             <span className="hidden sm:flex items-center gap-1 text-[11px] text-muted-foreground">
                               <FileText className="h-3 w-3" />{m.uzel.formular}
