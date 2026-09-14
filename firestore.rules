@@ -243,6 +243,10 @@ service cloud.firestore {
       allow read: if maProfil();
       allow write: if isAdmin();
     }
+    match /ciselnikUzlu/{id} {
+      allow read: if maProfil();
+      allow write: if isAdmin();
+    }
 
     // ---------- dokumenty (soubory na Wedos uloziste) ----------
     // Metadata souboru. Vytvari je API route nahrat-soubor pod idTokenem
