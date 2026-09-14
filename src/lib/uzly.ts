@@ -39,6 +39,7 @@ export type UzavreniUzlu =
   | 'skolenim'         // záznam školení daného tématu
   | 'zacvikem'         // záznam školení s vyplněným datem ukončení
   | 'prohlidkou'       // záznam lékařské prohlídky
+  | 'doklady'          // platnost průkazů a osvědčení (může jich být víc)
   | 'kolem';           // účast na centrálním termínu (zatím nepoužito)
 
 export interface CiselnikUzel {
@@ -83,6 +84,7 @@ export const POPIS_UZAVRENI: Record<UzavreniUzlu, string> = {
   skolenim: 'Záznamem školení',
   zacvikem: 'Záznamem zácviku',
   prohlidkou: 'Záznamem prohlídky',
+  doklady: 'Platností průkazů a osvědčení',
   kolem: 'Účastí na centrálním termínu',
 };
 
@@ -157,13 +159,8 @@ export const VYCHOZI_UZLY: Omit<CiselnikUzel, 'id'>[] = [
   },
   {
     poradi: 140, faze: 'provoz', nazev: 'Platnost průkazů a osvědčení',
-    podminka: 'priCinnosti', uzavreni: 'rucne', stav: 'aktivni',
-    napoveda: 'Svářečský průkaz, profesní průkaz řidiče, doklad o odborné způsobilosti v elektrotechnice. Hlídá se konec platnosti dokladu, ne datum školení.',
-  },
-  {
-    poradi: 150, faze: 'provoz', nazev: 'Odborná kontrola OOPP',
-    podminka: 'priCinnosti', uzavreni: 'rucne', stav: 'aktivni',
-    napoveda: 'Prostředky proti pádu, přilby a dýchací technika mají vlastní lhůtu kontroly nebo exspiraci. Běžné OOPP se jen evidují.',
+    podminka: 'priCinnosti', uzavreni: 'doklady', stav: 'aktivni',
+    napoveda: 'Svářečský průkaz, profesní průkaz řidiče, doklad o odborné způsobilosti v elektrotechnice. Hlídá se konec platnosti uvedený na dokladu, ne perioda školení. Dokladů může mít osoba víc — vypisují se jednotlivě. Zapisují se na záložce Školení u témat označených jako doklad, do pole Platnost do.',
   },
 
   {
@@ -183,13 +180,6 @@ export const VYCHOZI_UZLY: Omit<CiselnikUzel, 'id'>[] = [
     formular: 'F006', stav: 'aktivni',
     napoveda: 'Prohlídka v úplném rozsahu resetuje periodu periodické prohlídky, v neúplném nikoli.',
   },
-  {
-    poradi: 240, faze: 'udalost', nazev: 'Pracovní úraz',
-    podminka: 'vzdy', uzavreni: 'rucne', stav: 'aktivni',
-    napoveda: 'Zapište do knihy úrazů. U úrazu s hospitalizací nad 5 dnů nebo s opakovanou pracovní neschopností následuje mimořádná prohlídka.',
-    predpis: 'NV č. 201/2010 Sb.',
-  },
-
   {
     poradi: 310, faze: 'ukonceni', nazev: 'Výstupní lékařská prohlídka',
     podminka: 'priUkonceni', uzavreni: 'prohlidkou', druhProhlidky: 'vystupni',
@@ -235,6 +225,8 @@ export interface VyhodnocenyUzel {
   dalsi?: string | null;
   /** perioda v měsících, ze které se termín počítá */
   perioda?: number;
+  /** jednotlivé doklady u uzlu typu „doklady" — průkazů může být víc */
+  doklady?: { nazev: string; platnostDo?: string | null; cislo?: string | null; stav: StavUzlu }[];
 }
 
 /** Uzel vyžaduje pozornost — po lhůtě, nebo úplně bez záznamu. */
@@ -336,6 +328,41 @@ export function vyhodnotMapu(
         datum = z?.datumDo;
       } else {
         datum = rucni?.[u.id];
+      }
+
+      // Průkazy a osvědčení: hlídá se platnost na dokladu, ne perioda.
+      // Osoba jich může mít víc (svářečský, VZV, elektro) — proto seznam.
+      if (u.uzavreni === 'doklady') {
+        const temata = skoleni.filter((s) => s.doklad);
+        const polozky = temata
+          .map((t) => {
+            const z = mojeUdalosti
+              .filter((x) => x.typ === 'skoleni' && x.temaId === t.id)
+              .sort((a, b) => (b.datum ?? '').localeCompare(a.datum ?? ''))[0];
+            if (!z) return null;
+            const konec = z.platnostDo ?? dalsiTermin(z, t.periodaMesice) ?? null;
+            return {
+              nazev: t.nazev,
+              platnostDo: konec,
+              cislo: z.cisloDokladu ?? null,
+              stav: stavTerminu(konec, prahMesicu) as StavUzlu,
+            };
+          })
+          .filter((x): x is NonNullable<typeof x> => !!x);
+
+        const poradi = { ok: 0, blizi: 1, chybi: 2, po: 3 } as Record<string, number>;
+        const nejhorsi = polozky.reduce<StavUzlu>(
+          (acc, x) => ((poradi[x.stav] ?? 0) > (poradi[acc] ?? 0) ? x.stav : acc),
+          'ok',
+        );
+
+        return {
+          uzel: u,
+          stav: polozky.length === 0 ? 'chybi' : nejhorsi,
+          datum: null,
+          dalsi: polozky.map((x) => x.platnostDo).filter(Boolean).sort()[0] ?? null,
+          doklady: polozky,
+        };
       }
 
       // Fáze Provoz je cyklus — nezajímá nás, že něco proběhlo, ale kdy je to zas.
