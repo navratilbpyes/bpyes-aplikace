@@ -154,7 +154,16 @@ export default function KartaOsoby({
                             </span>
                           )}
                           <span className="text-xs whitespace-nowrap text-right">
-                            {m.uzel.faze === 'provoz' ? (
+                            {m.uzel.uzavreni === 'doklady' ? (
+                              <span className={
+                                m.stav === 'po' ? 'text-red-700 font-bold'
+                                : m.stav === 'blizi' ? 'text-amber-700 font-medium'
+                                : m.stav === 'chybi' ? 'text-slate-400 italic'
+                                : 'text-emerald-700 font-medium'
+                              }>
+                                {m.stav === 'chybi' ? 'žádný doklad' : `nejbližší ${formatDatum(m.dalsi)}`}
+                              </span>
+                            ) : m.uzel.faze === 'provoz' ? (
                               <>
                                 <span className={
                                   m.stav === 'po' ? 'text-red-700 font-bold'
@@ -190,7 +199,33 @@ export default function KartaOsoby({
                               <p className="text-[11px] text-muted-foreground">{m.uzel.predpis}</p>
                             )}
 
-                            {rucni ? (
+                            {m.uzel.uzavreni === 'doklady' ? (
+                              (m.doklady ?? []).length === 0 ? (
+                                <p className="text-[11px] text-muted-foreground">
+                                  Osoba nemá zapsaný žádný průkaz ani osvědčení. Zapisují se
+                                  na záložce Školení u témat označených jako doklad.
+                                </p>
+                              ) : (
+                                <div className="rounded border bg-background divide-y">
+                                  {(m.doklady ?? []).map((d, i) => (
+                                    <div key={i} className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs">
+                                      <span className="min-w-0">
+                                        <span className="font-medium">{d.nazev}</span>
+                                        {d.cislo && <span className="text-muted-foreground"> · č. {d.cislo}</span>}
+                                      </span>
+                                      <span className={
+                                        d.stav === 'po' ? 'text-red-700 font-bold whitespace-nowrap'
+                                        : d.stav === 'blizi' ? 'text-amber-700 font-medium whitespace-nowrap'
+                                        : d.stav === 'chybi' ? 'text-slate-400 italic whitespace-nowrap'
+                                        : 'text-emerald-700 font-medium whitespace-nowrap'
+                                      }>
+                                        {d.stav === 'chybi' ? 'bez platnosti' : `platí do ${formatDatum(d.platnostDo)}`}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )
+                            ) : rucni ? (
                               <div className="flex items-end gap-2">
                                 <div className="space-y-1">
                                   <Label className="text-xs">Splněno dne</Label>
