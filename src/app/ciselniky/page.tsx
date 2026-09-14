@@ -27,7 +27,7 @@ import { PERIODY as PERIODY_REVIZE, generujLhutaText } from '@/lib/revize';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
 import type { CiselnikRevize, Oblast, TypLhuty } from '@/lib/revize';
 import { POZARNI_RADKY } from '@/lib/pozarni-kniha';
-import { IkonaSkoleni, Wrench, HardHat, Route, Plus, X, Loader2 } from 'lucide-react';
+import { GraduationCap as IkonaSkoleni, Wrench, HardHat, Route, Plus, X, Loader2 } from 'lucide-react';
 import SekceUzly from '@/components/ciselniky/sekce-uzly';
 
 const OBLASTI: Oblast[] = ['Elektro', 'Tlak', 'Zdvihací', 'PO', 'Ostatní'];
