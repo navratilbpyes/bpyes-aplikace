@@ -16,13 +16,62 @@ import { auth } from '@/components/data-provider';
 /** Stav protokolu na revizi/školení. */
 export type ProtokolStav = 'ceka' | 'videl' | 'odmitnuto';
 
-/** Protokolová pole, která žijí na dokumentu revize/školení. */
+/** Jeden nahraný protokol. Revize jich může mít víc (dílčí protokoly, přílohy). */
+export interface ProtokolPolozka {
+  id: string;
+  dokumentId: string;
+  nazev: string;
+  stav: ProtokolStav;
+  duvod?: string | null;
+  nahranoIso: string;
+}
+
+/**
+ * Protokolová pole na dokumentu revize/školení.
+ *
+ * Historicky zde byl jeden protokol (protokolDokumentId a spol.). Nově se
+ * ukládá pole `protokoly`. Stará pole zůstávají kvůli existujícím záznamům
+ * a report je čte dál — při prvním zásahu se záznam převede funkcí `sjednot`.
+ */
 export interface ProtokolPole {
+  protokoly?: ProtokolPolozka[];
   protokolDokumentId?: string | null;
   protokolNazev?: string | null;
   protokolStav?: ProtokolStav | null;
   /** důvod odmítnutí (vyplní OZO při 'odmitnuto') */
   protokolDuvod?: string | null;
+}
+
+/** Vrátí seznam protokolů — starý jednoprotokolový tvar převede na pole. */
+export function seznamProtokolu(d: ProtokolPole): ProtokolPolozka[] {
+  if (d.protokoly && d.protokoly.length > 0) return d.protokoly;
+  if (d.protokolDokumentId) {
+    return [{
+      id: 'puvodni',
+      dokumentId: d.protokolDokumentId,
+      nazev: d.protokolNazev ?? 'protokol',
+      stav: (d.protokolStav ?? 'ceka') as ProtokolStav,
+      duvod: d.protokolDuvod ?? null,
+      nahranoIso: '',
+    }];
+  }
+  return [];
+}
+
+/**
+ * Sestaví zápis protokolových polí z nového seznamu.
+ * První protokol se zrcadlí i do starých polí, aby report a časový plán,
+ * které je čtou, fungovaly beze změny.
+ */
+export function zapisProtokoly(seznam: ProtokolPolozka[]): ProtokolPole {
+  const prvni = seznam[0];
+  return {
+    protokoly: seznam,
+    protokolDokumentId: prvni?.dokumentId ?? null,
+    protokolNazev: prvni?.nazev ?? null,
+    protokolStav: prvni?.stav ?? null,
+    protokolDuvod: prvni?.duvod ?? null,
+  };
 }
 
 /** Povolené typy souboru (shodné s API routou nahrat-soubor). */
