@@ -47,6 +47,8 @@ export default function SkoleniKlienta({ klientId }: Props) {
   const [ciselnik, setCiselnik] = useState<CiselnikSkoleni[]>([]);
   const [nacitam, setNacitam] = useState(true);
   const [vybrane, setVybrane] = useState('');
+  /** filtr oblasti — číselník má 49 položek, výběr bez něj je nepřehledný */
+  const [fOblast, setFOblast] = useState('vse');
   const [rozbaleno, setRozbaleno] = useState<string | null>(null);
 
   const cesta = useCallback(
@@ -142,6 +144,15 @@ export default function SkoleniKlienta({ klientId }: Props) {
     );
   }
 
+  // oblasti z číselníku (BOZP, PO, Doprava…) — přibude-li nová, objeví se sama
+  const oblasti = Array.from(
+    new Set(ciselnik.map((c) => c.oblast).filter((o): o is string => !!o)),
+  ).sort((a, b) => a.localeCompare(b, 'cs'));
+
+  const filtrovanyCiselnik = fOblast === 'vse'
+    ? ciselnik
+    : ciselnik.filter((c) => c.oblast === fOblast);
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -150,6 +161,20 @@ export default function SkoleniKlienta({ klientId }: Props) {
 
       <CardContent className="space-y-4">
         <div className="flex flex-wrap gap-2">
+          {oblasti.length > 0 && (
+            <Select value={fOblast} onValueChange={(v) => { setFOblast(v); setVybrane(''); }}>
+              <SelectTrigger className="w-full sm:w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="vse">Všechny oblasti</SelectItem>
+                {oblasti.map((o) => (
+                  <SelectItem key={o} value={o}>{o}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           <Select value={vybrane} onValueChange={setVybrane}>
             <SelectTrigger className="flex-1 min-w-[220px]">
               <SelectValue placeholder="Vyber téma z číselníku…" />
@@ -160,9 +185,9 @@ export default function SkoleniKlienta({ klientId }: Props) {
                   Číselník je prázdný — naplň jej v sekci Číselníky.
                 </div>
               )}
-              {ciselnik.map((c) => (
+              {filtrovanyCiselnik.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
-                  {c.nazev} ({popisPeriody(c.periodaMesice)})
+                  {fOblast === 'vse' && c.oblast ? `[${c.oblast}] ` : ''}{c.nazev} ({popisPeriody(c.periodaMesice)})
                 </SelectItem>
               ))}
             </SelectContent>
