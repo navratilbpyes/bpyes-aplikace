@@ -111,6 +111,8 @@ export interface RevizeKlienta {
   typLhuty?: TypLhuty;
   /** mapování na řádek požární knihy (snapshot z číselníku) */
   pozarniRadek?: string | null;
+  /** nedostatky zjištěné revizí a stav jejich odstranění */
+  nedostatky?: import('@/components/nedostatky-revize').Nedostatek[];
 }
 
 /** Přičte měsíce k datu (ISO in, ISO out). Klouzavý výpočet. */
