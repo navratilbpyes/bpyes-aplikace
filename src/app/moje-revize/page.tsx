@@ -42,6 +42,8 @@ import type { SkoleniKlienta } from '@/lib/skoleni';
 import VlaknoKomentaru from '@/components/komentare/vlakno';
 import ProtokolUpload from '@/components/protokol-upload';
 import type { ProtokolPole } from '@/lib/protokol';
+import NedostatkyRevize from '@/components/nedostatky-revize';
+import type { NedostatkyPole } from '@/components/nedostatky-revize';
 
 type Druh = 'revize' | 'skoleni';
 
@@ -468,6 +470,16 @@ export default function MojeRevizePage() {
                       </div>
                     </div>
                   )}
+                  {/* Nedostatky z revize — klient doplňuje odstranění */}
+                  {druh === 'revize' && (
+                    <div className="mt-4 pt-4 border-t">
+                      <NedostatkyRevize
+                        data={z as NedostatkyPole}
+                        onUlozit={(zmeny) => uprav(z.id, zmeny as Partial<Polozka>)}
+                      />
+                    </div>
+                  )}
+
                   {/* Protokol / revizní zpráva — lze nahrát i k OZO záznamu */}
                   <div className="mt-4 pt-4 border-t">
                     <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
