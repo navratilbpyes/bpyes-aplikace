@@ -61,7 +61,7 @@ function homografie(cil: Bod[], zdroj: Bod[]): number[] {
 }
 
 /** Narovná čtyřúhelník ze zdrojového obrázku do obdélníku dané šířky. */
-function narovnej(img: HTMLImageElement, rohy: Bod[], maxSirka = 1600): HTMLCanvasElement {
+function narovnej(img: HTMLImageElement, rohy: Bod[], maxSirka = 1800): HTMLCanvasElement {
   const vzdal = (a: Bod, b: Bod) => Math.hypot(a.x - b.x, a.y - b.y);
   const sirka = Math.max(vzdal(rohy[0], rohy[1]), vzdal(rohy[3], rohy[2]));
   const vyska = Math.max(vzdal(rohy[0], rohy[3]), vzdal(rohy[1], rohy[2]));
@@ -247,7 +247,7 @@ export default function OrezFotky({
       const c = narovnej(img, rohy);
       if (vylepsit) zvyrazni(c);
       const blob: Blob = await new Promise((res) =>
-        c.toBlob((b) => res(b!), 'image/jpeg', 0.9));
+        c.toBlob((b) => res(b!), 'image/jpeg', 0.75));
       const nazev = soubor.name.replace(/\.[^.]+$/, '') + '-sken.jpg';
       hotovo(new File([blob], nazev, { type: 'image/jpeg' }));
     } finally {
