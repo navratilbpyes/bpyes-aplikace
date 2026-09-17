@@ -78,12 +78,19 @@ export function zapisProtokoly(seznam: ProtokolPolozka[]): ProtokolPole {
 export const POVOLENE_TYPY = ['application/pdf', 'image/jpeg', 'image/png'];
 export const MAX_VELIKOST = 20 * 1024 * 1024;
 
-/** Vrátí čerstvý Firebase idToken přihlášeného uživatele, nebo null. */
-async function idToken(): Promise<string | null> {
+/**
+ * Vrátí Firebase idToken přihlášeného uživatele, nebo null.
+ *
+ * `vynutit` obnoví token i když ještě nevypršel. Bez toho vrací SDK token
+ * z mezipaměti a po hodině otevřené aplikace každý upload spadne na 401 —
+ * projevovalo se to při delší práci s revizemi (prvních pár souborů projde,
+ * pak přestane). Zápisové operace proto token vždy obnovují.
+ */
+async function idToken(vynutit = false): Promise<string | null> {
   const u = auth.currentUser;
   if (!u) return null;
   try {
-    return await u.getIdToken();
+    return await u.getIdToken(vynutit);
   } catch {
     return null;
   }
@@ -102,7 +109,7 @@ export async function nahrajProtokol(soubor: File, cilovyKlientId?: string): Pro
     throw new Error('Nepovolený typ souboru (jen PDF, JPG, PNG).');
   }
 
-  const token = await idToken();
+  const token = await idToken(true);
   if (!token) throw new Error('Nejste přihlášeni.');
 
   const form = new FormData();
@@ -119,6 +126,9 @@ export async function nahrajProtokol(soubor: File, cilovyKlientId?: string): Pro
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data?.souborId) {
+    if (res.status === 401) {
+      throw new Error('Přihlášení vypršelo. Obnovte stránku a zkuste to znovu.');
+    }
     throw new Error(data?.chyba ?? 'Nahrání selhalo.');
   }
   return data.souborId as string;
@@ -128,13 +138,16 @@ export async function nahrajProtokol(soubor: File, cilovyKlientId?: string): Pro
  * Vyžádá dočasný podepsaný odkaz ke stažení protokolu.
  * `dokumentId` je hodnota `protokolDokumentId` z revize.
  */
-export async function odkazProtokolu(dokumentId: string): Promise<string> {
-  const token = await idToken();
+export async function odkazProtokolu(dokumentId: string, nahled = false): Promise<string> {
+  const token = await idToken(true);
   if (!token) throw new Error('Nejste přihlášeni.');
 
-  const res = await fetch(`/api/odkaz-souboru?id=${encodeURIComponent(dokumentId)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetch(
+    `/api/odkaz-souboru?id=${encodeURIComponent(dokumentId)}${nahled ? '&nahled=1' : ''}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data?.odkaz) {
@@ -144,7 +157,12 @@ export async function odkazProtokolu(dokumentId: string): Promise<string> {
 }
 
 /** Otevře protokol v nové kartě (vyžádá odkaz a přesměruje). */
-export async function otevriProtokol(dokumentId: string): Promise<void> {
-  const odkaz = await odkazProtokolu(dokumentId);
+export async function otevriProtokol(dokumentId: string, nahled = false): Promise<void> {
+  const odkaz = await odkazProtokolu(dokumentId, nahled);
   window.open(odkaz, '_blank', 'noopener,noreferrer');
+}
+
+/** Přípona z názvu souboru — rozhoduje, čím se náhled vykreslí. */
+export function jeObrazek(nazev: string): boolean {
+  return /\.(jpe?g|png|gif|webp)$/i.test(nazev);
 }
