@@ -61,6 +61,9 @@ export default function ProtokolUpload({ klientId, data, onUlozit, adminMode, di
   const [odmitam, setOdmitam] = useState<string | null>(null);
   const [duvod, setDuvod] = useState('');
   const [kOrezu, setKOrezu] = useState<File | null>(null);
+  const [nadOblasti, setNadOblasti] = useState(false);
+  /** fronta čekajících souborů — víc protokolů naráz se nahrává po jednom */
+  const [fronta, setFronta] = useState<File[]>([]);
 
   const seznam = seznamProtokolu(data);
   const busy = nahravam || ukladam;
@@ -94,6 +97,7 @@ export default function ProtokolUpload({ klientId, data, onUlozit, adminMode, di
         },
       ]);
       toast({ title: 'Protokol nahrán', description: 'Čeká na kontrolu OZO.' });
+      dalsiZFronty();
     } catch (e: any) {
       toast({ title: 'Nahrání selhalo', description: e?.message ?? 'Zkuste to znovu.', variant: 'destructive' });
     } finally {
@@ -106,6 +110,37 @@ export default function ProtokolUpload({ klientId, data, onUlozit, adminMode, di
   function zpracujSoubor(soubor: File) {
     if (soubor.type.startsWith('image/')) setKOrezu(soubor);
     else nahraj(soubor);
+  }
+
+  /**
+   * Přijme jeden i víc souborů. Nepovolené typy zahodí s hláškou,
+   * zbytek zpracuje po jednom — ořez je dialog a ten nejde otevřít vícekrát.
+   */
+  function prijmi(soubory: File[]) {
+    const povolene = soubory.filter((f) => POVOLENE_TYPY.includes(f.type));
+    const zahozene = soubory.length - povolene.length;
+    if (zahozene > 0) {
+      toast({
+        title: `${zahozene} ${zahozene === 1 ? 'soubor byl' : 'souborů bylo'} přeskočeno`,
+        description: 'Přijímáme jen PDF, JPG a PNG.',
+        variant: 'destructive',
+      });
+    }
+    if (povolene.length === 0) return;
+    const [prvni, ...zbytek] = povolene;
+    setFronta(zbytek);
+    zpracujSoubor(prvni);
+  }
+
+  /** Pustí další soubor z fronty, jakmile je předchozí hotový. */
+  function dalsiZFronty() {
+    setFronta((f) => {
+      if (f.length === 0) return f;
+      const [dalsi, ...zbytek] = f;
+      // odložit o tick, ať se stihne zavřít předchozí dialog
+      setTimeout(() => zpracujSoubor(dalsi), 0);
+      return zbytek;
+    });
   }
 
   async function odeber(id: string) {
@@ -140,10 +175,12 @@ export default function ProtokolUpload({ klientId, data, onUlozit, adminMode, di
         ref={inputRef}
         type="file"
         accept={POVOLENE_TYPY.join(',')}
+        multiple
         className="hidden"
         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) zpracujSoubor(f);
+          const f = Array.from(e.target.files ?? []);
+          if (f.length > 0) prijmi(f);
+          e.target.value = '';
         }}
       />
 
@@ -240,26 +277,56 @@ export default function ProtokolUpload({ klientId, data, onUlozit, adminMode, di
         </div>
       )}
 
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={disabled || busy}
-        onClick={() => inputRef.current?.click()}
+      {/* Zóna pro přetažení. Kliknutí funguje stejně jako dřív — na mobilu
+          se přetahovat nedá, takže musí zůstat plnohodnotnou alternativou. */}
+      <div
+        role="button"
+        tabIndex={disabled || busy ? -1 : 0}
+        onClick={() => !disabled && !busy && inputRef.current?.click()}
+        onKeyDown={(e) => {
+          if ((e.key === 'Enter' || e.key === ' ') && !disabled && !busy) {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
+        onDragOver={(e) => { e.preventDefault(); if (!disabled && !busy) setNadOblasti(true); }}
+        onDragLeave={() => setNadOblasti(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setNadOblasti(false);
+          if (disabled || busy) return;
+          const f = Array.from(e.dataTransfer.files ?? []);
+          if (f.length > 0) prijmi(f);
+        }}
+        className={cn(
+          'flex flex-col items-center gap-1 rounded-lg border border-dashed px-4 py-5 text-center transition-colors',
+          disabled || busy
+            ? 'cursor-not-allowed opacity-60'
+            : 'cursor-pointer hover:border-blue-400 hover:bg-blue-50/40',
+          nadOblasti && 'border-blue-500 bg-blue-50',
+        )}
       >
-        {nahravam ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-        {seznam.length === 0 ? 'Nahrát protokol (PDF/JPG/PNG)' : 'Přidat další protokol'}
-      </Button>
-
-      {seznam.length === 0 && (
+        {nahravam ? (
+          <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+        ) : (
+          <Upload className="h-5 w-5 text-muted-foreground" />
+        )}
+        <p className="text-sm font-medium">
+          {nahravam
+            ? `Nahrávám…${fronta.length > 0 ? ` (zbývá ${fronta.length})` : ''}`
+            : seznam.length === 0 ? 'Nahrát protokol' : 'Přidat další protokol'}
+        </p>
+        <p className="text-[11px] text-muted-foreground">
+          Přetáhněte sem soubory, nebo klepněte pro výběr · PDF, JPG, PNG · lze i více naráz
+        </p>
         <p className="text-[11px] text-muted-foreground flex items-center gap-1">
           <ImageIcon className="h-3 w-3" /> Vyfocenou listinu lze před nahráním narovnat.
         </p>
-      )}
+      </div>
 
       <OrezFotky
         soubor={kOrezu}
-        zavri={() => { setKOrezu(null); if (inputRef.current) inputRef.current.value = ''; }}
+        zavri={() => { setKOrezu(null); dalsiZFronty(); }}
         hotovo={(upraveny) => { setKOrezu(null); nahraj(upraveny); }}
       />
     </div>
