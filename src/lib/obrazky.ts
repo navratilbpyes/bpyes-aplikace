@@ -76,6 +76,24 @@ export const FOTO_NEDOSTATKU: KompreseNastaveni = {
 };
 
 /** Razítko a podpis: menší, na bílém podkladu (kvůli průhlednému PNG). */
+/**
+ * Naskenovaná listina (revizní protokol, doklad o školení).
+ * Větší rozměr než u fotek nedostatků — text musí zůstat čitelný —
+ * ale pořád řádově menší než originál z mobilu (8 MB → ~400 kB).
+ */
+export const SKEN_DOKUMENTU: KompreseNastaveni = {
+  maxRozmer: 1800,
+  kvalita: 0.75,
+  podklad: '#ffffff',
+};
+
+/** Vyrobí ze zkomprimovaného data URL soubor k odeslání na úložiště. */
+export async function dataUrlNaSoubor(dataUrl: string, nazev: string): Promise<File> {
+  const blob = await (await fetch(dataUrl)).blob();
+  const cistyNazev = nazev.replace(/\.[^.]+$/, '') + '.jpg';
+  return new File([blob], cistyNazev, { type: 'image/jpeg' });
+}
+
 export const RAZITKO_PODPIS: KompreseNastaveni = {
   maxRozmer: 500,
   kvalita: 0.7,
