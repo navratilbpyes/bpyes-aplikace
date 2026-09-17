@@ -32,6 +32,7 @@ import {
 } from '@/lib/protokol';
 import type { ProtokolPole, ProtokolStav, ProtokolPolozka } from '@/lib/protokol';
 import OrezFotky from '@/components/orez-fotky';
+import { compressImage, dataUrlNaSoubor, SKEN_DOKUMENTU } from '@/lib/obrazky';
 
 interface Props {
   /** klientId cílové revize/školení — admin ho posílá do uploadu */
@@ -69,9 +70,17 @@ export default function ProtokolUpload({ klientId, data, onUlozit, adminMode, di
     await onUlozit(zapisProtokoly(novy));
   }
 
-  async function nahraj(soubor: File) {
+  async function nahraj(vstup: File) {
     setNahravam(true);
     try {
+      // Fotky se vždy zmenší — originál z mobilu má i 8 MB a PHP na úložišti
+      // ho odmítne. Text na listině musí zůstat čitelný, proto 1800 px.
+      let soubor = vstup;
+      if (vstup.type.startsWith('image/')) {
+        const dataUrl = await compressImage(vstup, SKEN_DOKUMENTU);
+        const zmenseny = await dataUrlNaSoubor(dataUrl, vstup.name);
+        if (zmenseny.size < vstup.size) soubor = zmenseny;
+      }
       const dokumentId = await nahrajProtokol(soubor, klientId);
       await ulozSeznam([
         ...seznam,
