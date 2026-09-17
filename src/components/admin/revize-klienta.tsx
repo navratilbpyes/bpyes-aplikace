@@ -30,6 +30,8 @@ import { PERIODY, popisPeriody, dopocitejDalsi, platnyTermin } from '@/lib/reviz
 import type { CiselnikRevize, RevizeKlienta as TypRevize } from '@/lib/revize';
 import ProtokolUpload from '@/components/protokol-upload';
 import type { ProtokolPole } from '@/lib/protokol';
+import NedostatkyRevize from '@/components/nedostatky-revize';
+import type { NedostatkyPole } from '@/components/nedostatky-revize';
 
 interface Props {
   klientId: string;
@@ -486,6 +488,14 @@ export default function RevizeKlienta({ klientId }: Props) {
                           Vrátit k automatickému výpočtu
                         </Button>
                       )}
+
+                      {/* Nedostatky z protokolu a jejich odstranění */}
+                      <div className="rounded-md border bg-muted/30 p-3">
+                        <NedostatkyRevize
+                          data={r as NedostatkyPole}
+                          onUlozit={(zmeny) => uprav(r.id, zmeny as Partial<TypRevize>)}
+                        />
+                      </div>
 
                       {/* Revizní protokol — nahrání / kontrola OZO */}
                       <div className="rounded-md border bg-muted/30 p-3 space-y-2">
