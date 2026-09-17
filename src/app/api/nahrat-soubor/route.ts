@@ -110,7 +110,11 @@ export async function POST(req: NextRequest) {
 
   const user = await overToken(idToken);
   if (!user) {
-    return NextResponse.json({ chyba: 'Neplatný token' }, { status: 401 });
+    // Nejčastěji vypršelá platnost po delší práci v otevřené aplikaci.
+    return NextResponse.json(
+      { chyba: 'Přihlášení vypršelo. Obnovte stránku a zkuste to znovu.' },
+      { status: 401 },
+    );
   }
 
   const profil = await nactiProfil(user.uid, idToken);
