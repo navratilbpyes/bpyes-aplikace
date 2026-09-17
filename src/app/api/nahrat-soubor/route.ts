@@ -161,12 +161,45 @@ export async function POST(req: NextRequest) {
   odeslat.append('podpis', podpis);
   odeslat.append('soubor', soubor);
 
-  const wedos = await fetch(ENDPOINT, { method: 'POST', body: odeslat });
-  const vysledek = await wedos.json();
-
-  if (!wedos.ok || !vysledek.ok) {
+  // Konfigurace chybí → jasná hláška místo pádu na undefined v createHmac/fetch.
+  if (!SECRET || !ENDPOINT) {
+    console.error('nahrat-soubor: chybí APP_UPLOAD_SECRET nebo UPLOAD_ENDPOINT');
     return NextResponse.json(
-      { chyba: vysledek.chyba ?? 'Nahrání selhalo' },
+      { chyba: 'Úložiště není nakonfigurováno (chybí ENV na serveru).' },
+      { status: 500 },
+    );
+  }
+
+  let wedos: Response;
+  try {
+    wedos = await fetch(ENDPOINT, { method: 'POST', body: odeslat });
+  } catch (e: any) {
+    console.error('nahrat-soubor: Wedos nedostupný', e?.message);
+    return NextResponse.json({ chyba: 'Úložiště neodpovídá. Zkuste to znovu.' }, { status: 502 });
+  }
+
+  // PHP při překročení upload_max_filesize vrací HTML, ne JSON — pak by json()
+  // vyhodil výjimku a route spadla na neinformativní 500. Čteme proto text.
+  const telo = await wedos.text();
+  let vysledek: any = null;
+  try {
+    vysledek = JSON.parse(telo);
+  } catch {
+    console.error('nahrat-soubor: Wedos nevrátil JSON', wedos.status, telo.slice(0, 300));
+    return NextResponse.json(
+      {
+        chyba: wedos.status === 413 || /entity too large|upload_max/i.test(telo)
+          ? 'Soubor je pro úložiště příliš velký.'
+          : `Úložiště vrátilo neočekávanou odpověď (HTTP ${wedos.status}).`,
+      },
+      { status: 502 },
+    );
+  }
+
+  if (!wedos.ok || !vysledek?.ok) {
+    console.error('nahrat-soubor: Wedos odmítl', wedos.status, vysledek?.chyba);
+    return NextResponse.json(
+      { chyba: vysledek?.chyba ?? 'Nahrání selhalo' },
       { status: wedos.status || 500 },
     );
   }
@@ -182,7 +215,11 @@ export async function POST(req: NextRequest) {
   });
 
   if (!zapisOk) {
-    return NextResponse.json({ chyba: 'Metadata se nepodařilo uložit' }, { status: 500 });
+    console.error('nahrat-soubor: zápis metadat selhal', { klientId, souborId: vysledek.souborId });
+    return NextResponse.json(
+      { chyba: 'Soubor se nahrál, ale metadata se nepodařilo uložit (Firestore Rules?).' },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ ok: true, souborId: vysledek.souborId });
