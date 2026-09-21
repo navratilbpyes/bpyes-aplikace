@@ -27,11 +27,13 @@ import {
 import { cn } from '@/app/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import {
-  nahrajProtokol, otevriProtokol, POVOLENE_TYPY,
+  nahrajProtokol, POVOLENE_TYPY,
   seznamProtokolu, zapisProtokoly,
 } from '@/lib/protokol';
 import type { ProtokolPole, ProtokolStav, ProtokolPolozka } from '@/lib/protokol';
 import OrezFotky from '@/components/orez-fotky';
+import NahledDokumentu from '@/components/nahled-dokumentu';
+import type { NahledCil } from '@/components/nahled-dokumentu';
 import { compressImage, dataUrlNaSoubor, SKEN_DOKUMENTU } from '@/lib/obrazky';
 
 interface Props {
@@ -64,6 +66,7 @@ export default function ProtokolUpload({ klientId, data, onUlozit, adminMode, di
   const [nadOblasti, setNadOblasti] = useState(false);
   /** fronta čekajících souborů — víc protokolů naráz se nahrává po jednom */
   const [fronta, setFronta] = useState<File[]>([]);
+  const [nahled, setNahled] = useState<NahledCil | null>(null);
 
   const seznam = seznamProtokolu(data);
   const busy = nahravam || ukladam;
@@ -193,7 +196,8 @@ export default function ProtokolUpload({ klientId, data, onUlozit, adminMode, di
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
                     type="button"
-                    onClick={() => otevriProtokol(p.dokumentId)}
+                    onClick={() => setNahled({ dokumentId: p.dokumentId, nazev: p.nazev })}
+                    title="Zobrazit náhled"
                     className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-700 hover:underline min-w-0"
                   >
                     <FileText className="h-4 w-4 shrink-0" />
@@ -323,6 +327,8 @@ export default function ProtokolUpload({ klientId, data, onUlozit, adminMode, di
           <ImageIcon className="h-3 w-3" /> Vyfocenou listinu lze před nahráním narovnat.
         </p>
       </div>
+
+      <NahledDokumentu cil={nahled} zavri={() => setNahled(null)} />
 
       <OrezFotky
         soubor={kOrezu}
