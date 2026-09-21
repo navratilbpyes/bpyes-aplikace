@@ -162,6 +162,25 @@ export async function otevriProtokol(dokumentId: string, nahled = false): Promis
   window.open(odkaz, '_blank', 'noopener,noreferrer');
 }
 
+/**
+ * Načte soubor k zobrazení v aplikaci a vrátí lokální URL (blob:).
+ * Obchází to download.php, který soubor vždy posílá ke stažení.
+ * Volající musí URL po použití uvolnit přes URL.revokeObjectURL.
+ */
+export async function nahledProtokolu(dokumentId: string): Promise<{ url: string; typ: string }> {
+  const token = await idToken(true);
+  if (!token) throw new Error('Nejste přihlášeni.');
+  const res = await fetch(`/api/nahled-souboru?id=${encodeURIComponent(dokumentId)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.chyba ?? 'Náhled se nepodařilo načíst.');
+  }
+  const blob = await res.blob();
+  return { url: URL.createObjectURL(blob), typ: blob.type };
+}
+
 /** Přípona z názvu souboru — rozhoduje, čím se náhled vykreslí. */
 export function jeObrazek(nazev: string): boolean {
   return /\.(jpe?g|png|gif|webp)$/i.test(nazev);
