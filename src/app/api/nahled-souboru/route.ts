@@ -123,6 +123,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ chyba: 'Úložiště neodpovídá.' }, { status: 502 });
   }
   if (!wedos.ok || !wedos.body) {
+    // Tělo do logu — HTML stránka tu obvykle znamená ochranu hostingu, ne chybu PHP.
+    const telo = await wedos.text().catch(() => '');
+    console.error('nahled-souboru: Wedos odmítl', wedos.status, telo.slice(0, 1500));
     return NextResponse.json({ chyba: `Soubor se nepodařilo načíst (HTTP ${wedos.status}).` }, { status: 502 });
   }
 
