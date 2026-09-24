@@ -386,6 +386,8 @@ export default function NewInspectionPage() {
         klientSnapshot,
         kontrolniBody: finalKontrolniBody,
         zavady: aggregatedZavady,
+        // Oddíly vyřazené z prověrky – aby je editace záznamu zachovala.
+        disabledSections,
         stav: finalStav,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
