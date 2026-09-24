@@ -106,6 +106,28 @@ export default function EditInspectionPage() {
       });
     });
     setPointDefects(initialDefects);
+
+    // Vyřazené oddíly: novější záznamy je mají uložené. U starších záznamů
+    // (bez pole disabledSections) je dopočítáme – za vyřazený považujeme oddíl,
+    // ve kterém není uložený žádný kontrolní bod. Protokol se skládá jen
+    // z uložených bodů, takže tento odhad nezmění výsledný dokument.
+    if (Array.isArray((recordToEdit as any).disabledSections)) {
+      setDisabledSections((recordToEdit as any).disabledSections);
+    } else {
+      const typ = recordToEdit.typKontroly || 'BOZPaPO';
+      const sekceTypu: any[] =
+        typ === 'PPP' ? CHECKLIST_PPP :
+        typ === 'PBOZP' ? CHECKLIST_PBOZP :
+        typ === 'PBOZPS' ? CHECKLIST_PBOZPS :
+        typ === 'BOZPaPO' ? CHECKLIST_SECTIONS :
+        [];
+      const ulozeneBody = new Set((recordToEdit.kontrolniBody || []).map((kb: any) => String(kb.bod)));
+      const odhadVyrazenych = sekceTypu
+        .filter((s: any) => !(s.points || []).some((p: any) => ulozeneBody.has(String(p.id))))
+        .map((s: any) => `ODDÍL ${s.id}: ${s.title}`);
+      setDisabledSections(odhadVyrazenych);
+    }
+
     setIsLoaded(true);
   }, [recordToEdit, isLoaded]);
 
@@ -313,6 +335,8 @@ export default function EditInspectionPage() {
         klientSnapshot,
         kontrolniBody: finalKontrolniBody,
         zavady: aggregatedZavady,
+        // Oddíly vyřazené z prověrky – uložíme, aby se při další editaci zachovaly.
+        disabledSections,
         stav: finalStav,
         createdAt: recordToEdit.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString()
