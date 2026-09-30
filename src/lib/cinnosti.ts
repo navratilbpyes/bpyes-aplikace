@@ -33,7 +33,9 @@ export const RIZIKOVE_FAKTORY: { kod: string; nazev: string }[] = [
   { kod: 'prach', nazev: 'Prach' },
   { kod: 'chemicke', nazev: 'Chemické látky' },
   { kod: 'aerosoly', nazev: 'Aerosoly s převážně dráždivým účinkem' },
-  { kod: 'fyzickaZatez', nazev: 'Fyzická zátěž' },
+  // kód zůstává 'fyzickaZatez' kvůli už uloženým zařazením; mění se jen název
+  { kod: 'fyzickaZatez', nazev: 'Celková fyzická zátěž' },
+  { kod: 'lokalniSvalovaZatez', nazev: 'Lokální svalová zátěž' },
   { kod: 'pracovniPoloha', nazev: 'Pracovní poloha' },
   { kod: 'zrakovaZatez', nazev: 'Zraková zátěž' },
   { kod: 'psychickaZatez', nazev: 'Psychická zátěž' },
