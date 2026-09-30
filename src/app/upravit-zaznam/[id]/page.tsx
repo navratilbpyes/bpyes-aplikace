@@ -100,8 +100,8 @@ export default function EditInspectionPage() {
         popis: zav.popis || "", navrhOpatreni: zav.navrhOpatreni || "",
         terminOdstraneni: zav.terminOdstraneni || "", odpovednaOsoba: zav.odpovednaOsoba || "",
         odpovednaOsobaManualni: zav.odpovednaOsoba || "", lokalizace: zav.lokalizace || "",
-        zavaznost: zav.zavaznost || "none", odstraneno: zav.stavOdstraneni === 'odstranena',
-        datumOdstraneni: zav.datumOdstraneni || "", zaznamProvedl: zav.zaznamProvedl || "",
+        zavaznost: zav.zavaznost || "none", odstraneno: zav.stavOdstraneni === 'odstranena' || zav.overenoOzo === 'potvrzeno',
+        datumOdstraneni: (zav.datumOdstraneni || "").slice(0, 10), zaznamProvedl: zav.zaznamProvedl || "",
         zaznamProvedlManualni: zav.zaznamProvedl || "", foto: zav.foto || [], bezOdkladu: zav.bezOdkladu || false
       });
     });
@@ -177,14 +177,21 @@ export default function EditInspectionPage() {
 
   const stats = useMemo(() => {
     const vals = activeChecklistFlat.map((p: any) => checklist[p.id]).filter(Boolean);
+    // Bod hodnocený N je „otevřený“ jen tehdy, má-li aspoň jeden neodstraněný nedostatek.
+    const bodyN = activeChecklistFlat.filter((p: any) => checklist[p.id]?.hodnoceni === 'N');
+    const otevrene = bodyN.filter((p: any) => {
+      const d = pointDefects[p.id] || [];
+      return d.length === 0 || d.some((x: any) => !x.odstraneno);
+    });
     return {
       V: vals.filter(v => v.hodnoceni === 'V').length,
-      N: vals.filter(v => v.hodnoceni === 'N').length,
+      N: otevrene.length,
+      Nodstraneno: bodyN.length - otevrene.length,
       NA: vals.filter(v => v.hodnoceni === 'NA').length,
       NK: vals.filter(v => v.hodnoceni === 'NK').length,
       unfilled: totalPoints - answeredPoints
     };
-  }, [checklist, activeChecklistFlat, totalPoints, answeredPoints]);
+  }, [checklist, pointDefects, activeChecklistFlat, totalPoints, answeredPoints]);
 
   const handleRatingChange = (point: ChecklistPoint, rating: 'V' | 'N' | 'NA' | 'NK') => {
     let text = "";
@@ -221,6 +228,42 @@ export default function EditInspectionPage() {
       const finalKontrolniBody: any[] = [];
       const aggregatedZavady: Zavada[] = [];
       let defectCounter = 1;
+
+      // Odstranění nedostatku zapsané při auditu: stejná pole, jaká používá detail záznamu
+      // a časový plán (odstraneno / vyresenoKlientem / overenoOzo). Hlášení klienta,
+      // které OZO ještě neověřil, se při editaci nesmí ztratit ani tiše potvrdit.
+      const poleOdstraneni = (def: any) => {
+        const p: any = ((recordToEdit as any).zavady || []).find((z: any) => z.id === def.uid) || {};
+        const potvrzeno = p.overenoOzo === 'potvrzeno' || p.stavOdstraneni === 'odstranena';
+        const provedl = (def.zaznamProvedl === 'manual' ? def.zaznamProvedlManualni : def.zaznamProvedl) || null;
+        if (def.odstraneno) {
+          return {
+            odstraneno: true,
+            vyresenoKlientem: true,
+            datumVyreseniKlientem: p.datumVyreseniKlientem || def.datumOdstraneni || new Date().toISOString().split('T')[0],
+            jmenoVyresitele: p.jmenoVyresitele || provedl,
+            poznamkaKlienta: p.poznamkaKlienta ?? null,
+            fotoVyreseni: p.fotoVyreseni || [],
+            overenoOzo: 'potvrzeno',
+            datumOvereniOzo: p.datumOvereniOzo || new Date().toISOString(),
+          };
+        }
+        if ((p.vyresenoKlientem || p.overenoOzo === 'vraceno') && !potvrzeno) {
+          return {
+            odstraneno: p.odstraneno ?? false,
+            vyresenoKlientem: !!p.vyresenoKlientem,
+            datumVyreseniKlientem: p.datumVyreseniKlientem ?? null,
+            jmenoVyresitele: p.jmenoVyresitele ?? null,
+            poznamkaKlienta: p.poznamkaKlienta ?? null,
+            fotoVyreseni: p.fotoVyreseni || [],
+            overenoOzo: p.overenoOzo ?? null,
+            datumOvereniOzo: p.datumOvereniOzo ?? null,
+            poznamkaOzo: p.poznamkaOzo ?? null,
+            datumOdstraneni: p.datumOdstraneni ?? '',
+          };
+        }
+        return { odstraneno: false };
+      };
 
       activeChecklistFlat.forEach(basePoint => {
         const pointState = checklist[basePoint.id];
@@ -271,6 +314,7 @@ export default function EditInspectionPage() {
               datumOdstraneni: def.odstraneno ? def.datumOdstraneni : "",
               zaznamProvedl: def.odstraneno ? (def.zaznamProvedl === 'manual' ? def.zaznamProvedlManualni : def.zaznamProvedl) : "",
               bezOdkladu: def.bezOdkladu || false,
+              ...poleOdstraneni(def),
               // Fotky u kazde zavady kvuli zobrazeni vsech nedostatku bodu v reportu.
               foto: def.foto || []
             } as any);
@@ -296,7 +340,11 @@ export default function EditInspectionPage() {
       }
 
       // ZDE JE BEZPEČNOSTNÍ POJISTKA - NIKDY NEZAVŘE REPORT S NESHODOU
-      const hasUnresolvedDefects = finalKontrolniBody.some(kb => kb.hodnoceni === 'N');
+      const bodOtevreny = (id: any) => {
+        const d = pointDefects[id] || [];
+        return d.length === 0 || d.some((x: any) => !x.odstraneno);
+      };
+      const hasUnresolvedDefects = finalKontrolniBody.some(kb => kb.hodnoceni === 'N' && bodOtevreny(kb.bod));
       const finalStav = (isDraft || hasUnresolvedDefects) ? 'otevreny' : 'uzavreny';
 
       // Snímek klienta je pořízen při vytvoření protokolu (dokument k datu).
@@ -699,6 +747,12 @@ export default function EditInspectionPage() {
             </div>
           )}
 
+          {stats.Nodstraneno > 0 && (
+            <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl text-sm text-emerald-800">
+              <strong>Odstraněno na místě:</strong> {stats.Nodstraneno} {stats.Nodstraneno === 1 ? 'bod' : 'bodů'} – všechny jejich nedostatky jsou označeny jako odstraněné a v záznamu zůstávají jako doložené zjištění.
+            </div>
+          )}
+
           <Card className="border-none shadow-sm"><CardHeader><CardTitle>Závěrečné hodnocení a doporučení</CardTitle></CardHeader><CardContent><Textarea placeholder="Napište celkové zhodnocení..." className="min-h-[120px] bg-white" value={formData.poznamka} onChange={(e) => setFormData(prev => ({ ...prev, poznamka: e.target.value }))} /></CardContent></Card>
           <Card className="border-none shadow-sm">
             <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/20 border-b pb-4">
@@ -706,7 +760,7 @@ export default function EditInspectionPage() {
               <div className="flex items-center gap-2 bg-white p-2 rounded-md border shadow-sm"><Filter className="h-4 w-4 text-muted-foreground ml-2" /><Select value={filterPosition} onValueChange={setFilterPosition}><SelectTrigger className="h-9 w-[220px] border-none shadow-none focus:ring-0"><SelectValue placeholder="Filtrovat pozici" /></SelectTrigger><SelectContent><SelectItem value="all">Zobrazit vše</SelectItem>{uniquePositions.map((pozice: any) => <SelectItem key={pozice} value={pozice}>{pozice}</SelectItem>)}<SelectItem value="manual">Vlastní zadání</SelectItem></SelectContent></Select></div>
             </CardHeader>
             <CardContent className="space-y-4 pt-6">
-              {filteredPointDefects.map(group => group.defects.map(defect => (<div key={defect.uid} className="p-4 border rounded-lg flex items-start gap-4 hover:bg-muted/20"><div className="bg-red-600 text-white font-mono text-xs h-6 w-6 rounded-full flex items-center justify-center shrink-0 mt-1">{Number(group.id) > 90000 ? '*' : group.id}</div><div className="flex-1 space-y-2"><p className="font-bold">{defect.popis}</p><div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground"><div className="flex items-center gap-2"><CalendarIcon className="h-3 w-3" />{defect.terminOdstraneni ? new Date(defect.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neuvedeno'}</div><div className="flex items-center gap-2"><UserIcon className="h-3 w-3" /><span className="font-medium text-black">{defect.odpovednaOsoba === 'manual' ? defect.odpovednaOsobaManualni : (defect.odpovednaOsoba || 'Neuvedena')}</span></div></div></div></div>)))}
+              {filteredPointDefects.map(group => group.defects.map(defect => (<div key={defect.uid} className="p-4 border rounded-lg flex items-start gap-4 hover:bg-muted/20"><div className={cn("text-white font-mono text-xs h-6 w-6 rounded-full flex items-center justify-center shrink-0 mt-1", defect.odstraneno ? "bg-emerald-600" : "bg-red-600")}>{Number(group.id) > 90000 ? '*' : group.id}</div><div className="flex-1 space-y-2"><p className={cn("font-bold", defect.odstraneno && "text-muted-foreground")}>{defect.popis}</p>{defect.odstraneno && (<p className="text-xs font-bold text-emerald-700">✓ Odstraněno{defect.datumOdstraneni ? ` ${new Date(defect.datumOdstraneni).toLocaleDateString('cs-CZ')}` : ''}</p>)}<div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground"><div className="flex items-center gap-2"><CalendarIcon className="h-3 w-3" />{defect.terminOdstraneni ? new Date(defect.terminOdstraneni).toLocaleDateString('cs-CZ') : 'Neuvedeno'}</div><div className="flex items-center gap-2"><UserIcon className="h-3 w-3" /><span className="font-medium text-black">{defect.odpovednaOsoba === 'manual' ? defect.odpovednaOsobaManualni : (defect.odpovednaOsoba || 'Neuvedena')}</span></div></div></div></div>)))}
               {filteredPointDefects.length === 0 && <div className="py-12 text-center text-muted-foreground italic">Nebyly zjištěny žádné závady k uložení.</div>}
             </CardContent>
           </Card>
