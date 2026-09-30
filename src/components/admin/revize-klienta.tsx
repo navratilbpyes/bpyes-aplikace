@@ -41,6 +41,10 @@ const isoNaDatum = (iso?: string) => (iso ? iso.slice(0, 10) : '');
 const datumNaIso = (d: string) => (d ? new Date(d + 'T00:00:00').toISOString() : undefined);
 const formatDatum = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('cs-CZ') : '—');
 
+/** Pořadí oddílů v přehledu; další oblasti z číselníku se řadí abecedně za ně. */
+const PORADI_OBLASTI = ['PO', 'Elektro', 'Tlak', 'Zdvihací', 'Ostatní'];
+const NEZARAZENO = 'Nezařazeno';
+
 export default function RevizeKlienta({ klientId }: Props) {
   const [seznam, setSeznam] = useState<TypRevize[]>([]);
   const [ciselnik, setCiselnik] = useState<CiselnikRevize[]>([]);
@@ -115,6 +119,8 @@ export default function RevizeKlienta({ klientId }: Props) {
       ciselnikId: null,
       nazev: 'Nová revize',
       periodaMesice: 12,
+      // je-li nahoře vybraný filtr oblasti, nová vlastní revize do ní rovnou patří
+      oblast: fOblast !== 'vse' ? fOblast : null,
       firmaNazev: null,
       firmaTelefon: null,
       firmaEmail: null,
@@ -167,6 +173,45 @@ export default function RevizeKlienta({ klientId }: Props) {
   const filtrovanyCiselnik = fOblast === 'vse'
     ? ciselnik
     : ciselnik.filter((c) => c.oblast === fOblast);
+
+  // Oblast revize: uložený snapshot, u starších záznamů podle položky číselníku
+  // (do databáze se nic nepřepisuje). Vlastní revize bez oblasti → Nezařazeno.
+  const oblastRevize = (r: TypRevize): string | null =>
+    r.oblast ?? ciselnik.find((c) => c.id === r.ciselnikId)?.oblast ?? null;
+
+  const dnes = new Date();
+  dnes.setHours(0, 0, 0, 0);
+  const poTerminu = (r: TypRevize) => {
+    const t = platnyTermin(r);
+    return !!t && new Date(t) < dnes;
+  };
+
+  const skupinyMap = new Map<string, TypRevize[]>();
+  for (const r of seznam) {
+    const k = oblastRevize(r) ?? NEZARAZENO;
+    skupinyMap.set(k, [...(skupinyMap.get(k) ?? []), r]);
+  }
+  const poradiKlicu = (k: string) => {
+    if (k === NEZARAZENO) return 1e6;
+    const i = PORADI_OBLASTI.indexOf(k);
+    return i >= 0 ? i : 1000;
+  };
+  const skupiny = Array.from(skupinyMap.entries())
+    .sort(([a], [b]) => poradiKlicu(a) - poradiKlicu(b) || a.localeCompare(b, 'cs'))
+    .map(([oblast, polozky]) => ({
+      oblast,
+      polozky: [...polozky].sort((a, b) => {
+        const ta = platnyTermin(a);
+        const tb = platnyTermin(b);
+        if (ta && tb) return ta.localeCompare(tb) || a.nazev.localeCompare(b.nazev, 'cs');
+        if (ta) return -1;
+        if (tb) return 1;
+        return a.nazev.localeCompare(b.nazev, 'cs');
+      }),
+    }));
+
+  // nabídka oblastí pro ruční zařazení revize
+  const nabidkaOblasti = Array.from(new Set([...PORADI_OBLASTI, ...oblasti.map(String)]));
 
   return (
     <Card>
@@ -222,8 +267,20 @@ export default function RevizeKlienta({ klientId }: Props) {
             Klient zatím nemá přiřazené žádné revize.
           </p>
         ) : (
-          <div className="space-y-2">
-            {seznam.map((r) => {
+          <div className="space-y-6">
+            {skupiny.map((sk) => (
+            <section key={sk.oblast} className="space-y-2">
+              <div className="flex items-center gap-2 border-b pb-1">
+                <h3 className="text-sm font-semibold">{sk.oblast}</h3>
+                <Badge variant="secondary" className="text-[10px]">{sk.polozky.length}</Badge>
+                {sk.polozky.some(poTerminu) && (
+                  <Badge className="text-[10px] bg-red-100 text-red-800 hover:bg-red-100">
+                    po termínu: {sk.polozky.filter(poTerminu).length}
+                  </Badge>
+                )}
+              </div>
+              <div className="space-y-2">
+            {sk.polozky.map((r) => {
               const termin = platnyTermin(r);
               const otevreno = rozbaleno === r.id;
               return (
@@ -347,6 +404,24 @@ export default function RevizeKlienta({ klientId }: Props) {
                             className="h-9"
                           />
                         </div>
+                      </div>
+
+                      <div className="space-y-1 sm:max-w-[50%]">
+                        <Label className="text-xs">Oblast (oddíl v přehledu)</Label>
+                        <Select
+                          value={oblastRevize(r) ?? '__zadna__'}
+                          onValueChange={(v) => uprav(r.id, {
+                            oblast: v === '__zadna__' ? undefined : (v as TypRevize['oblast']),
+                          })}
+                        >
+                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__zadna__">— nezařazeno —</SelectItem>
+                            {nabidkaOblasti.map((o) => (
+                              <SelectItem key={o} value={o}>{o}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       {/* Pracoviště (z detailu klienta) + bližší umístění */}
@@ -512,6 +587,9 @@ export default function RevizeKlienta({ klientId }: Props) {
                 </div>
               );
             })}
+              </div>
+            </section>
+            ))}
           </div>
         )}
       </CardContent>
