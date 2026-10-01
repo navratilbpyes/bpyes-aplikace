@@ -587,7 +587,7 @@ export default function KartaOsoby({
                       </div>
                     ) : (
                       <p className="text-[11px] text-muted-foreground">
-                        Uzavře se automaticky zápisem na záložce {m.uzel.uzavreni === 'prohlidkou' ? 'Prohlídky' : 'Zápis školení'}.
+                        Uzavře se automaticky zápisem na záložce {m.uzel.uzavreni === 'prohlidkou' ? 'Prohlídky' : 'Zápis školení'}{m.uzel.uzavreni === 'skolenim' ? ' (volba Vstupní)' : ''}.
                       </p>
                     )}
                   </div>
