@@ -41,6 +41,14 @@ import {
   polozkaLogu, POPIS_ZAVERU, POPIS_DRUHU,
 } from '@/lib/udalosti';
 
+/** Dnešní datum v místním čase (YYYY-MM-DD) — toISOString by v noci vrátilo včerejšek. */
+function dnesLokalne(): string {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
 const BARVA: Record<string, string> = {
   po: 'text-red-700 font-bold',
   blizi: 'text-amber-700 font-medium',
@@ -253,7 +261,7 @@ function DialogHromadny({
   const { user } = useData();
   const { toast } = useToast();
   const [otevreno, setOtevreno] = useState(false);
-  const [datum, setDatum] = useState(new Date().toISOString().split('T')[0]);
+  const [datum, setDatum] = useState(dnesLokalne());
   const [datumDo, setDatumDo] = useState('');
   const [datumPosudku, setDatumPosudku] = useState('');
   const [druh, setDruh] = useState<DruhProhlidky>('periodicka');
@@ -277,6 +285,18 @@ function DialogHromadny({
         .filter((r) => !r.dalsi || r.dalsi <= h)
         .map((r) => r.osoba.id),
     ));
+  }
+
+  /** Otevření dialogu: u školení se předvyberou povinní, kterým záznam chybí nebo termín končí. */
+  function otevri() {
+    setDatum(dnesLokalne());
+    setDoKdy('');
+    setVybrani(
+      rezim === 'skoleni'
+        ? new Set(radky.filter((r) => r.povinne && stavTerminu(r.dalsi) !== 'ok').map((r) => r.osoba.id))
+        : new Set(),
+    );
+    setOtevreno(true);
   }
 
   function prepni(id: string) {
@@ -326,12 +346,39 @@ function DialogHromadny({
     }
   }
 
-  const dostupni = radky.filter((r) => (rezim === 'skoleni' ? r.povinne : true));
+  // Zapsat lze komukoli — školení, které osobě z činností neplyne, se také stává.
+  const dostupni = radky;
+  const povinni = radky.filter((r) => r.povinne);
+  const ostatni = rezim === 'skoleni' ? radky.filter((r) => !r.povinne) : [];
+
+  const radekUI = (r: Radek) => {
+    const vybran = vybrani.has(r.osoba.id);
+    const st = stavTerminu(r.dalsi);
+    return (
+      <button
+        key={r.osoba.id}
+        type="button"
+        onClick={() => prepni(r.osoba.id)}
+        className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-muted ${vybran ? 'bg-blue-50/60' : ''}`}
+      >
+        <span className={`h-3.5 w-3.5 shrink-0 rounded border flex items-center justify-center ${vybran ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`}>
+          {vybran && <Check className="h-2.5 w-2.5 text-white" />}
+        </span>
+        <span className="flex-1 font-medium">{celeJmeno(r.osoba)}</span>
+        <span className="text-muted-foreground">
+          {r.posledniZ ? `naposledy ${formatDatum(r.posledniZ.datum)}` : ''}
+        </span>
+        <span className={`w-24 text-right ${BARVA[st]}`}>
+          {st === 'chybi' ? 'bez záznamu' : `do ${formatDatum(r.dalsi)}`}
+        </span>
+      </button>
+    );
+  };
   const blokovano = rezim === 'skoleni' && !tema;
 
   return (
     <Dialog open={otevreno} onOpenChange={setOtevreno}>
-      <Button onClick={() => setOtevreno(true)} disabled={blokovano}>
+      <Button onClick={otevri} disabled={blokovano}>
         {rezim === 'skoleni'
           ? <><GraduationCap className="mr-2 h-4 w-4" /> Zapsat školení</>
           : <><Stethoscope className="mr-2 h-4 w-4" /> Zapsat prohlídku</>}
@@ -342,7 +389,9 @@ function DialogHromadny({
             {rezim === 'skoleni' ? `Zápis školení — ${tema?.nazev ?? ''}` : 'Zápis lékařské prohlídky'}
           </DialogTitle>
           <DialogDescription>
-            Vyber, komu termín končí do zvoleného data, uprav výběr a zapiš jedním datem všem najednou.
+            {rezim === 'skoleni'
+              ? 'Vyplňte datum školení a zaškrtněte lidi, kteří se ho zúčastnili. Všem zaškrtnutým se zapíše stejné datum.'
+              : 'Vyplňte datum prohlídky a zaškrtněte lidi, kterých se týká. Všem zaškrtnutým se zapíše stejné datum.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -415,42 +464,55 @@ function DialogHromadny({
           )}
 
           <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
-            <div className="grid gap-3 sm:grid-cols-[1fr_auto] items-end">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Vybrat všechny, komu termín končí do</Label>
-                <Input type="date" value={doKdy} onChange={(e) => predvyber(e.target.value)} className="h-9" />
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setVybrani(new Set(dostupni.map((r) => r.osoba.id)))}>
-                  Vybrat vše
+            <p className="text-xs font-semibold">
+              {rezim === 'skoleni' ? 'Kdo se školení zúčastnil' : 'Koho se prohlídka týká'}
+            </p>
+
+            <div className="flex flex-wrap items-end gap-2">
+              {rezim === 'skoleni' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setVybrani(new Set(povinni.filter((r) => stavTerminu(r.dalsi) !== 'ok').map((r) => r.osoba.id)))}
+                >
+                  Povinní, kterým školení chybí nebo končí
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setVybrani(new Set())}>
-                  Zrušit výběr
-                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={() => setVybrani(new Set(dostupni.map((r) => r.osoba.id)))}>
+                Vybrat všechny
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setVybrani(new Set())}>
+                Zrušit výběr
+              </Button>
+              <div className="space-y-1 sm:ml-auto">
+                <Label className="text-[11px] text-muted-foreground">nebo komu termín končí do</Label>
+                <Input type="date" value={doKdy} onChange={(e) => predvyber(e.target.value)} className="h-8 w-[150px]" />
               </div>
             </div>
 
-            <div className="max-h-64 overflow-y-auto rounded border bg-background divide-y">
-              {dostupni.map((r) => {
-                const vybran = vybrani.has(r.osoba.id);
-                const st = stavTerminu(r.dalsi);
-                return (
-                  <button
-                    key={r.osoba.id}
-                    type="button"
-                    onClick={() => prepni(r.osoba.id)}
-                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-muted ${vybran ? 'bg-blue-50/60' : ''}`}
-                  >
-                    <span className={`h-3.5 w-3.5 shrink-0 rounded border flex items-center justify-center ${vybran ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`}>
-                      {vybran && <Check className="h-2.5 w-2.5 text-white" />}
-                    </span>
-                    <span className="flex-1 font-medium">{celeJmeno(r.osoba)}</span>
-                    <span className={BARVA[st]}>
-                      {st === 'chybi' ? 'bez záznamu' : formatDatum(r.dalsi)}
-                    </span>
-                  </button>
-                );
-              })}
+            {rezim === 'skoleni' && povinni.length === 0 && (
+              <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                Toto školení zatím nikomu neplyne z činností. Zaškrtněte lidi, kteří ho absolvovali,
+                a zapište je ručně. Aby se školení přiřazovalo samo, připojte ho k činnosti v Číselníky → Činnosti.
+              </p>
+            )}
+
+            <div className="max-h-72 overflow-y-auto rounded border bg-background divide-y">
+              {rezim === 'skoleni' && povinni.length > 0 && ostatni.length > 0 && (
+                <p className="bg-muted/40 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Školení plyne z činností
+                </p>
+              )}
+              {povinni.map(radekUI)}
+              {ostatni.length > 0 && (
+                <p className="bg-muted/40 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Z činností neplyne (zapsat lze ručně)
+                </p>
+              )}
+              {ostatni.map(radekUI)}
+              {dostupni.length === 0 && (
+                <p className="px-3 py-4 text-xs text-muted-foreground">Klient nemá v evidenci žádné osoby.</p>
+              )}
             </div>
 
             <p className="text-xs font-medium flex items-center gap-1.5">
@@ -470,7 +532,7 @@ function DialogHromadny({
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOtevreno(false)}>Zrušit</Button>
-          <Button onClick={zapis} disabled={uklada || vybrani.size === 0}>
+          <Button onClick={zapis} disabled={uklada || vybrani.size === 0 || !datum}>
             {uklada && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             Zapsat {vybrani.size > 0 ? `(${vybrani.size})` : ''}
           </Button>
