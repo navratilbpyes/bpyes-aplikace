@@ -174,6 +174,19 @@ export default function SekceUdalosti({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            ) : <div />}
+            <DialogHromadny
+              klientId={klientId}
+              rezim={rezim}
+              tema={skoleni.find((s) => s.id === temaId)}
+              vstupni={vstupni}
+              radky={radky}
+              poHotovo={nacti}
+            />
+          </div>
+          {rezim === 'skoleni' && (
+            <>
                 {temaVybrane && moznePeriodicke && mozneVstupni && (
                   <div className="inline-flex rounded-md border p-0.5 text-xs mt-1.5">
                     {[{ v: false, t: 'Periodické' }, { v: true, t: 'Vstupní' }].map((o) => (
@@ -191,17 +204,8 @@ export default function SekceUdalosti({
                 {temaVybrane && !moznePeriodicke && (
                   <p className="text-[11px] text-muted-foreground mt-1">Téma má jen vstupní školení — eviduje se, kdo a kdy ho absolvoval.</p>
                 )}
-              </div>
-            ) : <div />}
-            <DialogHromadny
-              klientId={klientId}
-              rezim={rezim}
-              tema={skoleni.find((s) => s.id === temaId)}
-              vstupni={vstupni}
-              radky={radky}
-              poHotovo={nacti}
-            />
-          </div>
+            </>
+          )}
 
           {nacitam ? (
             <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
