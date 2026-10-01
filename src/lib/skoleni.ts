@@ -3,6 +3,8 @@
  * Umístění: src/lib/skoleni.ts
  */
 
+import type { ZarazeniFaktoru } from './cinnosti';
+
 export type StavZaznamu = 'aktivni' | 'smazano';
 
 /** Položka číselníku školení. */
@@ -26,6 +28,31 @@ export interface CiselnikSkoleni {
   /** doklad s vlastní platností (průkaz, osvědčení) */
   doklad?: boolean;
   poznamka?: string | null;
+
+  /* ── Sloučení s číselníkem činností („Školení a činnosti") ──
+   * Položka může být klasické školení, činnost (rizikový profil), nebo obojí.
+   * periodaMesice = 0 → položka bez periody (nehlídá se termín). */
+
+  /** čistě evidenční položka — nevyžaduje školení ani pověření */
+  bezSkoleniPovereni?: boolean;
+  /** vyžaduje praktický zácvik s mentorem (F002–F005) */
+  zacvik?: boolean;
+  /** vyžaduje přezkoušení (eviduje se jen datum) */
+  prezkouseni?: boolean;
+  /** vyžaduje pověření (lhůtu platnosti doplní až číselník Pověření) */
+  vyzadujePovereni?: boolean;
+  /** profesní riziko dle části II přílohy č. 1 vyhlášky č. 79/2013 Sb. */
+  profesniRiziko?: boolean;
+  prohlidkaDo50?: number | null;
+  prohlidkaNad50?: number | null;
+  /** rozsah odborných vyšetření — text se přenáší do F006 */
+  odbornaVysetreni?: string | null;
+  /** kategorizace rizikových faktorů, které z položky plynou */
+  faktory?: ZarazeniFaktoru[];
+  /** ID dalších položek, které z této vyplývají (dříve „povinná školení" činnosti) */
+  souvisejiciIds?: string[];
+  /** ID původních činností z `ciselnikCinnosti`, které se do položky sloučily */
+  puvodniCinnostIds?: string[];
 }
 
 /**
@@ -92,6 +119,7 @@ export function platnyTermin(s: SkoleniKlienta): string | undefined {
 
 /** Formát periody pro zobrazení. */
 export function popisPeriody(mesicu: number): string {
+  if (!mesicu) return 'bez periody';
   if (mesicu === 12) return '1× ročně';
   if (mesicu === 24) return '1× za 2 roky';
   if (mesicu === 36) return '1× za 3 roky';
@@ -107,4 +135,10 @@ export const PERIODY: { hodnota: number; popis: string }[] = [
   { hodnota: 36, popis: '1× za 3 roky' },
   { hodnota: 48, popis: '1× za 4 roky' },
   { hodnota: 60, popis: '1× za 5 let' },
+];
+
+/** Předvolby period pro číselník — navíc „bez periody". */
+export const PERIODY_S_NULOU: { hodnota: number; popis: string }[] = [
+  { hodnota: 0, popis: 'Bez periody' },
+  ...PERIODY,
 ];
