@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select';
 import { Plus, X, Loader2, ChevronDown, ChevronRight, Route } from 'lucide-react';
 import type { CiselnikCinnost } from '@/lib/cinnosti';
+import { sestavCinnosti, prepojUzel } from '@/lib/cinnosti-adapter';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
 import type {
   CiselnikUzel, FazeUzlu, PodminkaUzlu, UzavreniUzlu,
@@ -46,11 +47,14 @@ export default function SekceUzly() {
 
   const nacti = useCallback(async () => {
     try {
-      const [snapU, snapC, snapS] = await Promise.all([
+      const [snapU, snapS] = await Promise.all([
         getDocs(query(collection(db, 'ciselnikUzlu'), where('stav', '==', 'aktivni'))),
-        getDocs(query(collection(db, 'ciselnikCinnosti'), where('stav', '==', 'aktivni'))),
         getDocs(query(collection(db, 'ciselnikSkoleni'), where('stav', '==', 'aktivni'))),
       ]);
+
+      const polozky = snapS.docs.map((d) => ({ id: d.id, ...d.data() }) as CiselnikSkoleni)
+        .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs'));
+      const sestaveno = sestavCinnosti(polozky);
 
       if (snapU.empty) {
         // první otevření — založí výchozí sadu uzlů
@@ -63,19 +67,14 @@ export default function SekceUzly() {
       } else {
         setUzly(
           snapU.docs
-            .map((d) => ({ id: d.id, ...d.data() }) as CiselnikUzel)
+            .map((d) => prepojUzel({ id: d.id, ...d.data() } as CiselnikUzel, sestaveno.alias))
             .sort((a, b) => (a.poradi ?? 0) - (b.poradi ?? 0)),
         );
       }
 
-      setCinnosti(
-        snapC.docs.map((d) => ({ id: d.id, ...d.data() }) as CiselnikCinnost)
-          .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs')),
-      );
-      setSkoleni(
-        snapS.docs.map((d) => ({ id: d.id, ...d.data() }) as CiselnikSkoleni)
-          .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs')),
-      );
+      // spouštěcí „činnosti" uzlů jsou nově položky sloučeného číselníku
+      setCinnosti(sestaveno.cinnosti);
+      setSkoleni(polozky);
     } catch (e) {
       console.error('Načtení uzlů selhalo:', e);
     } finally {
@@ -236,7 +235,7 @@ export default function SekceUzly() {
 
                           {u.podminka === 'priCinnosti' && (
                             <div className="space-y-1">
-                              <Label className="text-xs">Spouštějící činnosti</Label>
+                              <Label className="text-xs">Spouštějící školení a činnosti</Label>
                               <p className="text-[11px] text-muted-foreground">
                                 Nevybrat žádnou znamená „při jakékoli přiřazené činnosti".
                               </p>
