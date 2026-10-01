@@ -25,6 +25,11 @@ export interface Klient {
    */
   odpovedneOsoby?: { id?: string; jmeno?: string; pozice?: string; funkce?: string; email?: string; telefon?: string }[];
   kontakty?: Kontakt[];
+  /**
+   * ID položek číselníku „Školení a činnosti", které jsou pro klienta relevantní.
+   * Nastavuje admin v Lidských zdrojích → Nastavení klienta. Prázdné/chybí = nenastaveno (zobrazí se vše).
+   */
+  relevantniPolozky?: string[];
   createdAt?: string;
 }
 
