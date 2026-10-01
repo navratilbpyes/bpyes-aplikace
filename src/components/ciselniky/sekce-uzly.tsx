@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -232,6 +233,14 @@ export default function SekceUzly() {
                               </Select>
                             </div>
                           </div>
+
+                          <label className="flex items-center gap-2 text-xs font-medium">
+                            <Switch
+                              checked={!!u.volitelny}
+                              onCheckedChange={(v) => uprav(u.id, { volitelny: v })}
+                            />
+                            Volitelný krok (nehlásí se jako chybějící)
+                          </label>
 
                           {u.podminka === 'priCinnosti' && (
                             <div className="space-y-1">
