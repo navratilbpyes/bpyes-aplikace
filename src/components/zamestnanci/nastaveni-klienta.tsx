@@ -10,26 +10,43 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/components/data-provider';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus, X } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { synchronizujSouhrn } from '@/lib/souhrn-skoleni';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
-import { popisPeriody } from '@/lib/skoleni';
+import { popisPeriody, PERIODY_S_NULOU } from '@/lib/skoleni';
 import { poradiOblasti } from '@/lib/cinnosti-adapter';
 
 export default function NastaveniKlienta({
-  klientId, klientNazev, ulozene, polozky,
+  klientId, klientNazev, ulozene, polozky: vsechnyPolozky, poZmene,
 }: {
   klientId: string | null;
   klientNazev?: string;
   /** aktuálně uložené ID relevantních položek (undefined = nenastaveno) */
   ulozene: string[] | undefined;
+  /** všechny položky číselníku včetně vlastních položek (filtruje se zde) */
   polozky: CiselnikSkoleni[];
+  /** znovunačtení dat v Lidských zdrojích po změně vlastních položek */
+  poZmene?: () => void;
 }) {
+  const polozky = useMemo(() => vsechnyPolozky.filter((p) => !p.klientId), [vsechnyPolozky]);
+  const vlastni = useMemo(
+    () => vsechnyPolozky.filter((p) => !!klientId && p.klientId === klientId)
+      .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs')),
+    [vsechnyPolozky, klientId],
+  );
+  const [vNazev, setVNazev] = useState('');
+  const [vPerioda, setVPerioda] = useState(12);
+  const [vProvadi, setVProvadi] = useState('');
   const { toast } = useToast();
   const [vybrane, setVybrane] = useState<Set<string>>(new Set(ulozene ?? []));
   const [uklada, setUklada] = useState(false);
@@ -61,6 +78,7 @@ export default function NastaveniKlienta({
     setUklada(true);
     try {
       await updateDoc(doc(db, 'klienti', klientId), { relevantniPolozky: Array.from(nove) });
+      synchronizujSouhrn(klientId).catch((e) => console.warn('Souhrn školení:', e));
     } catch (e) {
       console.error('Uložení relevantních položek selhalo:', e);
       toast({ title: 'Uložení selhalo', variant: 'destructive' });
@@ -68,6 +86,34 @@ export default function NastaveniKlienta({
     } finally {
       setUklada(false);
     }
+  }
+
+  async function pridejVlastni() {
+    if (!klientId || !vNazev.trim()) return;
+    await addDoc(collection(db, 'ciselnikSkoleni'), {
+      nazev: vNazev.trim(),
+      oblast: 'Vlastní',
+      periodaMesice: vPerioda,
+      provadi: vProvadi.trim() || null,
+      klientId,
+      stav: 'aktivni',
+    });
+    setVNazev(''); setVProvadi('');
+    poZmene?.();
+    setTimeout(() => synchronizujSouhrn(klientId).catch(() => {}), 500);
+  }
+
+  async function upravVlastni(id: string, zmeny: Partial<CiselnikSkoleni>) {
+    const cistec = Object.fromEntries(
+      Object.entries(zmeny).map(([k, v]) => [k, v === undefined || v === '' ? null : v]),
+    );
+    await updateDoc(doc(db, 'ciselnikSkoleni', id), cistec);
+  }
+
+  async function smazVlastni(id: string) {
+    await updateDoc(doc(db, 'ciselnikSkoleni', id), { stav: 'smazano' });
+    poZmene?.();
+    if (klientId) setTimeout(() => synchronizujSouhrn(klientId).catch(() => {}), 500);
   }
 
   function prepni(id: string) {
@@ -92,6 +138,7 @@ export default function NastaveniKlienta({
   }
 
   return (
+    <div className="space-y-6">
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Relevantní školení a činnosti{klientNazev ? ` — ${klientNazev}` : ''}</CardTitle>
@@ -157,5 +204,86 @@ export default function NastaveniKlienta({
         })}
       </CardContent>
     </Card>
+
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Vlastní položky klienta</CardTitle>
+        <CardDescription>
+          Školení nebo činnost, která se týká jen tohoto klienta a není v globálním číselníku.
+          Je automaticky relevantní, objeví se v matici, zápisu školení i v souhrnu u klienta.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-2 sm:grid-cols-[1fr_170px_180px_auto] items-end">
+          <div className="space-y-1">
+            <Label className="text-xs">Název</Label>
+            <Input
+              value={vNazev}
+              onChange={(e) => setVNazev(e.target.value)}
+              placeholder="např. Obsluha lisu XY"
+              onKeyDown={(e) => e.key === 'Enter' && pridejVlastni()}
+              className="h-9"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Perioda</Label>
+            <Select value={String(vPerioda)} onValueChange={(v) => setVPerioda(Number(v))}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {PERIODY_S_NULOU.map((p) => (
+                  <SelectItem key={p.hodnota} value={String(p.hodnota)}>{p.popis}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Kdo provádí</Label>
+            <Input value={vProvadi} onChange={(e) => setVProvadi(e.target.value)} placeholder="např. OZO" className="h-9" />
+          </div>
+          <Button onClick={pridejVlastni} disabled={!vNazev.trim()}>
+            <Plus className="mr-2 h-4 w-4" /> Přidat
+          </Button>
+        </div>
+
+        {vlastni.length > 0 && (
+          <div className="divide-y border-y">
+            {vlastni.map((p) => (
+              <div key={p.id} className="grid gap-2 py-2 sm:grid-cols-[1fr_170px_180px_auto] items-center">
+                <Input
+                  defaultValue={p.nazev}
+                  onBlur={(e) => e.target.value.trim() && e.target.value !== p.nazev && upravVlastni(p.id, { nazev: e.target.value.trim() })}
+                  className="h-9"
+                />
+                <Select
+                  defaultValue={String(p.periodaMesice ?? 0)}
+                  onValueChange={(v) => upravVlastni(p.id, { periodaMesice: Number(v) })}
+                >
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PERIODY_S_NULOU.map((x) => (
+                      <SelectItem key={x.hodnota} value={String(x.hodnota)}>{x.popis}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  defaultValue={p.provadi ?? ''}
+                  onBlur={(e) => upravVlastni(p.id, { provadi: e.target.value.trim() })}
+                  placeholder="kdo provádí"
+                  className="h-9"
+                />
+                <Button
+                  variant="ghost" size="icon"
+                  onClick={() => smazVlastni(p.id)}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+    </div>
   );
 }
