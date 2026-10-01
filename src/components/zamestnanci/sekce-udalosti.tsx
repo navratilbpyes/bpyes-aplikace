@@ -291,6 +291,8 @@ function DialogHromadny({
   function otevri() {
     setDatum(dnesLokalne());
     setDoKdy('');
+    // Lektor se předvyplní z číselníku (kdo školení provádí); jde upravit.
+    setProvedl(rezim === 'skoleni' ? (tema?.provadi ?? '') : '');
     setVybrani(
       rezim === 'skoleni'
         ? new Set(radky.filter((r) => r.povinne && stavTerminu(r.dalsi) !== 'ok').map((r) => r.osoba.id))
