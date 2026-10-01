@@ -35,6 +35,8 @@ export interface CiselnikSkoleni {
 
   /** čistě evidenční položka — nevyžaduje školení ani pověření */
   bezSkoleniPovereni?: boolean;
+  /** má vstupní školení / zácvik (zapisuje se při nástupu nebo změně pozice). Bez hodnoty platí u položek se zácvikem. */
+  maVstupni?: boolean;
   /** vyžaduje praktický zácvik s mentorem (F002–F005) */
   zacvik?: boolean;
   /** vyžaduje přezkoušení (eviduje se jen datum) */
@@ -151,3 +153,9 @@ export const PERIODY_S_NULOU: { hodnota: number; popis: string }[] = [
   { hodnota: 0, popis: 'Bez periody' },
   ...PERIODY,
 ];
+
+/** Má položka vstupní školení? Výslovná volba má přednost, jinak ano u položek se zácvikem. */
+export function maVstupniSkoleni(s: Pick<CiselnikSkoleni, 'maVstupni' | 'zacvik' | 'bezSkoleniPovereni'>): boolean {
+  if (s.bezSkoleniPovereni) return false;
+  return s.maVstupni ?? !!s.zacvik;
+}
