@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * AuditFlow — číselníky školení a revizí.
+ * AuditFlow — číselníky školení a činností a revizí.
  * Umístění: src/app/ciselniky/page.tsx
  *
  * Globální katalogy témat. Při přiřazení klientovi se hodnoty
@@ -21,13 +21,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import SekceCinnosti from '@/components/ciselniky/sekce-cinnosti';
-import { PERIODY as PERIODY_SKOLENI, popisPeriody } from '@/lib/skoleni';
+import SekceSkoleniCinnosti from '@/components/ciselniky/sekce-skoleni-cinnosti';
+import { SekceKategorie } from '@/components/ciselniky/sekce-cinnosti';
 import { PERIODY as PERIODY_REVIZE, generujLhutaText } from '@/lib/revize';
-import type { CiselnikSkoleni } from '@/lib/skoleni';
 import type { CiselnikRevize, Oblast, TypLhuty } from '@/lib/revize';
 import { POZARNI_RADKY } from '@/lib/pozarni-kniha';
-import { GraduationCap as IkonaSkoleni, Wrench, HardHat, Route, Plus, X, Loader2 } from 'lucide-react';
+import { GraduationCap as IkonaSkoleni, Wrench, Route, Plus, X, Loader2 } from 'lucide-react';
 import SekceUzly from '@/components/ciselniky/sekce-uzly';
 
 const OBLASTI: Oblast[] = ['Elektro', 'Tlak', 'Zdvihací', 'PO', 'Ostatní'];
@@ -43,7 +42,7 @@ export default function CiselnikyPage() {
       <div className="space-y-1">
         <h1 className="text-3xl font-bold tracking-tight">Číselníky</h1>
         <p className="text-sm text-muted-foreground">
-          Katalogy témat školení a revizí. Při přiřazení klientovi se hodnoty zkopírují —
+          Katalogy školení a činností a revizí. Při přiřazení klientovi se hodnoty zkopírují —
           pozdější úprava zde už přiřazené položky nezmění.
         </p>
       </div>
@@ -51,36 +50,23 @@ export default function CiselnikyPage() {
       <Tabs defaultValue="skoleni" className="space-y-6">
         <TabsList className="w-full justify-start h-auto p-1 bg-secondary">
           <TabsTrigger value="skoleni" className="px-6 py-2">
-            <IkonaSkoleni className="mr-2 h-4 w-4" /> Školení
+            <IkonaSkoleni className="mr-2 h-4 w-4" /> Školení a činnosti
           </TabsTrigger>
           <TabsTrigger value="revize" className="px-6 py-2">
             <Wrench className="mr-2 h-4 w-4" /> Revize
-          </TabsTrigger>
-          <TabsTrigger value="cinnosti" className="px-6 py-2">
-            <HardHat className="mr-2 h-4 w-4" /> Činnosti
-          </TabsTrigger>
-          <TabsTrigger value="cinnosti" className="px-6 py-2">
-            <HardHat className="mr-2 h-4 w-4" /> Činnosti
           </TabsTrigger>
           <TabsTrigger value="uzly" className="px-6 py-2">
             <Route className="mr-2 h-4 w-4" /> Procesní mapa
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="skoleni">
-          <SekceSkoleni />
+        <TabsContent value="skoleni" className="space-y-6">
+          <SekceSkoleniCinnosti />
+          <SekceKategorie />
         </TabsContent>
 
         <TabsContent value="revize">
           <SekceRevize />
-        </TabsContent>
-
-        <TabsContent value="cinnosti">
-          <SekceCinnosti />
-        </TabsContent>
-
-        <TabsContent value="cinnosti">
-          <SekceCinnosti />
         </TabsContent>
 
         <TabsContent value="uzly">
@@ -89,171 +75,6 @@ export default function CiselnikyPage() {
         
       </Tabs>
     </div>
-  );
-}
-
-/* ─────────────────────────  ŠKOLENÍ  ───────────────────────── */
-
-function SekceSkoleni() {
-  const [polozky, setPolozky] = useState<CiselnikSkoleni[]>([]);
-  const [nacitam, setNacitam] = useState(true);
-  const [nazev, setNazev] = useState('');
-  const [perioda, setPerioda] = useState(12);
-  const [provadi, setProvadi] = useState('');
-
-  const nacti = useCallback(async () => {
-    try {
-      const snap = await getDocs(
-        query(collection(db, 'ciselnikSkoleni'), where('stav', '==', 'aktivni')),
-      );
-      setPolozky(
-        snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }) as CiselnikSkoleni)
-          .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs')),
-      );
-    } catch (e) {
-      console.error('Načtení číselníku školení selhalo:', e);
-    } finally {
-      setNacitam(false);
-    }
-  }, []);
-
-  useEffect(() => { nacti(); }, [nacti]);
-
-  async function pridej() {
-    if (nazev.trim() === '') return;
-    await addDoc(collection(db, 'ciselnikSkoleni'), {
-      nazev: nazev.trim(),
-      periodaMesice: perioda,
-      provadi: provadi.trim() || null,
-      stav: 'aktivni',
-    });
-    setNazev('');
-    setProvadi('');
-    nacti();
-  }
-
-  async function uprav(id: string, zmeny: Partial<CiselnikSkoleni>) {
-    setPolozky((p) => p.map((x) => (x.id === id ? { ...x, ...zmeny } : x)));
-    const cistec = Object.fromEntries(
-      Object.entries(zmeny).map(([k, v]) => [k, v === undefined || v === '' ? null : v]),
-    );
-    await updateDoc(doc(db, 'ciselnikSkoleni', id), cistec);
-  }
-
-  async function smaz(id: string) {
-    setPolozky((p) => p.filter((x) => x.id !== id));
-    await updateDoc(doc(db, 'ciselnikSkoleni', id), { stav: 'smazano' });
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Témata školení</CardTitle>
-        <CardDescription>
-          Téma, výchozí perioda a kdo školení provádí (OZO, externí dodavatel, jméno).
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        <div className="grid gap-2 sm:grid-cols-[1fr_180px_200px_auto] items-end">
-          <div className="space-y-1">
-            <Label className="text-xs">Téma školení</Label>
-            <Input
-              value={nazev}
-              onChange={(e) => setNazev(e.target.value)}
-              placeholder="např. Školení BOZP"
-              onKeyDown={(e) => e.key === 'Enter' && pridej()}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Perioda</Label>
-            <Select value={String(perioda)} onValueChange={(v) => setPerioda(Number(v))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PERIODY_SKOLENI.map((p) => (
-                  <SelectItem key={p.hodnota} value={String(p.hodnota)}>{p.popis}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Kdo provádí</Label>
-            <Input
-              value={provadi}
-              onChange={(e) => setProvadi(e.target.value)}
-              placeholder="např. OZO"
-              onKeyDown={(e) => e.key === 'Enter' && pridej()}
-            />
-          </div>
-          <Button onClick={pridej} disabled={nazev.trim() === ''}>
-            <Plus className="mr-2 h-4 w-4" /> Přidat
-          </Button>
-        </div>
-
-        {nacitam ? (
-          <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Načítám…
-          </div>
-        ) : polozky.length === 0 ? (
-          <p className="py-6 text-sm text-muted-foreground">
-            Zatím žádná témata. Přidej první výše.
-          </p>
-        ) : (
-          <div className="divide-y border-t">
-            {polozky.map((s) => (
-              <div
-                key={s.id}
-                className="grid gap-2 py-3 sm:grid-cols-[1fr_150px_160px_180px_auto] items-center"
-              >
-                <Input
-                  value={s.nazev}
-                  onChange={(e) => uprav(s.id, { nazev: e.target.value })}
-                  className="h-9"
-                />
-                <Select
-                  value={String(s.periodaMesice)}
-                  onValueChange={(v) => uprav(s.id, { periodaMesice: Number(v) })}
-                >
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {PERIODY_SKOLENI.map((p) => (
-                      <SelectItem key={p.hodnota} value={String(p.hodnota)}>{p.popis}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  value={s.provadi ?? ''}
-                  onChange={(e) => uprav(s.id, { provadi: e.target.value })}
-                  placeholder="kdo provádí"
-                  className="h-9"
-                />
-                <Select
-                  value={s.pozarniRadek ?? '__zadny__'}
-                  onValueChange={(v) => uprav(s.id, { pozarniRadek: v === '__zadny__' ? null : v })}
-                >
-                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Řádek PK…" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__zadny__">— bez požární knihy —</SelectItem>
-                    {POZARNI_RADKY.map((pr) => (
-                      <SelectItem key={pr.id} value={pr.id} className="text-xs">{pr.nazev}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => smaz(s.id)}
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 
