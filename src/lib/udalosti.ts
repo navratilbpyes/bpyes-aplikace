@@ -15,7 +15,7 @@ import { db } from '@/components/data-provider';
 import type { StavZaznamu } from './skoleni';
 import { pridejMesice } from './skoleni';
 
-export type TypUdalosti = 'skoleni' | 'zacvik' | 'prohlidka';
+export type TypUdalosti = 'skoleni' | 'zacvik' | 'prohlidka' | 'povereni';
 
 /** Závěr lékařského posudku dle § 43 zák. č. 373/2011 Sb. */
 export type ZaverProhlidky =
@@ -39,7 +39,7 @@ export interface Udalost {
   id: string;
   osobaId: string;
   typ: TypUdalosti;
-  /** u školení a zácviku odkaz do ciselnikSkoleni, u prohlídky prázdné */
+  /** u školení a zácviku odkaz do ciselnikSkoleni, u pověření do ciselnikPovereni, u prohlídky prázdné */
   temaId?: string | null;
   /** název tématu v době zápisu (snapshot pro historii) */
   temaNazev?: string | null;
@@ -59,6 +59,8 @@ export interface Udalost {
   platnostDo?: string | null;
   /** číslo průkazu nebo osvědčení */
   cisloDokladu?: string | null;
+  /** u pověření: platí na neurčito (konec platnosti se nehlídá) */
+  naNeurcito?: boolean;
   /** lektor, mentor nebo poskytovatel PLS */
   provedl?: string | null;
   poznamka?: string | null;
