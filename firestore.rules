@@ -247,6 +247,11 @@ service cloud.firestore {
       allow read: if maProfil();
       allow write: if isAdmin();
     }
+    // druhy poverení a doba jejich platnosti (mesice; 0 = na neurcito)
+    match /ciselnikPovereni/{id} {
+      allow read: if maProfil();
+      allow write: if isAdmin();
+    }
 
     // ---------- dokumenty (soubory na Wedos uloziste) ----------
     // Metadata souboru. Vytvari je API route nahrat-soubor pod idTokenem
