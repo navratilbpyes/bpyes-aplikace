@@ -6,12 +6,13 @@
  *
  * Firestore: klienti/{klientId}/skoleni/{id}
  *
- * Přidání z číselníku zkopíruje hodnoty (snapshot). Totéž téma lze přidat
- * vícekrát pro různé skupiny — rozliší je poznámka. Perioda i „kdo provádí"
- * jdou u klienta přepsat. Termín se dopočte z periody, nebo se zadá ručně.
+ * Souhrn se plní automaticky z Lidských zdrojů (relevantní položky klienta a záznamy
+ * osob) — viz lib/souhrn-skoleni.ts. Řádky `auto` jsou jen ke čtení. Ručně zadané
+ * (starší) řádky zůstávají upravitelné a lze je smazat. Nové ručně se nepřidávají —
+ * vlastní položky se zakládají v Lidských zdrojích → Nastavení klienta.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import {
   collection, addDoc, updateDoc, doc, query, where, getDocs,
 } from 'firebase/firestore';
@@ -29,7 +30,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
 import { PERIODY, popisPeriody, dopocitejDalsi, platnyTermin } from '@/lib/skoleni';
-import type { CiselnikSkoleni, SkoleniKlienta as TypSkoleni } from '@/lib/skoleni';
+import type { SkoleniKlienta as TypSkoleni } from '@/lib/skoleni';
+import { synchronizujSouhrn } from '@/lib/souhrn-skoleni';
 import ProtokolUpload from '@/components/protokol-upload';
 import type { ProtokolPole } from '@/lib/protokol';
 
@@ -44,11 +46,7 @@ const formatDatum = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('c
 
 export default function SkoleniKlienta({ klientId }: Props) {
   const [seznam, setSeznam] = useState<TypSkoleni[]>([]);
-  const [ciselnik, setCiselnik] = useState<CiselnikSkoleni[]>([]);
   const [nacitam, setNacitam] = useState(true);
-  const [vybrane, setVybrane] = useState('');
-  /** filtr oblasti — číselník má 49 položek, výběr bez něj je nepřehledný */
-  const [fOblast, setFOblast] = useState('vse');
   const [rozbaleno, setRozbaleno] = useState<string | null>(null);
 
   const cesta = useCallback(
@@ -58,63 +56,18 @@ export default function SkoleniKlienta({ klientId }: Props) {
 
   const nacti = useCallback(async () => {
     try {
-      const [kSnap, cSnap] = await Promise.all([
-        getDocs(query(cesta(), where('stav', '==', 'aktivni'))),
-        getDocs(query(collection(db, 'ciselnikSkoleni'), where('stav', '==', 'aktivni'))),
-      ]);
+      // nejdřív přepočet souhrnu z Lidských zdrojů (jen admin; selhání nesmí zablokovat zobrazení)
+      try { await synchronizujSouhrn(klientId); } catch (e) { console.warn('Souhrn školení se nepodařilo přepočítat:', e); }
+      const kSnap = await getDocs(query(cesta(), where('stav', '==', 'aktivni')));
       setSeznam(kSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as TypSkoleni));
-      setCiselnik(
-        cSnap.docs
-          .map((d) => ({ id: d.id, ...d.data() }) as CiselnikSkoleni)
-          .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs')),
-      );
     } catch (e) {
       console.error('Načtení školení selhalo:', e);
     } finally {
       setNacitam(false);
     }
-  }, [cesta]);
+  }, [cesta, klientId]);
 
   useEffect(() => { nacti(); }, [nacti]);
-
-  async function pridejZCiselniku() {
-    const zdroj = ciselnik.find((c) => c.id === vybrane);
-    if (!zdroj) return;
-    await addDoc(cesta(), {
-      ciselnikId: zdroj.id,
-      nazev: zdroj.nazev,
-      periodaMesice: zdroj.periodaMesice,
-      provadi: zdroj.provadi ?? null,
-      pozarniRadek: zdroj.pozarniRadek ?? null,
-      poznamka: null,
-      posledniIso: null,
-      dalsiIso: null,
-      dalsiRucne: false,
-      stav: 'aktivni',
-      zadal: 'ozo',
-      potvrzenoOzo: true,
-    });
-    setVybrane('');
-    nacti();
-  }
-
-  async function pridejVlastni() {
-    const ref = await addDoc(cesta(), {
-      ciselnikId: null,
-      nazev: 'Nové školení',
-      periodaMesice: 12,
-      provadi: null,
-      poznamka: null,
-      posledniIso: null,
-      dalsiIso: null,
-      dalsiRucne: false,
-      stav: 'aktivni',
-      zadal: 'ozo',
-      potvrzenoOzo: true,
-    });
-    await nacti();
-    setRozbaleno(ref.id);
-  }
 
   async function uprav(id: string, zmeny: Partial<TypSkoleni>) {
     setSeznam((p) => p.map((s) => (s.id === id ? { ...s, ...zmeny } : s)));
@@ -144,14 +97,10 @@ export default function SkoleniKlienta({ klientId }: Props) {
     );
   }
 
-  // oblasti z číselníku (BOZP, PO, Doprava…) — přibude-li nová, objeví se sama
-  const oblasti = Array.from(
-    new Set(ciselnik.map((c) => c.oblast).filter((o): o is string => !!o)),
-  ).sort((a, b) => a.localeCompare(b, 'cs'));
-
-  const filtrovanyCiselnik = fOblast === 'vse'
-    ? ciselnik
-    : ciselnik.filter((c) => c.oblast === fOblast);
+  const automaticke = seznam
+    .filter((s) => s.auto)
+    .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs'));
+  const rucni = seznam.filter((s) => !s.auto);
 
   return (
     <Card>
@@ -160,61 +109,36 @@ export default function SkoleniKlienta({ klientId }: Props) {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className="flex flex-wrap gap-2">
-          {oblasti.length > 0 && (
-            <Select value={fOblast} onValueChange={(v) => { setFOblast(v); setVybrane(''); }}>
-              <SelectTrigger className="w-full sm:w-[160px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="vse">Všechny oblasti</SelectItem>
-                {oblasti.map((o) => (
-                  <SelectItem key={o} value={o}>{o}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
-          <Select value={vybrane} onValueChange={setVybrane}>
-            <SelectTrigger className="flex-1 min-w-[220px]">
-              <SelectValue placeholder="Vyber téma z číselníku…" />
-            </SelectTrigger>
-            <SelectContent>
-              {ciselnik.length === 0 && (
-                <div className="px-2 py-3 text-sm text-muted-foreground">
-                  Číselník je prázdný — naplň jej v sekci Číselníky.
-                </div>
-              )}
-              {filtrovanyCiselnik.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {fOblast === 'vse' && c.oblast ? `[${c.oblast}] ` : ''}{c.nazev} ({popisPeriody(c.periodaMesice)})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={pridejZCiselniku} disabled={!vybrane}>
-            <Plus className="mr-2 h-4 w-4" /> Přidat
-          </Button>
-          <Button variant="secondary" onClick={pridejVlastni}>
-            Vlastní
-          </Button>
-        </div>
-
         <p className="text-xs text-muted-foreground">
-          Stejné téma lze přidat vícekrát pro různé skupiny — rozliš je poznámkou.
+          Souhrn se plní automaticky z Lidských zdrojů podle relevantních školení a činností klienta.
+          „Poslední“ je nejnovější školení kterékoli osoby, „další“ nejbližší končící termín;
+          osoba bez záznamu se počítá jako po termínu. Vlastní položky klienta se zakládají v
+          Lidských zdrojích → Nastavení klienta.
         </p>
 
         {seznam.length === 0 ? (
           <p className="py-6 text-sm text-muted-foreground">
-            Klient zatím nemá přiřazená žádná školení.
+            Zatím nic. Nastavte klientovi relevantní školení a činnosti v Lidských zdrojích → Nastavení klienta.
           </p>
         ) : (
           <div className="space-y-2">
-            {seznam.map((s) => {
+            {[...automaticke, ...rucni].map((s, i) => {
               const termin = platnyTermin(s);
               const otevreno = rozbaleno === s.id;
+              const auto = !!s.auto;
               return (
-                <div key={s.id} className="rounded-lg border overflow-hidden">
+                <Fragment key={s.id}>
+                {i === 0 && auto && (
+                  <h3 className="pt-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Automatický souhrn z Lidských zdrojů ({automaticke.length})
+                  </h3>
+                )}
+                {i === automaticke.length && rucni.length > 0 && (
+                  <h3 className="pt-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Ručně zadané / starší záznamy ({rucni.length})
+                  </h3>
+                )}
+                <div className="rounded-lg border overflow-hidden">
                   <div className="flex items-start gap-2 bg-muted/40 p-3">
                     <Button
                       variant="ghost"
@@ -233,7 +157,10 @@ export default function SkoleniKlienta({ klientId }: Props) {
                         {s.poznamka && (
                           <span className="text-sm text-muted-foreground">— {s.poznamka}</span>
                         )}
-                        {!s.ciselnikId && (
+                        {auto && (
+                          <Badge variant="outline" className="text-[10px]">automaticky</Badge>
+                        )}
+                        {!auto && !s.ciselnikId && (
                           <Badge variant="secondary" className="text-[10px]">vlastní</Badge>
                         )}
                         {s.zadal === 'klient' && s.potvrzenoOzo === false && (
@@ -260,27 +187,50 @@ export default function SkoleniKlienta({ klientId }: Props) {
                       <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
                         <span>{popisPeriody(s.periodaMesice)}</span>
                         {s.provadi && <span>{s.provadi}</span>}
+                        {auto && (s.pocetOsob ?? 0) > 0 && (
+                          <span>
+                            {s.pocetOsob} {s.pocetOsob === 1 ? 'osoba' : (s.pocetOsob ?? 0) < 5 ? 'osoby' : 'osob'}
+                            {(s.pocetBezZaznamu ?? 0) > 0 && (
+                              <strong className="text-red-700"> · {s.pocetBezZaznamu}× bez záznamu</strong>
+                            )}
+                          </span>
+                        )}
+                        {auto && (s.pocetOsob ?? 0) === 0 && <span>zatím žádná dotčená osoba</span>}
+                        {s.posledniIso && (
+                          <span>
+                            poslední: <strong className="text-foreground">{formatDatum(s.posledniIso)}</strong>
+                          </span>
+                        )}
                         <span>
                           další: <strong className="text-foreground">{formatDatum(termin)}</strong>
                         </span>
-                        {s.dalsiRucne && (
+                        {!auto && s.dalsiRucne && (
                           <Badge variant="outline" className="text-[10px] h-4">ručně</Badge>
                         )}
                       </div>
                     </div>
 
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                      onClick={() => smaz(s.id)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                    {!auto && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => smaz(s.id)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
 
                   {otevreno && (
                     <div className="border-t p-3 space-y-3">
+                      {auto && (
+                        <p className="text-xs text-muted-foreground">
+                          Tento řádek se počítá automaticky ze záznamů osob v Lidských zdrojích a nelze ho
+                          upravit ručně. Termíny změníte zápisem školení u konkrétních osob.
+                        </p>
+                      )}
+                      {!auto && (<>
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1">
                           <Label className="text-xs">Téma školení</Label>
@@ -365,6 +315,8 @@ export default function SkoleniKlienta({ klientId }: Props) {
                         </div>
                       </div>
 
+                      </>)}
+
                       {/* Doklad o školení — nahrání / kontrola OZO */}
                       <div className="rounded-md border bg-muted/30 p-3 space-y-2">
                         <Label className="text-xs font-medium">Doklad o školení</Label>
@@ -376,7 +328,7 @@ export default function SkoleniKlienta({ klientId }: Props) {
                         />
                       </div>
 
-                      {s.dalsiRucne && (
+                      {!auto && s.dalsiRucne && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -392,6 +344,7 @@ export default function SkoleniKlienta({ klientId }: Props) {
                     </div>
                   )}
                 </div>
+                </Fragment>
               );
             })}
           </div>
