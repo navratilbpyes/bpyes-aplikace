@@ -1,401 +1,724 @@
-/**
- * AuditFlow — procesní mapa osoby: uzly a jejich vyhodnocení.
- * Umístění: src/lib/uzly.ts
- *
- * Mapa je osobní, ne firemní. Ukazuje, kde konkrétní člověk stojí:
- * co má za sebou, co ho čeká a co chybí. Firemní pohled vzniká
- * agregací osobních map, ne vlastní strukturou.
- *
- * Uzel má tři vlastnosti:
- *   1. podmínku zobrazení — komu se vůbec ukáže,
- *   2. způsob uzavření — ručně / událostí / kolem,
- *   3. formulář, který k němu patří.
- */
-
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '@/components/data-provider';
-import type { StavZaznamu } from './skoleni';
-import type { CiselnikCinnost } from './cinnosti';
-import type { Osoba } from './osoby';
-import { aktivniCinnosti } from './osoby';
-import type { Udalost } from './udalosti';
-import { dalsiTermin, stavTerminu, PRAH_VYCHOZI } from './udalosti';
-import type { CiselnikSkoleni } from './skoleni';
-
-export type FazeUzlu = 'nastup' | 'provoz' | 'udalost' | 'ukonceni';
-
-/** Komu se uzel zobrazí. */
-export type PodminkaUzlu =
-  | 'vzdy'
-  | 'priCinnosti'      // osoba má některou z uvedených činností
-  | 'priZacviku'       // osoba má činnost vyžadující zácvik
-  | 'priVedouci'       // pozice je vedoucí
-  | 'priProfesnimRiziku'
-  | 'priUkonceni';     // osoba má vyplněné datum ukončení
-
-/** Čím se uzel odškrtne. */
-export type UzavreniUzlu =
-  | 'rucne'            // datum a poznámka přímo na kartě
-  | 'skolenim'         // záznam školení daného tématu
-  | 'zacvikem'         // záznam školení s vyplněným datem ukončení
-  | 'prohlidkou'       // záznam lékařské prohlídky
-  | 'doklady'          // platnost průkazů a osvědčení (může jich být víc)
-  | 'kolem';           // účast na centrálním termínu (zatím nepoužito)
-
-export interface CiselnikUzel {
-  id: string;
-  poradi: number;
-  faze: FazeUzlu;
-  nazev: string;
-  podminka: PodminkaUzlu;
-  /** u podmínky priCinnosti — ID činností, které uzel spouštějí */
-  cinnostiIds?: string[];
-  uzavreni: UzavreniUzlu;
-  /** u uzavření skolenim/zacvikem — ID tématu z ciselnikSkoleni */
-  skoleniId?: string | null;
-  /** u uzavření prohlidkou — druh prohlídky */
-  druhProhlidky?: string | null;
-  /** označení formuláře, např. „F001" */
-  formular?: string | null;
-  /** volitelný krok — nepočítá se mezi problémy ani do celku, dokud není splněn */
-  volitelny?: boolean;
-  /** vysvětlivka pro klienta — co má udělat a proč */
-  napoveda?: string | null;
-  predpis?: string | null;
-  stav: StavZaznamu;
-}
-
-export const POPIS_FAZE: Record<FazeUzlu, string> = {
-  nastup: 'Nástup',
-  provoz: 'Provoz',
-  udalost: 'Mimořádné události',
-  ukonceni: 'Ukončení',
-};
-
-export const POPIS_PODMINKY: Record<PodminkaUzlu, string> = {
-  vzdy: 'Vždy',
-  priCinnosti: 'Při vybrané činnosti',
-  priZacviku: 'Při činnosti se zácvikem',
-  priVedouci: 'U vedoucí pozice',
-  priProfesnimRiziku: 'Při profesním riziku',
-  priUkonceni: 'Při ukončení poměru',
-};
-
-export const POPIS_UZAVRENI: Record<UzavreniUzlu, string> = {
-  rucne: 'Ručně (datum a poznámka)',
-  skolenim: 'Záznamem školení',
-  zacvikem: 'Záznamem zácviku',
-  prohlidkou: 'Záznamem prohlídky',
-  doklady: 'Platností průkazů a osvědčení',
-  kolem: 'Účastí na centrálním termínu',
-};
+'use client';
 
 /**
- * Výchozí sada uzlů. Zakládá se při prvním otevření číselníku, dál se edituje
- * v aplikaci — texty ani podmínky nepatří do kódu, mění se s předpisy.
+ * AuditFlow — karta osoby.
+ * Umístění: src/components/zamestnanci/karta-osoby.tsx
+ *
+ * Nástup a Ukončení: odškrtávací kroky procesní mapy.
+ * Provoz: živý přehled školení, pověření a prohlídky osoby (z jejích položek
+ *         v číselníku „Školení a činnosti"), u každé položky „Zapsat" — opakovaně.
+ * Mimořádné události: deník s libovolným počtem záznamů (přerušení od–do,
+ *         úrazy s DPN, ostatní události). Úrazy se podrobněji řeší později.
+ * Historie: sloučené záznamy školení, pověření a prohlídek.
  */
-export const VYCHOZI_UZLY: Omit<CiselnikUzel, 'id'>[] = [
-  {
-    poradi: 10, faze: 'nastup', nazev: 'Zařazení: pozice, činnosti, kategorie',
-    podminka: 'vzdy', uzavreni: 'rucne', stav: 'aktivni',
-    napoveda: 'Přiřaďte osobě pracovní pozici a činnosti, které bude vykonávat. Z nich systém odvodí povinná školení i lhůtu lékařské prohlídky.',
-  },
-  {
-    poradi: 20, faze: 'nastup', nazev: 'Vstupní lékařská prohlídka',
-    podminka: 'vzdy', uzavreni: 'prohlidkou', druhProhlidky: 'vstupni',
-    formular: 'F006', stav: 'aktivni',
-    napoveda: 'Musí proběhnout před nástupem. U kategorie 1 bez profesního rizika ji lze vynechat — jakmile má ale osoba činnost s profesním rizikem, je povinná vždy.',
-    predpis: '§ 59 zákona č. 373/2011 Sb.',
-  },
-  {
-    poradi: 30, faze: 'nastup', nazev: 'Dopravně psychologické vyšetření',
-    podminka: 'priCinnosti', uzavreni: 'rucne', formular: 'F007', stav: 'aktivni',
-    napoveda: 'Řidiči z povolání před zahájením činnosti, řidiči referenti od 65 let věku.',
-    predpis: '§ 87a zákona č. 361/2000 Sb.',
-  },
-  {
-    poradi: 40, faze: 'nastup', nazev: 'Vstupní školení BOZP a PO',
-    podminka: 'vzdy', uzavreni: 'skolenim', formular: 'F001', stav: 'aktivni',
-    napoveda: 'První den nástupu, před zahájením práce. Od jeho data se počítá perioda dalšího školení.',
-    predpis: '§ 103 odst. 2 zákoníku práce · § 16 zákona č. 133/1985 Sb.',
-  },
-  {
-    poradi: 50, faze: 'nastup', nazev: 'Školení vedoucích zaměstnanců',
-    podminka: 'priVedouci', uzavreni: 'skolenim', formular: 'F001', stav: 'aktivni',
-    napoveda: 'Vedoucí potřebují rozšířené školení — odpovídají za BOZP na svěřeném úseku.',
-    predpis: '§ 103 odst. 2 a 3 zákoníku práce',
-  },
-  {
-    poradi: 60, faze: 'nastup', nazev: 'Vstupní odborné školení k činnostem',
-    podminka: 'priCinnosti', uzavreni: 'skolenim', formular: 'F001', stav: 'aktivni',
-    napoveda: 'Školení, která plynou z přiřazených činností — výšky, vozíky, svařování a další. Musí předcházet praktickému zácviku.',
-  },
-  {
-    poradi: 70, faze: 'nastup', nazev: 'Praktický zácvik',
-    podminka: 'priZacviku', uzavreni: 'zacvikem', formular: 'F002–F005', stav: 'aktivni',
-    napoveda: 'Začíná dnem odborného školení a končí ověřením. Délka se liší podle schopností konkrétního člověka. Provádí se pouze u osob, které vstupní odborné školení absolvovaly.',
-  },
-  {
-    poradi: 80, faze: 'nastup', nazev: 'Přidělení OOPP',
-    podminka: 'vzdy', uzavreni: 'rucne', formular: 'F010', stav: 'aktivni',
-    napoveda: 'Podle vlastního seznamu OOPP zpracovaného na základě vyhodnocení rizik. Zapište, co bylo vydáno, na evidenční kartu.',
-    predpis: '§ 104 zákoníku práce · NV č. 390/2021 Sb.',
-  },
 
-  {
-    poradi: 110, faze: 'provoz', nazev: 'Periodické školení BOZP a PO',
-    podminka: 'vzdy', uzavreni: 'skolenim', formular: 'F001', stav: 'aktivni',
-    napoveda: 'Opakuje se v periodě podle vnitřního předpisu. Termín běží od data vstupního školení konkrétní osoby.',
-  },
-  {
-    poradi: 120, faze: 'provoz', nazev: 'Periodická odborná školení a přezkoušení',
-    podminka: 'priCinnosti', uzavreni: 'skolenim', formular: 'F001', stav: 'aktivni',
-    napoveda: 'Opakovaná školení k jednotlivým činnostem. U jeřábníků, vazačů a obsluhy plošin zahrnuje i přezkoušení.',
-  },
-  {
-    poradi: 130, faze: 'provoz', nazev: 'Periodická lékařská prohlídka',
-    podminka: 'vzdy', uzavreni: 'prohlidkou', druhProhlidky: 'periodicka',
-    formular: 'F006', stav: 'aktivni',
-    napoveda: 'Lhůta vychází z kategorie práce a z činností s profesním rizikem — platí vždy ta nejkratší. Prohlídka musí být nejpozději 10 dnů před koncem platnosti posudku.',
-    predpis: '§ 11 vyhlášky č. 79/2013 Sb.',
-  },
-  {
-    poradi: 140, faze: 'provoz', nazev: 'Platnost průkazů a osvědčení',
-    podminka: 'priCinnosti', uzavreni: 'doklady', stav: 'aktivni',
-    napoveda: 'Svářečský průkaz, profesní průkaz řidiče, doklad o odborné způsobilosti v elektrotechnice. Hlídá se konec platnosti uvedený na dokladu, ne perioda školení. Dokladů může mít osoba víc — vypisují se jednotlivě. Zapisují se na záložce Školení u témat označených jako doklad, do pole Platnost do.',
-  },
+import { useState, useMemo, useEffect } from 'react';
+import { updateDoc, doc, addDoc, collection } from 'firebase/firestore';
+import { db, useData } from '@/components/data-provider';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
+import {
+  Check, Circle, ChevronDown, ChevronRight, FileText, Loader2, Stethoscope, GraduationCap,
+  AlertTriangle, RotateCw, BadgeCheck, Plus, X,
+} from 'lucide-react';
+import type { Osoba } from '@/lib/osoby';
+import { celeJmeno, aktivniCinnosti } from '@/lib/osoby';
+import type { CiselnikCinnost } from '@/lib/cinnosti';
+import type { Udalost, ZaverProhlidky } from '@/lib/udalosti';
+import {
+  formatDatum, POPIS_DRUHU, POPIS_ZAVERU, nactiPrah, posledni, dalsiTermin, stavTerminu, polozkaLogu,
+} from '@/lib/udalosti';
+import type { CiselnikUzel, VyhodnocenyUzel, FazeUzlu } from '@/lib/uzly';
+import { vyhodnotMapu, POPIS_FAZE, souhrnMapy } from '@/lib/uzly';
+import type { CiselnikSkoleni } from '@/lib/skoleni';
+import { pridejMesice } from '@/lib/skoleni';
+import type { CiselnikPovereni } from '@/lib/povereni';
+import { posledniPovereni, stavPovereni, popisPlatnosti } from '@/lib/povereni';
 
-  {
-    poradi: 210, faze: 'udalost', nazev: 'Změna pozice nebo činnosti',
-    podminka: 'vzdy', uzavreni: 'rucne', formular: 'F006 + F001 + F010', stav: 'aktivni',
-    napoveda: 'Převedení na jinou práci spouští tři věci najednou: lékařskou prohlídku, doškolení k nové činnosti a úpravu přidělených OOPP.',
-  },
-  {
-    poradi: 220, faze: 'udalost', nazev: 'Přerušení výkonu práce',
-    podminka: 'vzdy', uzavreni: 'rucne', stav: 'aktivni',
-    napoveda: 'Zaznamenejte delší nepřítomnost. Nemoc nad 8 týdnů, úraz s těžkými následky nebo přerušení nad 6 měsíců zakládá mimořádnou prohlídku do 5 pracovních dnů od návratu.',
-    predpis: '§ 12 vyhlášky č. 79/2013 Sb.',
-  },
-  {
-    poradi: 230, faze: 'udalost', nazev: 'Mimořádná lékařská prohlídka',
-    podminka: 'vzdy', uzavreni: 'prohlidkou', druhProhlidky: 'mimoradna',
-    formular: 'F006', stav: 'aktivni',
-    napoveda: 'Prohlídka v úplném rozsahu resetuje periodu periodické prohlídky, v neúplném nikoli.',
-  },
-  {
-    poradi: 310, faze: 'ukonceni', nazev: 'Výstupní lékařská prohlídka',
-    podminka: 'priUkonceni', uzavreni: 'prohlidkou', druhProhlidky: 'vystupni',
-    formular: 'F008', stav: 'aktivni',
-    napoveda: 'Povinná u kategorie 2R, 3 a 4, dále při nemoci z povolání nebo úrazu s opakovanou neschopností. V ostatních případech na žádost zaměstnance nebo zaměstnavatele.',
-    predpis: '§ 13 vyhlášky č. 79/2013 Sb.',
-  },
-  {
-    poradi: 320, faze: 'ukonceni', nazev: 'Vrácení OOPP',
-    podminka: 'priUkonceni', uzavreni: 'rucne', formular: 'F010', stav: 'aktivni',
-    napoveda: 'Zaznamenejte vrácení na evidenční kartu OOPP.',
-  },
-  {
-    poradi: 330, faze: 'ukonceni', nazev: 'Následná lékařská prohlídka',
-    podminka: 'priProfesnimRiziku', uzavreni: 'prohlidkou', druhProhlidky: 'nasledna',
-    stav: 'aktivni',
-    napoveda: 'U prací s rizikem pozdních následků. Běží až po skončení expozice, tedy i po ukončení pracovního poměru.',
-  },
+/** Fáze zobrazené jako odškrtávací kroky. Provoz a události mají vlastní sekce níže. */
+const FAZE_KROKY: FazeUzlu[] = ['nastup', 'ukonceni'];
+
+type Stav = 'ok' | 'blizi' | 'po' | 'chybi';
+
+interface Preruseni { id: string; od: string; do: string; poznamka: string }
+interface Uraz { id: string; cislo: string; dpn: boolean }
+interface Udalost2 { id: string; typ: string; datum: string; poznamka: string }
+
+const TYPY_UDALOSTI: { hodnota: string; popis: string; formular?: string }[] = [
+  { hodnota: 'zmena', popis: 'Změna pozice nebo činnosti', formular: 'F006 + F001 + F010' },
+  { hodnota: 'jina', popis: 'Jiná událost' },
 ];
 
-export async function nactiUzly(): Promise<CiselnikUzel[]> {
-  const snap = await getDocs(
-    query(collection(db, 'ciselnikUzlu'), where('stav', '==', 'aktivni')),
+const novyId = () => Math.random().toString(36).slice(2, 10);
+
+function dnesLokalne(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+const BARVA_STAVU: Record<Stav, string> = {
+  po: 'border-red-600 bg-red-600 text-white',
+  blizi: 'border-amber-500 bg-amber-500 text-white',
+  chybi: 'border-slate-300 text-slate-300',
+  ok: 'border-emerald-600 bg-emerald-600 text-white',
+};
+const TEXT_STAVU: Record<Stav, string> = {
+  po: 'text-red-700 font-bold',
+  blizi: 'text-amber-700 font-medium',
+  chybi: 'text-slate-400 italic',
+  ok: 'text-emerald-700 font-medium',
+};
+
+function Kolecko({ stav }: { stav: Stav }) {
+  return (
+    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${BARVA_STAVU[stav]}`}>
+      {stav === 'ok' ? <Check className="h-3 w-3" />
+        : stav === 'po' ? <AlertTriangle className="h-3 w-3" />
+        : stav === 'blizi' ? <RotateCw className="h-3 w-3" />
+        : <Circle className="h-2 w-2 fill-current" />}
+    </span>
   );
-  return snap.docs
-    .map((d) => ({ id: d.id, ...d.data() }) as CiselnikUzel)
-    .sort((a, b) => (a.poradi ?? 0) - (b.poradi ?? 0));
 }
 
-/**
- * Stav uzlu.
- * Nástup, události a ukončení jsou binární — vstupní školení se nekoná podruhé.
- * Provoz je cyklus, a tam „splněno" nic neříká: rozhoduje termín dalšího.
- */
-export type StavUzlu = 'splneno' | 'ceka' | 'ok' | 'blizi' | 'po' | 'chybi';
-
-export interface VyhodnocenyUzel {
-  uzel: CiselnikUzel;
-  stav: StavUzlu;
-  /** datum posledního splnění */
-  datum?: string | null;
-  /** termín dalšího — jen u cyklických uzlů ve fázi Provoz */
-  dalsi?: string | null;
-  /** perioda v měsících, ze které se termín počítá */
-  perioda?: number;
-  /** jednotlivé doklady u uzlu typu „doklady" — průkazů může být víc */
-  doklady?: { nazev: string; platnostDo?: string | null; cislo?: string | null; stav: StavUzlu }[];
+/** Řádek přehledu Provoz. */
+interface RadekProvozu {
+  klic: string;
+  druh: 'skoleni' | 'povereni' | 'prohlidka';
+  nazev: string;
+  podnazev?: string;
+  stav: Stav;
+  posledniDatum: string | null;
+  dalsi: string | null;
+  /** ID tématu (školení) nebo druhu pověření */
+  temaId?: string;
+  provadi?: string | null;
+  def?: CiselnikPovereni;
+  naNeurcito?: boolean;
 }
 
-/** Uzel vyžaduje pozornost — po lhůtě, nebo úplně bez záznamu. */
-export function jeProblem(v: VyhodnocenyUzel): boolean {
-  if (v.uzel.volitelny && v.stav !== 'po') return false;
-  return v.stav === 'po' || v.stav === 'chybi'
-    || (v.uzel.faze === 'nastup' && v.stav === 'ceka');
-}
+export default function KartaOsoby({
+  osoba, klientId, uzly, cinnosti, udalosti, jeVedouci, skoleni, povereni = [], periodaProhlidky, zavri, poZmene,
+}: {
+  osoba: Osoba | null;
+  klientId: string | null;
+  uzly: CiselnikUzel[];
+  cinnosti: CiselnikCinnost[];
+  udalosti: Udalost[];
+  jeVedouci: boolean;
+  skoleni: CiselnikSkoleni[];
+  povereni?: CiselnikPovereni[];
+  periodaProhlidky?: number;
+  zavri: () => void;
+  poZmene: () => void;
+}) {
+  const { toast } = useToast();
+  const { user } = useData();
+  const [rozbaleny, setRozbaleny] = useState<string | null>(null);
+  const [uklada, setUklada] = useState<string | null>(null);
+  /** řádek Provozu, u kterého je otevřený rychlý zápis */
+  const [zapisKlic, setZapisKlic] = useState<string | null>(null);
 
-/** Souhrn mapy pro seznam osob — nejhorší stav rozhoduje. */
-export function souhrnMapy(mapa: VyhodnocenyUzel[]): {
-  stav: 'ok' | 'blizi' | 'po' | 'nekompletni';
-  splneno: number;
-  celkem: number;
-  problemy: number;
-} {
-  // volitelné kroky, které nejsou splněné, se nepočítají vůbec
-  mapa = mapa.filter((m) => !(m.uzel.volitelny && m.stav === 'ceka'));
-  const celkem = mapa.length;
-  const splneno = mapa.filter((m) => m.stav === 'splneno' || m.stav === 'ok' || m.stav === 'blizi').length;
-  const po = mapa.filter((m) => m.stav === 'po').length;
-  const chybi = mapa.filter((m) => jeProblem(m) && m.stav !== 'po').length;
-  const blizi = mapa.filter((m) => m.stav === 'blizi').length;
-  return {
-    stav: po > 0 ? 'po' : chybi > 0 ? 'nekompletni' : blizi > 0 ? 'blizi' : 'ok',
-    splneno,
-    celkem,
-    problemy: po + chybi,
-  };
-}
+  const prah = nactiPrah();
 
-/** Zobrazí se uzel této osobě? */
-function zobrazit(
-  u: CiselnikUzel,
-  osoba: Osoba,
-  cinnosti: CiselnikCinnost[],
-  jeVedouci: boolean,
-): boolean {
-  switch (u.podminka) {
-    case 'vzdy':
-      return true;
-    case 'priVedouci':
-      return jeVedouci;
-    case 'priZacviku':
-      return cinnosti.some((c) => c.zacvik);
-    case 'priProfesnimRiziku':
-      return cinnosti.some((c) => c.profesniRiziko);
-    case 'priUkonceni':
-      return !!osoba.datumUkonceni;
-    case 'priCinnosti': {
-      const sada = u.cinnostiIds ?? [];
-      if (sada.length === 0) return cinnosti.length > 0;
-      return cinnosti.some((c) => sada.includes(c.id));
+  const mojeUdalosti = useMemo(
+    () => (osoba
+      ? udalosti
+        .filter((u) => u.osobaId === osoba.id)
+        .sort((a, b) => (b.datum ?? '').localeCompare(a.datum ?? ''))
+      : []),
+    [osoba, udalosti],
+  );
+
+  /** Mapa jen pro Nástup a Ukončení (Provoz a události se řeší níže). */
+  const mapa: VyhodnocenyUzel[] = useMemo(
+    () => (osoba
+      ? vyhodnotMapu(
+        uzly.filter((u) => FAZE_KROKY.includes(u.faze)),
+        osoba, cinnosti, udalosti, jeVedouci, skoleni, periodaProhlidky, prah,
+      )
+      : []),
+    [osoba, uzly, cinnosti, udalosti, jeVedouci, skoleni, periodaProhlidky, prah],
+  );
+
+  /** Živý přehled Provozu. */
+  const provoz = useMemo<RadekProvozu[]>(() => {
+    if (!osoba) return [];
+    const skMap = new Map(skoleni.map((s) => [s.id, s]));
+    const povMap = new Map(povereni.map((p) => [p.id, p]));
+    const radky: RadekProvozu[] = [];
+
+    // školení: z přiřazených položek (cinnosti už obsahují i související)
+    const idsSkoleni = new Set<string>();
+    cinnosti.forEach((c) => (c.skoleniIds ?? []).forEach((id) => idsSkoleni.add(id)));
+    for (const id of idsSkoleni) {
+      const t = skMap.get(id);
+      if (!t || !(t.periodaMesice > 0) || t.bezSkoleniPovereni) continue;
+      const p = posledni(udalosti, osoba.id, 'skoleni', id);
+      const dalsi = dalsiTermin(p, t.periodaMesice) ?? null;
+      radky.push({
+        klic: `s-${id}`, druh: 'skoleni', nazev: t.nazev,
+        podnazev: [t.oblast, t.doklad ? 'doklad' : '', t.prezkouseni ? 'vč. přezkoušení' : ''].filter(Boolean).join(' · '),
+        stav: (p ? stavTerminu(dalsi, prah) : 'chybi') as Stav,
+        posledniDatum: p?.datum ?? null, dalsi, temaId: id, provadi: t.provadi ?? null,
+      });
     }
-    default:
-      return true;
+
+    // pověření: z přiřazených položek s přepínačem „Vyžaduje pověření"
+    const videnaPov = new Set<string>();
+    for (const a of aktivniCinnosti(osoba)) {
+      const t = skMap.get(a.cinnostId);
+      if (!t?.vyzadujePovereni || t.bezSkoleniPovereni) continue;
+      const def = t.povereniId ? povMap.get(t.povereniId) : undefined;
+      const k = def?.id ?? `bez-${t.id}`;
+      if (videnaPov.has(k)) continue;
+      videnaPov.add(k);
+      if (!def) {
+        radky.push({
+          klic: `p-${k}`, druh: 'povereni', nazev: `Pověření — ${t.nazev}`,
+          podnazev: 'u položky není vybraný druh pověření', stav: 'chybi', posledniDatum: null, dalsi: null,
+        });
+        continue;
+      }
+      const z = posledniPovereni(udalosti, osoba.id, def.id);
+      const r = stavPovereni(z, def, prah);
+      radky.push({
+        klic: `p-${def.id}`, druh: 'povereni', nazev: def.nazev,
+        podnazev: `pověření · platnost ${popisPlatnosti(def.platnostMesice)}`,
+        stav: (r.stav === 'neurcito' ? 'ok' : r.stav) as Stav,
+        posledniDatum: z?.datum ?? null,
+        dalsi: r.konec, naNeurcito: r.stav === 'neurcito',
+        temaId: def.id, def, provadi: def.kdoVydava ?? null,
+      });
+    }
+
+    // periodická lékařská prohlídka
+    const prohlidky = mojeUdalosti.filter((u) => u.typ === 'prohlidka');
+    if (periodaProhlidky || prohlidky.length > 0) {
+      const p = prohlidky[0];
+      const dalsi = periodaProhlidky ? (dalsiTermin(p, periodaProhlidky) ?? null) : null;
+      radky.push({
+        klic: 'prohlidka', druh: 'prohlidka', nazev: 'Lékařská prohlídka',
+        podnazev: periodaProhlidky ? `perioda ${periodaProhlidky} měsíců` : 'perioda se nepočítá',
+        stav: (p && dalsi ? stavTerminu(dalsi, prah) : p ? 'ok' : 'chybi') as Stav,
+        posledniDatum: p?.datum ?? null, dalsi,
+      });
+    }
+
+    const poradi: Record<string, number> = { skoleni: 0, povereni: 1, prohlidka: 2 };
+    return radky.sort((a, b) => poradi[a.druh] - poradi[b.druh] || a.nazev.localeCompare(b.nazev, 'cs'));
+  }, [osoba, skoleni, povereni, cinnosti, udalosti, mojeUdalosti, periodaProhlidky, prah]);
+
+  const souhrnKroku = useMemo(() => souhrnMapy(mapa), [mapa]);
+  const problemyProvozu = provoz.filter((r) => r.stav === 'po' || r.stav === 'chybi').length;
+  const celkem = souhrnKroku.celkem + provoz.length;
+  const problemy = souhrnKroku.problemy + problemyProvozu;
+  const splneno = celkem - problemy;
+
+  /** Ruční uzavření uzlu — datum se ukládá do mapy `uzavreneUzly` na osobě. */
+  async function uzavriRucne(uzelId: string, datum: string) {
+    if (!osoba || !klientId) return;
+    setUklada(uzelId);
+    try {
+      const stavajici = ((osoba as any).uzavreneUzly ?? {}) as Record<string, string>;
+      const nove = { ...stavajici };
+      if (datum) nove[uzelId] = new Date(datum).toISOString();
+      else delete nove[uzelId];
+      await updateDoc(doc(db, 'klienti', klientId, 'osoby', osoba.id), { uzavreneUzly: nove });
+      (osoba as any).uzavreneUzly = nove;
+      poZmene();
+    } catch (e: any) {
+      toast({ title: 'Uložení selhalo', description: e?.message ?? '', variant: 'destructive' });
+    } finally {
+      setUklada(null);
+    }
+  }
+
+  /** Rychlý zápis k řádku Provozu (opakovaně, žádný limit jednoho záznamu). */
+  async function zapis(r: RadekProvozu, v: {
+    datum: string; platnostDo: string; naNeurcito: boolean; provedl: string; zaver: ZaverProhlidky; poznamka: string;
+  }) {
+    if (!osoba || !klientId || !v.datum) return;
+    const kdo = user?.email ?? 'neznámý';
+    const odIso = new Date(v.datum).toISOString();
+    try {
+      await addDoc(collection(db, 'klienti', klientId, 'udalosti'), {
+        osobaId: osoba.id,
+        typ: r.druh === 'prohlidka' ? 'prohlidka' : r.druh,
+        temaId: r.druh === 'prohlidka' ? null : (r.temaId ?? null),
+        temaNazev: r.druh === 'prohlidka' ? null : r.nazev,
+        datum: odIso,
+        datumDo: null,
+        datumPosudku: null,
+        druhProhlidky: r.druh === 'prohlidka' ? 'periodicka' : null,
+        zaver: r.druh === 'prohlidka' ? v.zaver : null,
+        platnostDo: r.druh === 'povereni' && !v.naNeurcito && v.platnostDo ? new Date(v.platnostDo).toISOString() : null,
+        naNeurcito: r.druh === 'povereni' ? v.naNeurcito : false,
+        cisloDokladu: null,
+        provedl: v.provedl.trim() || null,
+        poznamka: v.poznamka.trim() || null,
+        stav: 'aktivni',
+        log: [polozkaLogu(kdo, 'zalozeno', null, odIso)],
+      });
+      toast({ title: 'Záznam zapsán' });
+      setZapisKlic(null);
+      poZmene();
+    } catch (e: any) {
+      toast({ title: 'Zápis selhal', description: e?.message ?? '', variant: 'destructive' });
+    }
+  }
+
+  /* ── deník mimořádných událostí (pole na dokumentu osoby) ── */
+  const [preruseni, setPreruseni] = useState<Preruseni[]>([]);
+  const [urazy, setUrazy] = useState<Uraz[]>([]);
+  const [udalosti2, setUdalosti2] = useState<Udalost2[]>([]);
+
+  useEffect(() => {
+    const o = osoba as any;
+    setPreruseni(o?.preruseni ?? []);
+    setUrazy(o?.urazy ?? []);
+    setUdalosti2(o?.mimoradneUdalosti ?? []);
+    setZapisKlic(null);
+    setRozbaleny(null);
+  }, [osoba?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function ulozPole(pole: 'preruseni' | 'urazy' | 'mimoradneUdalosti', hodnota: unknown[]) {
+    if (!osoba || !klientId) return;
+    try {
+      await updateDoc(doc(db, 'klienti', klientId, 'osoby', osoba.id), { [pole]: hodnota });
+      (osoba as any)[pole] = hodnota;
+    } catch (e: any) {
+      toast({ title: 'Uložení selhalo', description: e?.message ?? '', variant: 'destructive' });
+    }
+  }
+
+  function upravPreruseni(nove: Preruseni[], uloz = false) {
+    setPreruseni(nove);
+    if (uloz) ulozPole('preruseni', nove);
+  }
+  function upravUrazy(nove: Uraz[], uloz = false) {
+    setUrazy(nove);
+    if (uloz) ulozPole('urazy', nove);
+  }
+  function upravUdalosti(nove: Udalost2[], uloz = false) {
+    setUdalosti2(nove);
+    if (uloz) ulozPole('mimoradneUdalosti', nove);
+  }
+
+  return (
+    <Dialog open={!!osoba} onOpenChange={(o) => !o && zavri()}>
+      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
+        <DialogHeader>
+          <DialogTitle>{osoba ? celeJmeno(osoba) : ''}</DialogTitle>
+          <DialogDescription>
+            {splneno} z {celkem} v pořádku
+            {problemy > 0 ? ` · ${problemy} vyžaduje pozornost` : ''}.
+            Zobrazuje se jen to, co se této osoby týká.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-5">
+          {/* ───── Nástup ───── */}
+          {renderKroky('nastup')}
+
+          {/* ───── Provoz ───── */}
+          <div className="space-y-1">
+            <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
+              Provoz
+              <span className="ml-2 normal-case font-normal tracking-normal">termín dalšího</span>
+            </p>
+            {provoz.length === 0 ? (
+              <p className="rounded-lg border px-3 py-3 text-xs text-muted-foreground">
+                Osobě zatím nejsou přiřazeny žádné položky s periodou ani pověřením. Přiřaďte je v Matici.
+              </p>
+            ) : (
+              <div className="rounded-lg border divide-y">
+                {provoz.map((r) => (
+                  <div key={r.klic}>
+                    <div className="flex items-center gap-2 sm:gap-3 px-2.5 sm:px-3 py-2.5">
+                      <Kolecko stav={r.stav} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] sm:text-sm font-medium leading-tight">{r.nazev}</p>
+                        {r.podnazev && <p className="text-[11px] text-muted-foreground">{r.podnazev}</p>}
+                      </div>
+                      <span className="text-xs whitespace-nowrap text-right">
+                        <span className={TEXT_STAVU[r.stav]}>
+                          {r.stav === 'chybi' ? 'bez záznamu'
+                            : r.naNeurcito ? 'na neurčito'
+                            : r.dalsi ? formatDatum(r.dalsi) : 'zapsáno'}
+                        </span>
+                        {r.posledniDatum && (
+                          <span className="block text-[10px] text-muted-foreground">
+                            poslední {formatDatum(r.posledniDatum)}
+                          </span>
+                        )}
+                      </span>
+                      {r.klic.startsWith('p-bez-') ? null : (
+                        <Button
+                          size="sm" variant="outline" className="h-7 text-xs shrink-0"
+                          onClick={() => setZapisKlic(zapisKlic === r.klic ? null : r.klic)}
+                        >
+                          Zapsat
+                        </Button>
+                      )}
+                    </div>
+                    {zapisKlic === r.klic && (
+                      <RychlyZapis radek={r} zrusit={() => setZapisKlic(null)} ulozit={(v) => zapis(r, v)} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ───── Mimořádné události ───── */}
+          <div className="space-y-3">
+            <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
+              Mimořádné události
+            </p>
+
+            <Sekce
+              nadpis="Přerušení výkonu práce"
+              napoveda="Nemoc nad 8 týdnů, úraz s těžkými následky nebo přerušení nad 6 měsíců zakládá mimořádnou prohlídku do 5 pracovních dnů od návratu (§ 12 vyhlášky č. 79/2013 Sb.). Mimořádnou prohlídku zapíšete v záložce Prohlídky."
+              pridat={() => upravPreruseni([...preruseni, { id: novyId(), od: dnesLokalne(), do: '', poznamka: '' }], true)}
+              pocet={preruseni.length}
+            >
+              {preruseni.map((p) => (
+                <div key={p.id} className="grid gap-2 sm:grid-cols-[150px_150px_1fr_auto] items-center">
+                  <Input type="date" value={p.od} className="h-8 text-xs"
+                    onChange={(e) => upravPreruseni(preruseni.map((x) => x.id === p.id ? { ...x, od: e.target.value } : x))}
+                    onBlur={() => ulozPole('preruseni', preruseni)} />
+                  <Input type="date" value={p.do} className="h-8 text-xs" title="do (prázdné = stále trvá)"
+                    onChange={(e) => upravPreruseni(preruseni.map((x) => x.id === p.id ? { ...x, do: e.target.value } : x))}
+                    onBlur={() => ulozPole('preruseni', preruseni)} />
+                  <Input value={p.poznamka} placeholder="důvod / poznámka" className="h-8 text-xs"
+                    onChange={(e) => upravPreruseni(preruseni.map((x) => x.id === p.id ? { ...x, poznamka: e.target.value } : x))}
+                    onBlur={() => ulozPole('preruseni', preruseni)} />
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={() => upravPreruseni(preruseni.filter((x) => x.id !== p.id), true)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              {preruseni.length > 0 && (
+                <p className="text-[10px] text-muted-foreground">Sloupce: od · do (prázdné = stále trvá) · poznámka</p>
+              )}
+            </Sekce>
+
+            <Sekce
+              nadpis="Pracovní úrazy"
+              napoveda="Zatím jen jednoduchý záznam. Podrobná evidence úrazů přibude později."
+              pridat={() => upravUrazy([...urazy, { id: novyId(), cislo: '', dpn: false }], true)}
+              pocet={urazy.length}
+            >
+              {urazy.map((u) => (
+                <div key={u.id} className="grid gap-2 sm:grid-cols-[1fr_auto_auto] items-center">
+                  <Input value={u.cislo} placeholder="číslo úrazu" className="h-8 text-xs"
+                    onChange={(e) => upravUrazy(urazy.map((x) => x.id === u.id ? { ...x, cislo: e.target.value } : x))}
+                    onBlur={() => ulozPole('urazy', urazy)} />
+                  <label className="flex items-center gap-2 text-xs">
+                    <Checkbox
+                      checked={u.dpn}
+                      onCheckedChange={(v) => upravUrazy(urazy.map((x) => x.id === u.id ? { ...x, dpn: !!v } : x), true)}
+                    />
+                    DPN
+                  </label>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={() => upravUrazy(urazy.filter((x) => x.id !== u.id), true)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </Sekce>
+
+            <Sekce
+              nadpis="Ostatní události"
+              napoveda="Změna pozice nebo činnosti spouští lékařskou prohlídku, doškolení a úpravu OOPP (F006 + F001 + F010)."
+              pridat={() => upravUdalosti([...udalosti2, { id: novyId(), typ: 'zmena', datum: dnesLokalne(), poznamka: '' }], true)}
+              pocet={udalosti2.length}
+            >
+              {udalosti2.map((u) => (
+                <div key={u.id} className="grid gap-2 sm:grid-cols-[210px_150px_1fr_auto] items-center">
+                  <Select value={u.typ} onValueChange={(v) => upravUdalosti(udalosti2.map((x) => x.id === u.id ? { ...x, typ: v } : x), true)}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {TYPY_UDALOSTI.map((t) => <SelectItem key={t.hodnota} value={t.hodnota}>{t.popis}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Input type="date" value={u.datum} className="h-8 text-xs"
+                    onChange={(e) => upravUdalosti(udalosti2.map((x) => x.id === u.id ? { ...x, datum: e.target.value } : x))}
+                    onBlur={() => ulozPole('mimoradneUdalosti', udalosti2)} />
+                  <Input value={u.poznamka} placeholder="poznámka" className="h-8 text-xs"
+                    onChange={(e) => upravUdalosti(udalosti2.map((x) => x.id === u.id ? { ...x, poznamka: e.target.value } : x))}
+                    onBlur={() => ulozPole('mimoradneUdalosti', udalosti2)} />
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={() => upravUdalosti(udalosti2.filter((x) => x.id !== u.id), true)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </Sekce>
+          </div>
+
+          {/* ───── Ukončení ───── */}
+          {renderKroky('ukonceni')}
+
+          {/* ───── Historie ───── */}
+          <div className="space-y-1">
+            <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
+              Historie
+            </p>
+            {mojeUdalosti.length === 0 ? (
+              <p className="py-3 text-xs text-muted-foreground">Zatím žádné záznamy.</p>
+            ) : (
+              <div className="rounded-lg border divide-y">
+                {mojeUdalosti.map((u) => (
+                  <div key={u.id} className="flex items-start gap-3 px-3 py-2">
+                    {u.typ === 'prohlidka'
+                      ? <Stethoscope className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                      : u.typ === 'povereni'
+                        ? <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                        : <GraduationCap className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">
+                        {u.typ === 'prohlidka'
+                          ? `${POPIS_DRUHU[u.druhProhlidky ?? 'periodicka']} prohlídka`
+                          : u.typ === 'povereni'
+                            ? `Pověření: ${u.temaNazev ?? ''}`
+                            : (u.temaNazev ?? 'Školení')}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {u.datumDo ? `zácvik do ${formatDatum(u.datumDo)} · ` : ''}
+                        {u.typ === 'povereni' ? (u.naNeurcito ? 'na neurčito · ' : u.platnostDo ? `do ${formatDatum(u.platnostDo)} · ` : '') : ''}
+                        {u.zaver ? `${POPIS_ZAVERU[u.zaver]} · ` : ''}
+                        {u.provedl ?? ''}
+                      </p>
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {formatDatum(u.datum)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
+  /** Odškrtávací kroky mapy pro danou fázi (Nástup, Ukončení). */
+  function renderKroky(faze: FazeUzlu) {
+    const vFazi = mapa.filter((m) => m.uzel.faze === faze);
+    if (vFazi.length === 0) return null;
+    return (
+      <div key={faze} className="space-y-1">
+        <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
+          {POPIS_FAZE[faze]}
+        </p>
+        <div className="rounded-lg border divide-y">
+          {vFazi.map((m) => {
+            const rozbaleno = rozbaleny === m.uzel.id;
+            const rucni = m.uzel.uzavreni === 'rucne';
+            const stavKolecka: Stav = m.stav === 'splneno' || m.stav === 'ok' ? 'ok'
+              : m.stav === 'blizi' ? 'blizi' : m.stav === 'po' ? 'po' : 'chybi';
+            return (
+              <div key={m.uzel.id}>
+                <button
+                  type="button"
+                  onClick={() => setRozbaleny(rozbaleno ? null : m.uzel.id)}
+                  className="flex w-full items-center gap-2 sm:gap-3 px-2.5 sm:px-3 py-2.5 text-left hover:bg-muted/40"
+                >
+                  <Kolecko stav={stavKolecka} />
+                  <span className="flex-1 text-[13px] sm:text-sm font-medium leading-tight">
+                    {m.uzel.nazev}
+                    {m.uzel.volitelny && (
+                      <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">volitelné</span>
+                    )}
+                  </span>
+                  {m.uzel.formular && (
+                    <span className="hidden sm:flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <FileText className="h-3 w-3" />{m.uzel.formular}
+                    </span>
+                  )}
+                  <span className={`text-xs whitespace-nowrap ${m.stav === 'splneno' ? 'text-emerald-700 font-medium' : 'text-muted-foreground'}`}>
+                    {m.stav === 'splneno' ? formatDatum(m.datum) : 'čeká'}
+                  </span>
+                  {rozbaleno ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                </button>
+
+                {rozbaleno && (
+                  <div className="space-y-3 border-t bg-muted/20 px-3 py-3">
+                    {m.uzel.napoveda && (
+                      <p className="text-xs leading-relaxed text-muted-foreground">{m.uzel.napoveda}</p>
+                    )}
+                    {m.uzel.predpis && (
+                      <p className="text-[11px] text-muted-foreground">{m.uzel.predpis}</p>
+                    )}
+                    {rucni ? (
+                      <div className="flex items-end gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Splněno dne</Label>
+                          <Input
+                            type="date"
+                            value={m.datum ? m.datum.split('T')[0] : ''}
+                            onChange={(e) => uzavriRucne(m.uzel.id, e.target.value)}
+                            className="h-9 w-[170px]"
+                          />
+                        </div>
+                        {uklada === m.uzel.id && <Loader2 className="h-4 w-4 animate-spin mb-2" />}
+                        {m.datum && (
+                          <Button
+                            variant="ghost" size="sm"
+                            onClick={() => uzavriRucne(m.uzel.id, '')}
+                            className="mb-0.5 text-xs text-muted-foreground"
+                          >
+                            Zrušit
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground">
+                        Uzavře se automaticky zápisem na záložce {m.uzel.uzavreni === 'prohlidkou' ? 'Prohlídky' : 'Zápis školení'}.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
   }
 }
 
-/**
- * Vyhodnotí mapu pro jednu osobu.
- * Uzly uzavírané záznamem se čtou z `udalosti`; ručně uzavírané z pole
- * `uzavreneUzly` na osobě (klíč = ID uzlu, hodnota = datum).
- */
-export function vyhodnotMapu(
-  uzly: CiselnikUzel[],
-  osoba: Osoba,
-  cinnosti: CiselnikCinnost[],
-  udalosti: Udalost[],
-  jeVedouci: boolean,
-  /** číselník školení — kvůli periodám u cyklických uzlů */
-  skoleni: CiselnikSkoleni[] = [],
-  /** perioda prohlídky osoby v měsících (počítá se z kategorie a činností) */
-  periodaProhlidkyMesicu?: number,
-  prahMesicu: number = PRAH_VYCHOZI,
-): VyhodnocenyUzel[] {
-  const mojeUdalosti = udalosti.filter((x) => x.osobaId === osoba.id);
-  const rucni = (osoba as any).uzavreneUzly as Record<string, string> | undefined;
+/* ─────────────────────────  POMOCNÉ KOMPONENTY  ───────────────────────── */
 
-  return uzly
-    .filter((u) => zobrazit(u, osoba, cinnosti, jeVedouci))
-    .map((u) => {
-      let datum: string | null | undefined;
+function Sekce({
+  nadpis, napoveda, pridat, pocet, children,
+}: {
+  nadpis: string;
+  napoveda?: string;
+  pridat: () => void;
+  pocet: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border">
+      <div className="flex items-center justify-between gap-2 px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">
+            {nadpis} {pocet > 0 && <span className="text-xs font-normal text-muted-foreground">({pocet})</span>}
+          </p>
+          {napoveda && <p className="text-[11px] leading-snug text-muted-foreground">{napoveda}</p>}
+        </div>
+        <Button size="sm" variant="outline" className="h-7 shrink-0 text-xs" onClick={pridat}>
+          <Plus className="mr-1 h-3.5 w-3.5" /> Přidat
+        </Button>
+      </div>
+      {pocet > 0 && <div className="space-y-2 border-t bg-muted/20 px-3 py-3">{children}</div>}
+    </div>
+  );
+}
 
-      if (u.uzavreni === 'prohlidkou') {
-        const z = mojeUdalosti
-          .filter((x) => x.typ === 'prohlidka'
-            && (!u.druhProhlidky || x.druhProhlidky === u.druhProhlidky))
-          .sort((a, b) => (b.datum ?? '').localeCompare(a.datum ?? ''))[0];
-        datum = z?.datum;
-      } else if (u.uzavreni === 'skolenim' || u.uzavreni === 'kolem') {
-        const z = mojeUdalosti
-          .filter((x) => x.typ === 'skoleni'
-            && (!u.skoleniId || x.temaId === u.skoleniId))
-          .sort((a, b) => (b.datum ?? '').localeCompare(a.datum ?? ''))[0];
-        datum = z?.datum;
-      } else if (u.uzavreni === 'zacvikem') {
-        const z = mojeUdalosti
-          .filter((x) => x.typ === 'skoleni' && !!x.datumDo
-            && (!u.skoleniId || x.temaId === u.skoleniId))
-          .sort((a, b) => (b.datumDo ?? '').localeCompare(a.datumDo ?? ''))[0];
-        datum = z?.datumDo;
-      } else {
-        datum = rucni?.[u.id];
-      }
+function RychlyZapis({
+  radek, zrusit, ulozit,
+}: {
+  radek: RadekProvozu;
+  zrusit: () => void;
+  ulozit: (v: {
+    datum: string; platnostDo: string; naNeurcito: boolean; provedl: string; zaver: ZaverProhlidky; poznamka: string;
+  }) => void;
+}) {
+  const [datum, setDatum] = useState(dnesLokalne());
+  const mesicu = radek.def?.platnostMesice ?? 0;
+  const [naNeurcito, setNaNeurcito] = useState(radek.druh === 'povereni' && mesicu === 0);
+  const [platnostDo, setPlatnostDo] = useState(
+    radek.druh === 'povereni' && mesicu > 0 ? pridejMesice(dnesLokalne(), mesicu).slice(0, 10) : '',
+  );
+  const [provedl, setProvedl] = useState(radek.provadi ?? '');
+  const [zaver, setZaver] = useState<ZaverProhlidky>('zpusobily');
+  const [poznamka, setPoznamka] = useState('');
+  const [uklada, setUklada] = useState(false);
 
-      // Průkazy a osvědčení: hlídá se platnost na dokladu, ne perioda.
-      // Osoba jich může mít víc (svářečský, VZV, elektro) — proto seznam.
-      if (u.uzavreni === 'doklady') {
-        const temata = skoleni.filter((s) => s.doklad);
-        const polozky = temata
-          .map((t) => {
-            const z = mojeUdalosti
-              .filter((x) => x.typ === 'skoleni' && x.temaId === t.id)
-              .sort((a, b) => (b.datum ?? '').localeCompare(a.datum ?? ''))[0];
-            if (!z) return null;
-            const konec = z.platnostDo ?? dalsiTermin(z, t.periodaMesice) ?? null;
-            return {
-              nazev: t.nazev,
-              platnostDo: konec,
-              cislo: z.cisloDokladu ?? null,
-              stav: stavTerminu(konec, prahMesicu) as StavUzlu,
-            };
-          })
-          .filter((x): x is NonNullable<typeof x> => !!x);
+  return (
+    <div className="grid gap-3 border-t bg-muted/20 px-3 py-3 sm:grid-cols-2">
+      <div className="space-y-1">
+        <Label className="text-xs">{radek.druh === 'povereni' ? 'Pověřen od' : radek.druh === 'prohlidka' ? 'Datum prohlídky' : 'Datum školení'}</Label>
+        <Input
+          type="date" value={datum} className="h-9"
+          onChange={(e) => {
+            setDatum(e.target.value);
+            if (radek.druh === 'povereni' && mesicu > 0 && !naNeurcito && e.target.value) {
+              setPlatnostDo(pridejMesice(e.target.value, mesicu).slice(0, 10));
+            }
+          }}
+        />
+      </div>
 
-        const poradi = { ok: 0, blizi: 1, chybi: 2, po: 3 } as Record<string, number>;
-        const nejhorsi = polozky.reduce<StavUzlu>(
-          (acc, x) => ((poradi[x.stav] ?? 0) > (poradi[acc] ?? 0) ? x.stav : acc),
-          'ok',
-        );
+      {radek.druh === 'povereni' && (
+        <div className="space-y-1">
+          <Label className="text-xs">Platí do</Label>
+          <div className="flex items-center gap-3">
+            <Input type="date" value={platnostDo} disabled={naNeurcito} className="h-9"
+              onChange={(e) => setPlatnostDo(e.target.value)} />
+            <label className="flex items-center gap-1.5 text-xs whitespace-nowrap">
+              <Checkbox checked={naNeurcito} onCheckedChange={(v) => setNaNeurcito(!!v)} />
+              na neurčito
+            </label>
+          </div>
+        </div>
+      )}
 
-        return {
-          uzel: u,
-          stav: polozky.length === 0 ? 'chybi' : nejhorsi,
-          datum: null,
-          dalsi: polozky.map((x) => x.platnostDo).filter(Boolean).sort()[0] ?? null,
-          doklady: polozky,
-        };
-      }
+      {radek.druh === 'prohlidka' && (
+        <div className="space-y-1">
+          <Label className="text-xs">Závěr posudku</Label>
+          <Select value={zaver} onValueChange={(v) => setZaver(v as ZaverProhlidky)}>
+            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {(Object.keys(POPIS_ZAVERU) as ZaverProhlidky[]).map((z) => (
+                <SelectItem key={z} value={z}>{POPIS_ZAVERU[z]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
-      // Fáze Provoz je cyklus — nezajímá nás, že něco proběhlo, ale kdy je to zas.
-      if (u.faze === 'provoz') {
-        const perioda = u.uzavreni === 'prohlidkou'
-          ? (periodaProhlidkyMesicu ?? 0)
-          : (skoleni.find((s) => s.id === u.skoleniId)?.periodaMesice ?? 0);
+      <div className="space-y-1">
+        <Label className="text-xs">
+          {radek.druh === 'povereni' ? 'Pověřil' : radek.druh === 'prohlidka' ? 'Poskytovatel PLS' : 'Lektor'}
+        </Label>
+        <Input value={provedl} onChange={(e) => setProvedl(e.target.value)} className="h-9" />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">Poznámka</Label>
+        <Input value={poznamka} onChange={(e) => setPoznamka(e.target.value)} className="h-9" />
+      </div>
 
-        const posledniZaznam = mojeUdalosti
-          .filter((x) => (u.uzavreni === 'prohlidkou'
-            ? x.typ === 'prohlidka' && (!u.druhProhlidky || x.druhProhlidky === u.druhProhlidky)
-            : x.typ === 'skoleni' && (!u.skoleniId || x.temaId === u.skoleniId)))
-          .sort((a, b) => (b.datum ?? '').localeCompare(a.datum ?? ''))[0];
-
-        const dalsi = dalsiTermin(posledniZaznam, perioda);
-        return {
-          uzel: u,
-          stav: stavTerminu(dalsi, prahMesicu) as StavUzlu,
-          datum: datum ?? null,
-          dalsi: dalsi ?? null,
-          perioda,
-        };
-      }
-
-      return {
-        uzel: u,
-        stav: (datum ? 'splneno' : 'ceka') as StavUzlu,
-        datum: datum ?? null,
-      };
-    });
+      <div className="flex justify-end gap-2 sm:col-span-2">
+        <Button size="sm" variant="ghost" onClick={zrusit}>Zrušit</Button>
+        <Button
+          size="sm"
+          disabled={uklada || !datum || (radek.druh === 'povereni' && !naNeurcito && !platnostDo)}
+          onClick={async () => {
+            setUklada(true);
+            await ulozit({ datum, platnostDo, naNeurcito, provedl, zaver, poznamka });
+            setUklada(false);
+          }}
+        >
+          {uklada && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+          Zapsat
+        </Button>
+      </div>
+    </div>
+  );
 }
