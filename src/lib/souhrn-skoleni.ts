@@ -87,7 +87,7 @@ export async function synchronizujSouhrn(klientId: string): Promise<VysledekSouh
     let bezZaznamu = 0;
     for (const o of dotcene) {
       const zaznamy = udalosti
-        .filter((u) => u.osobaId === o.id && u.typ === 'skoleni' && u.temaId === id)
+        .filter((u) => u.osobaId === o.id && u.typ === 'skoleni' && u.temaId === id && u.vstupni !== true)
         .sort((a, b) => (b.datum ?? '').localeCompare(a.datum ?? ''));
       const nejnovejsi = zaznamy[0];
       const termin = dalsiTermin(nejnovejsi, p.periodaMesice);
