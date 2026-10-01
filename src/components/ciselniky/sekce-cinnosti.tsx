@@ -312,7 +312,7 @@ export default function SekceCinnosti() {
 
 /* ─────────────────────────  KATEGORIE PRÁCE  ───────────────────────── */
 
-function SekceKategorie() {
+export function SekceKategorie() {
   const [polozky, setPolozky] = useState<CiselnikKategorie[]>([]);
   const [nacitam, setNacitam] = useState(true);
 
