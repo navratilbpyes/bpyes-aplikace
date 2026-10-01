@@ -70,6 +70,7 @@ export default function SekceUdalosti({
   rezim: 'skoleni' | 'prohlidka';
 }) {
   const { toast } = useToast();
+  const { userProfile } = useData();
   const [udalosti, setUdalosti] = useState<Udalost[]>([]);
   const [nacitam, setNacitam] = useState(true);
   const [temaId, setTemaId] = useState<string>('');
@@ -267,7 +268,13 @@ export default function SekceUdalosti({
         </CardContent>
       </Card>
 
-      <DialogHistorie data={historie} zavri={() => setHistorie(null)} />
+      <DialogHistorie
+        data={historie}
+        klientId={klientId}
+        jeAdmin={userProfile?.role === 'admin'}
+        poZmene={nacti}
+        zavri={() => setHistorie(null)}
+      />
     </div>
   );
 }
@@ -585,18 +592,108 @@ function DialogHromadny({
 /* ─────────────────────────  HISTORIE  ───────────────────────── */
 
 function DialogHistorie({
-  data, zavri,
+  data, klientId, jeAdmin, poZmene, zavri,
 }: {
   data: { osoba: Osoba; zaznamy: Udalost[] } | null;
+  klientId: string;
+  jeAdmin: boolean;
+  poZmene: () => void;
   zavri: () => void;
 }) {
+  const { user } = useData();
+  const { toast } = useToast();
+  const [uprava, setUprava] = useState<string | null>(null);
+  const [potvrdit, setPotvrdit] = useState<string | null>(null);
+  const [f, setF] = useState({
+    datum: '', datumDo: '', datumPosudku: '', platnostDo: '', cisloDokladu: '',
+    provedl: '', poznamka: '', vstupni: false,
+  });
+  const [uklada, setUklada] = useState(false);
+
+  const den = (v?: string | null) => (v ? v.slice(0, 10) : '');
+  const iso = (v: string) => (v ? new Date(v).toISOString() : null);
+
+  function otevriUpravu(u: Udalost) {
+    setF({
+      datum: den(u.datum), datumDo: den(u.datumDo), datumPosudku: den(u.datumPosudku),
+      platnostDo: den(u.platnostDo), cisloDokladu: u.cisloDokladu ?? '',
+      provedl: u.provedl ?? '', poznamka: u.poznamka ?? '', vstupni: u.vstupni === true,
+    });
+    setUprava(u.id);
+    setPotvrdit(null);
+  }
+
+  async function uloz(u: Udalost) {
+    if (!f.datum) return;
+    setUklada(true);
+    const kdo = user?.email ?? 'neznámý';
+    const log = [...(u.log ?? [])];
+    const zmenaDatumu = (pole: string, stare: string | null | undefined, nove: string | null) => {
+      if (den(stare) !== den(nove)) log.push(polozkaLogu(kdo, pole, stare ?? null, nove));
+    };
+    const nove = {
+      datum: iso(f.datum) as string,
+      datumDo: iso(f.datumDo),
+      datumPosudku: iso(f.datumPosudku),
+      platnostDo: iso(f.platnostDo),
+      cisloDokladu: f.cisloDokladu.trim() || null,
+      provedl: f.provedl.trim() || null,
+      poznamka: f.poznamka.trim() || null,
+      ...(u.typ === 'skoleni' ? { vstupni: f.vstupni } : {}),
+    };
+    zmenaDatumu('datum', u.datum, nove.datum);
+    zmenaDatumu('datumDo', u.datumDo, nove.datumDo);
+    zmenaDatumu('datumPosudku', u.datumPosudku, nove.datumPosudku);
+    zmenaDatumu('platnostDo', u.platnostDo, nove.platnostDo);
+    if ((u.cisloDokladu ?? null) !== nove.cisloDokladu) log.push(polozkaLogu(kdo, 'cisloDokladu upraveno', null, null));
+    if ((u.provedl ?? null) !== nove.provedl) log.push(polozkaLogu(kdo, 'lektor upraven', null, null));
+    if ((u.poznamka ?? null) !== nove.poznamka) log.push(polozkaLogu(kdo, 'poznámka upravena', null, null));
+    if (u.typ === 'skoleni' && (u.vstupni === true) !== f.vstupni) {
+      log.push(polozkaLogu(kdo, f.vstupni ? 'změněno na vstupní' : 'změněno na periodické', null, null));
+    }
+    try {
+      await updateDoc(doc(db, 'klienti', klientId, 'udalosti', u.id), { ...nove, log });
+      toast({ title: 'Záznam upraven' });
+      setUprava(null);
+      poZmene();
+      zavri();
+    } catch (e: any) {
+      toast({ title: 'Uložení selhalo', description: e?.message ?? '', variant: 'destructive' });
+    } finally {
+      setUklada(false);
+    }
+  }
+
+  async function smaz(u: Udalost) {
+    if (potvrdit !== u.id) { setPotvrdit(u.id); return; }
+    try {
+      await updateDoc(doc(db, 'klienti', klientId, 'udalosti', u.id), {
+        stav: 'smazano',
+        log: [...(u.log ?? []), polozkaLogu(user?.email ?? 'neznámý', 'smazano', u.datum, null)],
+      });
+      toast({ title: 'Záznam smazán' });
+      setPotvrdit(null);
+      poZmene();
+      zavri();
+    } catch (e: any) {
+      toast({ title: 'Smazání selhalo', description: e?.message ?? '', variant: 'destructive' });
+    }
+  }
+
+  const pole = (label: string, hodnota: string, zmen: (v: string) => void, typ = 'text') => (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <Input type={typ} value={hodnota} onChange={(e) => zmen(e.target.value)} className="h-9" />
+    </div>
+  );
+
   return (
-    <Dialog open={!!data} onOpenChange={(o) => !o && zavri()}>
+    <Dialog open={!!data} onOpenChange={(o) => { if (!o) { setUprava(null); setPotvrdit(null); zavri(); } }}>
       <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>{data ? celeJmeno(data.osoba) : ''}</DialogTitle>
           <DialogDescription>
-            Všechny záznamy školení, zácviků a prohlídek, od nejnovějšího.
+            Všechny záznamy školení, zácviků a prohlídek, od nejnovějšího. Chybný záznam lze upravit nebo smazat.
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto space-y-2">
@@ -608,7 +705,9 @@ function DialogHistorie({
                 <span className="font-medium">
                   {u.typ === 'prohlidka'
                     ? `${POPIS_DRUHU[u.druhProhlidky ?? 'periodicka']} prohlídka`
-                    : (u.temaNazev ?? 'Školení')}
+                    : u.typ === 'povereni'
+                      ? `Pověření: ${u.temaNazev ?? ''}`
+                      : `${u.vstupni ? 'Vstupní: ' : ''}${u.temaNazev ?? 'Školení'}`}
                 </span>
                 <span className="text-xs text-muted-foreground">{formatDatum(u.datum)}</span>
               </div>
@@ -633,6 +732,45 @@ function DialogHistorie({
                       {z.puvodni ? `: ${formatDatum(z.puvodni)} → ${formatDatum(z.nova)}` : ''}
                     </p>
                   ))}
+                </div>
+              )}
+
+              {uprava === u.id ? (
+                <div className="grid gap-3 border-t pt-3 sm:grid-cols-2">
+                  {pole(u.typ === 'prohlidka' ? 'Datum prohlídky' : u.typ === 'povereni' ? 'Pověřen od' : 'Datum školení', f.datum, (v) => setF({ ...f, datum: v }), 'date')}
+                  {u.typ === 'skoleni' && pole('Ukončení zácviku', f.datumDo, (v) => setF({ ...f, datumDo: v }), 'date')}
+                  {u.typ === 'prohlidka' && pole('Datum vydání posudku', f.datumPosudku, (v) => setF({ ...f, datumPosudku: v }), 'date')}
+                  {(u.typ === 'povereni' || u.platnostDo || u.cisloDokladu) && pole('Platí do', f.platnostDo, (v) => setF({ ...f, platnostDo: v }), 'date')}
+                  {(u.typ === 'skoleni' && (u.platnostDo || u.cisloDokladu)) && pole('Číslo dokladu', f.cisloDokladu, (v) => setF({ ...f, cisloDokladu: v }))}
+                  {pole(u.typ === 'prohlidka' ? 'Poskytovatel PLS' : u.typ === 'povereni' ? 'Pověřil' : 'Lektor', f.provedl, (v) => setF({ ...f, provedl: v }))}
+                  {pole('Poznámka', f.poznamka, (v) => setF({ ...f, poznamka: v }))}
+                  {u.typ === 'skoleni' && (
+                    <label className="flex items-center gap-2 text-xs sm:col-span-2">
+                      <input type="checkbox" checked={f.vstupni} onChange={(e) => setF({ ...f, vstupni: e.target.checked })} />
+                      Jde o vstupní školení (jinak periodické)
+                    </label>
+                  )}
+                  <div className="flex justify-end gap-2 sm:col-span-2">
+                    <Button size="sm" variant="ghost" onClick={() => setUprava(null)}>Zrušit</Button>
+                    <Button size="sm" disabled={uklada || !f.datum} onClick={() => uloz(u)}>
+                      {uklada && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                      Uložit
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => otevriUpravu(u)}>
+                    Upravit
+                  </Button>
+                  {jeAdmin && (
+                    <Button
+                      size="sm" variant={potvrdit === u.id ? 'destructive' : 'ghost'}
+                      className="h-7 text-xs" onClick={() => smaz(u)}
+                    >
+                      {potvrdit === u.id ? 'Opravdu smazat?' : 'Smazat'}
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
