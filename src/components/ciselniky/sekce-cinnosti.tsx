@@ -198,7 +198,6 @@ export default function SekceCinnosti() {
                                   >
                                     <span className={`h-3.5 w-3.5 shrink-0 rounded border ${vybrano ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`} />
                                     <span className="flex-1">{s.nazev}</span>
-                                    {s.kod && <span className="text-[10px] text-muted-foreground">{s.kod}</span>}
                                   </button>
                                 );
                               })}
