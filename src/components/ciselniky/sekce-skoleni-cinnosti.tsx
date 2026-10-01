@@ -32,6 +32,8 @@ import { PERIODY_S_NULOU, popisPeriody } from '@/lib/skoleni';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
 import { PERIODY_PROHLIDKY, popisPeriodyProhlidky } from '@/lib/cinnosti';
 import { POZARNI_RADKY } from '@/lib/pozarni-kniha';
+import type { CiselnikPovereni } from '@/lib/povereni';
+import { popisPlatnosti } from '@/lib/povereni';
 
 /** Oblasti dle lhůtníku; položky s jinou (importovanou) oblastí se přidají automaticky. */
 const ZAKLADNI_OBLASTI = [
@@ -42,6 +44,7 @@ const BEZ_OBLASTI = '__bez__';
 
 export default function SekceSkoleniCinnosti() {
   const [polozky, setPolozky] = useState<CiselnikSkoleni[]>([]);
+  const [povereni, setPovereni] = useState<CiselnikPovereni[]>([]);
   const [nacitam, setNacitam] = useState(true);
   const [neprevedeno, setNeprevedeno] = useState(0);
   const [otevrene, setOtevrene] = useState<string | null>(null);
@@ -67,6 +70,16 @@ export default function SekceSkoleniCinnosti() {
           .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs')),
       );
       setNeprevedeno(snapC.docs.filter((d) => !d.data().prevedeno).length);
+      // číselník pověření je samostatný; jeho selhání (např. chybějící pravidla) nesmí shodit seznam
+      try {
+        const snapP = await getDocs(query(collection(db, 'ciselnikPovereni'), where('stav', '==', 'aktivni')));
+        setPovereni(
+          snapP.docs.map((d) => ({ id: d.id, ...d.data() }) as CiselnikPovereni)
+            .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs')),
+        );
+      } catch (e) {
+        console.warn('Číselník pověření nelze načíst:', e);
+      }
     } catch (e) {
       console.error('Načtení číselníku školení a činností selhalo:', e);
     } finally {
@@ -275,6 +288,7 @@ export default function SekceSkoleniCinnosti() {
                         p={p}
                         oblasti={oblasti}
                         vsechny={polozky}
+                        povereni={povereni}
                         rozbaleno={otevrene === p.id}
                         onToggle={() => setOtevrene(otevrene === p.id ? null : p.id)}
                         uprav={uprav}
@@ -296,11 +310,12 @@ export default function SekceSkoleniCinnosti() {
 /* ─────────────────────────  ŘÁDEK POLOŽKY  ───────────────────────── */
 
 function RadekPolozky({
-  p, oblasti, vsechny, rozbaleno, onToggle, uprav, smaz, prepniSouvisejici,
+  p, oblasti, vsechny, povereni, rozbaleno, onToggle, uprav, smaz, prepniSouvisejici,
 }: {
   p: CiselnikSkoleni;
   oblasti: string[];
   vsechny: CiselnikSkoleni[];
+  povereni: CiselnikPovereni[];
   rozbaleno: boolean;
   onToggle: () => void;
   uprav: (id: string, zmeny: Partial<CiselnikSkoleni>) => void;
@@ -430,11 +445,35 @@ function RadekPolozky({
             />
             <Prepinac
               nadpis="Vyžaduje pověření"
-              popis="Osoba musí být k činnosti písemně pověřena. Lhůtu platnosti pověření doplní číselník Pověření."
+              popis="Osoba musí být k činnosti písemně pověřena. Druh a platnost pověření nastavíte níže (číselník Pověření)."
               hodnota={!!p.vyzadujePovereni}
               onZmena={(v) => uprav(p.id, { vyzadujePovereni: v })}
               zakazano={evidencni}
             />
+            {p.vyzadujePovereni && !evidencni && (
+              <div className="px-3 py-2 pl-8 space-y-1">
+                <Label className="text-xs">Druh pověření</Label>
+                <Select
+                  value={p.povereniId ?? '__zadne__'}
+                  onValueChange={(v) => uprav(p.id, { povereniId: v === '__zadne__' ? null : v })}
+                >
+                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="vyberte…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__zadne__">— nevybráno —</SelectItem>
+                    {povereni.map((x) => (
+                      <SelectItem key={x.id} value={x.id} className="text-xs">
+                        {x.nazev} ({popisPlatnosti(x.platnostMesice)})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {povereni.length === 0 && (
+                  <p className="text-[11px] text-amber-700">
+                    Číselník pověření je prázdný — druhy pověření založíte v záložce Pověření.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
