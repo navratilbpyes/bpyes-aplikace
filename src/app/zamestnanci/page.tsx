@@ -33,7 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   Users, Plus, Loader2, Upload, X, Briefcase, Grid3x3, Stethoscope, Search,
   ChevronDown, ChevronRight, Pencil, Download, Printer, Trash2, GraduationCap,
-  Check, AlertTriangle, RotateCw, Circle, SlidersHorizontal,
+  Check, AlertTriangle, RotateCw, Circle, SlidersHorizontal, BadgeCheck,
 } from 'lucide-react';
 import type { Osoba, Pozice } from '@/lib/osoby';
 import {
@@ -49,6 +49,9 @@ import Napoveda from '@/components/ui/napoveda';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
 import SekceUdalosti from '@/components/zamestnanci/sekce-udalosti';
 import NastaveniKlienta from '@/components/zamestnanci/nastaveni-klienta';
+import SekcePovereniOsob from '@/components/zamestnanci/sekce-povereni';
+import type { CiselnikPovereni } from '@/lib/povereni';
+import { stavPovereni, posledniPovereni } from '@/lib/povereni';
 import { synchronizujSouhrn } from '@/lib/souhrn-skoleni';
 import { sestavCinnosti, prepojOsobu, prepojPozici, prepojUzel } from '@/lib/cinnosti-adapter';
 import KartaOsoby from '@/components/zamestnanci/karta-osoby';
@@ -75,6 +78,7 @@ export default function ZamestnanciPage() {
   const [cinnosti, setCinnosti] = useState<CiselnikCinnost[]>([]);
   const [kategorie, setKategorie] = useState<CiselnikKategorie[]>([]);
   const [skoleni, setSkoleni] = useState<CiselnikSkoleni[]>([]);
+  const [povereni, setPovereni] = useState<CiselnikPovereni[]>([]);
   const [udalosti, setUdalosti] = useState<Record<string, Udalost[]>>({});
   const [uzly, setUzly] = useState<CiselnikUzel[]>([]);
   const [nacitam, setNacitam] = useState(true);
@@ -111,6 +115,14 @@ export default function ZamestnanciPage() {
       setCinnosti(sestaveno.cinnosti);
       setKategorie(snapK.docs.map((d) => ({ id: d.id, ...d.data() }) as CiselnikKategorie));
       setUzly((await nactiUzly()).map((u) => prepojUzel(u, alias)));
+      // číselník pověření — jeho selhání (např. chybějící pravidla) nesmí shodit celou stránku
+      try {
+        const snapP = await getDocs(query(collection(db, 'ciselnikPovereni'), where('stav', '==', 'aktivni')));
+        setPovereni(snapP.docs.map((d) => ({ id: d.id, ...d.data() }) as CiselnikPovereni));
+      } catch (e) {
+        console.warn('Číselník pověření nelze načíst:', e);
+        setPovereni([]);
+      }
 
       const davky = await Promise.all(
         dostupniKlienti.map(async (k) => ({
@@ -328,6 +340,9 @@ export default function ZamestnanciPage() {
           <TabsTrigger value="skoleni" className="px-3 md:px-6 py-2 shrink-0">
             <GraduationCap className="mr-2 h-4 w-4" /> Zápis školení
           </TabsTrigger>
+          <TabsTrigger value="povereni" className="px-3 md:px-6 py-2 shrink-0">
+            <BadgeCheck className="mr-2 h-4 w-4" /> Pověření
+          </TabsTrigger>
           <TabsTrigger value="prohlidky" className="px-3 md:px-6 py-2 shrink-0">
             <Stethoscope className="mr-2 h-4 w-4" /> Prohlídky
           </TabsTrigger>
@@ -533,6 +548,7 @@ export default function ZamestnanciPage() {
             osoby={filtrovane}
             cinnosti={viditelneCinnosti}
             skoleni={skoleni}
+            povereni={povereni}
             udalosti={vybranyKlient ? udalosti[vybranyKlient] ?? [] : []}
             poZmene={nacti}
           />
@@ -573,6 +589,17 @@ export default function ZamestnanciPage() {
             poziceKategorie={Object.fromEntries(
               filtrovane.map((o) => [o.id, vypocet(o).kategorie]),
             )}
+          />
+        </TabsContent>
+
+        <TabsContent value="povereni">
+          <SekcePovereniOsob
+            klientId={vybranyKlient}
+            osoby={filtrovane}
+            skoleni={skoleni}
+            povereni={povereni}
+            udalosti={vybranyKlient ? udalosti[vybranyKlient] ?? [] : []}
+            poZmene={nacti}
           />
         </TabsContent>
 
@@ -769,12 +796,13 @@ function DialogUpravaOsoby({
 /* ─────────────────────────  MATICE  ───────────────────────── */
 
 function Matice({
-  klientId, osoby, cinnosti, skoleni, udalosti, poZmene,
+  klientId, osoby, cinnosti, skoleni, povereni, udalosti, poZmene,
 }: {
   klientId: string | null;
   osoby: OsobaRadek[];
   cinnosti: CiselnikCinnost[];
   skoleni: CiselnikSkoleni[];
+  povereni: CiselnikPovereni[];
   udalosti: Udalost[];
   poZmene: () => void;
 }) {
@@ -818,11 +846,12 @@ function Matice({
    * Stav buňky = nejhorší stav ze všech školení, která z činnosti plynou.
    * Termín se počítá z data konkrétní osoby, ne z firemního termínu.
    */
-  function stavBunky(osobaId: string, c: CiselnikCinnost): { stav: 'ok' | 'blizi' | 'po' | 'chybi'; popis: string } {
+  function stavSkoleni(osobaId: string, c: CiselnikCinnost): { stav: 'ok' | 'blizi' | 'po' | 'chybi'; popis: string } {
     const ids = (c.skoleniIds ?? []).filter((id) => (skoleniMap[id]?.periodaMesice ?? 0) > 0);
     if (ids.length === 0) {
       // Evidenční položka je výslovně bez termínů → v pořádku.
-      if (skoleniMap[c.id]?.bezSkoleniPovereni) {
+      // Položka jen s pověřením se hodnotí podle pověření (viz stavBunky).
+      if (skoleniMap[c.id]?.bezSkoleniPovereni || skoleniMap[c.id]?.vyzadujePovereni) {
         return { stav: 'ok', popis: 'Evidenční položka — nevyžaduje školení ani pověření.' };
       }
       // Jinak se neví, co hlídat. Modrá by tvrdila, že je doloženo něco, co doloženo není.
@@ -848,6 +877,32 @@ function Matice({
       if (poradi[st] > poradi[nejhorsi]) nejhorsi = st;
     }
     return { stav: nejhorsi, popis: popisy.join('\n') };
+  }
+
+  /** Stav buňky = nejhorší ze školení a (je-li vyžadováno) z pověření. */
+  function stavBunky(osobaId: string, c: CiselnikCinnost): { stav: 'ok' | 'blizi' | 'po' | 'chybi'; popis: string } {
+    const sk = stavSkoleni(osobaId, c);
+    const polozka = skoleniMap[c.id];
+    if (!polozka?.vyzadujePovereni || polozka.bezSkoleniPovereni) return sk;
+
+    const def = polozka.povereniId ? povereni.find((p) => p.id === polozka.povereniId) : undefined;
+    let pov: { stav: 'ok' | 'blizi' | 'po' | 'chybi'; popis: string };
+    if (!def) {
+      pov = { stav: 'chybi', popis: 'Pověření: položka nemá v číselníku vybraný druh pověření.' };
+    } else {
+      const z = posledniPovereni(udalosti, osobaId, def.id);
+      const r = stavPovereni(z, def, prah);
+      pov = {
+        stav: r.stav === 'neurcito' ? 'ok' : r.stav,
+        popis: `Pověření ${def.nazev}: ${
+          r.stav === 'chybi' ? 'NEDOLOŽENO — osoba nemá zapsané pověření'
+          : r.konec ? `platí do ${formatDatum(r.konec)}` : 'platí na neurčito'}`,
+      };
+    }
+    const poradi = { ok: 0, blizi: 1, chybi: 2, po: 3 } as const;
+    const stav = poradi[pov.stav] > poradi[sk.stav] ? pov.stav : sk.stav;
+    const popis = [sk.popis, pov.popis].filter((x) => x && !x.startsWith('Evidenční položka')).join('\n');
+    return { stav, popis };
   }
 
   async function prepni(o: OsobaRadek, cinnostId: string) {
