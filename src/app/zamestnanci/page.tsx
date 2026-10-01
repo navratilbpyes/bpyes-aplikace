@@ -49,6 +49,7 @@ import Napoveda from '@/components/ui/napoveda';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
 import SekceUdalosti from '@/components/zamestnanci/sekce-udalosti';
 import NastaveniKlienta from '@/components/zamestnanci/nastaveni-klienta';
+import { synchronizujSouhrn } from '@/lib/souhrn-skoleni';
 import { sestavCinnosti, prepojOsobu, prepojPozici, prepojUzel } from '@/lib/cinnosti-adapter';
 import KartaOsoby from '@/components/zamestnanci/karta-osoby';
 import type { Udalost } from '@/lib/udalosti';
@@ -217,17 +218,40 @@ export default function ZamestnanciPage() {
     return ids;
   }, [osoby, vybranyKlient]);
 
+  /** vlastní položky: cizí klienty skrýt, vlastní klienta jsou vždy relevantní */
+  const ciziVlastni = useMemo(
+    () => new Set(skoleni.filter((s) => s.klientId && s.klientId !== vybranyKlient).map((s) => s.id)),
+    [skoleni, vybranyKlient],
+  );
+  const mojeVlastni = useMemo(
+    () => new Set(skoleni.filter((s) => s.klientId && s.klientId === vybranyKlient).map((s) => s.id)),
+    [skoleni, vybranyKlient],
+  );
+  const jeViditelna = (id: string) =>
+    !ciziVlastni.has(id)
+    && (!filtrujeRelevanci || relevantni!.has(id) || prirazeneKlientovi.has(id) || mojeVlastni.has(id));
+
   const viditelneCinnosti = useMemo(
-    () => (filtrujeRelevanci
-      ? cinnosti.filter((c) => relevantni!.has(c.id) || prirazeneKlientovi.has(c.id))
-      : cinnosti),
-    [cinnosti, filtrujeRelevanci, relevantni, prirazeneKlientovi],
+    () => cinnosti.filter((c) => jeViditelna(c.id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cinnosti, filtrujeRelevanci, relevantni, prirazeneKlientovi, ciziVlastni, mojeVlastni],
   );
   const viditelneSkoleni = useMemo(
-    () => (filtrujeRelevanci ? skoleni.filter((s) => relevantni!.has(s.id)) : skoleni),
-    [skoleni, filtrujeRelevanci, relevantni],
+    () => skoleni.filter((s) => !ciziVlastni.has(s.id)
+      && (!filtrujeRelevanci || relevantni!.has(s.id) || mojeVlastni.has(s.id))),
+    [skoleni, filtrujeRelevanci, relevantni, ciziVlastni, mojeVlastni],
   );
-  const skrytoPolozek = nastavenoRelevance ? cinnosti.length - cinnosti.filter((c) => relevantni!.has(c.id) || prirazeneKlientovi.has(c.id)).length : 0;
+  const skrytoPolozek = nastavenoRelevance
+    ? cinnosti.filter((c) => !ciziVlastni.has(c.id)).length
+      - cinnosti.filter((c) => !ciziVlastni.has(c.id)
+        && (relevantni!.has(c.id) || prirazeneKlientovi.has(c.id) || mojeVlastni.has(c.id))).length
+    : 0;
+
+  /** přepočet automatického souhrnu školení klienta (jen admin, po načtení dat) */
+  useEffect(() => {
+    if (!isAdmin || !vybranyKlient || nacitam) return;
+    synchronizujSouhrn(vybranyKlient).catch((e) => console.warn('Souhrn školení:', e));
+  }, [isAdmin, vybranyKlient, nacitam]);
 
   /** Export aktuálně vyfiltrovaného seznamu. BOM kvůli diakritice v Excelu. */
   function exportCsv() {
@@ -559,6 +583,7 @@ export default function ZamestnanciPage() {
               klientNazev={klientDoc?.nazev}
               ulozene={klientDoc?.relevantniPolozky}
               polozky={skoleni}
+              poZmene={nacti}
             />
           </TabsContent>
         )}
