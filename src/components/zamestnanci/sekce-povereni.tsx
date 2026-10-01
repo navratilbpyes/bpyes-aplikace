@@ -11,7 +11,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { db, useData } from '@/components/data-provider';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, BadgeCheck } from 'lucide-react';
+import { Loader2, Plus, BadgeCheck, Trash2 } from 'lucide-react';
 import type { Osoba } from '@/lib/osoby';
 import { aktivniCinnosti, celeJmeno } from '@/lib/osoby';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
@@ -111,6 +111,40 @@ export default function SekcePovereniOsob({
   }, [osoby, udalosti, radky, povMap, prah]);
 
   const [dialog, setDialog] = useState<{ povereniId?: string; osobaId?: string } | null>(null);
+  const { user } = useData();
+  const { toast } = useToast();
+  /** ID záznamu, u kterého čeká potvrzení smazání (dvoukrokové mazání) */
+  const [potvrdit, setPotvrdit] = useState<string | null>(null);
+
+  /** Smazání záznamu pověření = označení jako smazaný (historie v logu zůstává). */
+  async function smazZaznam(u: Udalost) {
+    if (!klientId) return;
+    if (potvrdit !== u.id) { setPotvrdit(u.id); return; }
+    try {
+      await updateDoc(doc(db, 'klienti', klientId, 'udalosti', u.id), {
+        stav: 'smazano',
+        log: [...(u.log ?? []), polozkaLogu(user?.email ?? 'neznámý', 'smazano', u.datum, null)],
+      });
+      toast({ title: 'Záznam pověření smazán' });
+      setPotvrdit(null);
+      poZmene();
+    } catch (e: any) {
+      toast({ title: 'Smazání selhalo', description: e?.message ?? '', variant: 'destructive' });
+    }
+  }
+
+  const tlacitkoSmazat = (u: Udalost) => (
+    <Button
+      size="sm"
+      variant={potvrdit === u.id ? 'destructive' : 'ghost'}
+      className="h-7 text-xs"
+      onClick={() => smazZaznam(u)}
+      onBlur={() => setPotvrdit((p) => (p === u.id ? null : p))}
+      title="Smazat záznam pověření"
+    >
+      {potvrdit === u.id ? 'Opravdu smazat?' : <Trash2 className="h-3.5 w-3.5" />}
+    </Button>
+  );
 
   if (!klientId) {
     return (
@@ -169,7 +203,7 @@ export default function SekcePovereniOsob({
                   <th className="text-left font-bold px-2 py-2">Platí od</th>
                   <th className="text-left font-bold px-2 py-2">Platí do</th>
                   <th className="text-left font-bold px-2 py-2">Stav</th>
-                  <th className="w-24" />
+                  <th className="w-36" />
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -191,7 +225,7 @@ export default function SekcePovereniOsob({
                         {STAV_UI[r.stav].text}
                       </span>
                     </td>
-                    <td className="px-2 py-2 text-right">
+                    <td className="px-2 py-2 text-right whitespace-nowrap">
                       {r.def && (
                         <Button
                           size="sm" variant="outline" className="h-7 text-xs"
@@ -200,6 +234,7 @@ export default function SekcePovereniOsob({
                           Zapsat
                         </Button>
                       )}
+                      {r.zaznam && tlacitkoSmazat(r.zaznam)}
                     </td>
                   </tr>
                 ))}
@@ -217,7 +252,7 @@ export default function SekcePovereniOsob({
                         {STAV_UI[r.stav].text}
                       </span>
                     </td>
-                    <td />
+                    <td className="px-2 py-2 text-right">{tlacitkoSmazat(r.zaznam)}</td>
                   </tr>
                 ))}
               </tbody>
