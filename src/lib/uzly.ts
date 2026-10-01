@@ -57,6 +57,8 @@ export interface CiselnikUzel {
   druhProhlidky?: string | null;
   /** označení formuláře, např. „F001" */
   formular?: string | null;
+  /** volitelný krok — nepočítá se mezi problémy ani do celku, dokud není splněn */
+  volitelny?: boolean;
   /** vysvětlivka pro klienta — co má udělat a proč */
   napoveda?: string | null;
   predpis?: string | null;
@@ -231,6 +233,7 @@ export interface VyhodnocenyUzel {
 
 /** Uzel vyžaduje pozornost — po lhůtě, nebo úplně bez záznamu. */
 export function jeProblem(v: VyhodnocenyUzel): boolean {
+  if (v.uzel.volitelny && v.stav !== 'po') return false;
   return v.stav === 'po' || v.stav === 'chybi'
     || (v.uzel.faze === 'nastup' && v.stav === 'ceka');
 }
@@ -242,6 +245,8 @@ export function souhrnMapy(mapa: VyhodnocenyUzel[]): {
   celkem: number;
   problemy: number;
 } {
+  // volitelné kroky, které nejsou splněné, se nepočítají vůbec
+  mapa = mapa.filter((m) => !(m.uzel.volitelny && m.stav === 'ceka'));
   const celkem = mapa.length;
   const splneno = mapa.filter((m) => m.stav === 'splneno' || m.stav === 'ok' || m.stav === 'blizi').length;
   const po = mapa.filter((m) => m.stav === 'po').length;
