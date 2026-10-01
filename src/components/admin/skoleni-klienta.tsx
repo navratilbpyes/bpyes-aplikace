@@ -156,7 +156,7 @@ export default function SkoleniKlienta({ klientId }: Props) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Školení klienta</CardTitle>
+        <CardTitle className="text-base">Školení a činnosti klienta</CardTitle>
       </CardHeader>
 
       <CardContent className="space-y-4">
