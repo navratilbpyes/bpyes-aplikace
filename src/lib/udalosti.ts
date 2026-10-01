@@ -61,6 +61,11 @@ export interface Udalost {
   cisloDokladu?: string | null;
   /** u pověření: platí na neurčito (konec platnosti se nehlídá) */
   naNeurcito?: boolean;
+  /**
+   * U školení: vstupní (při nástupu / změně pozice). Záznamy bez hodnoty jsou starší
+   * a počítají se jako periodické; u témat bez periody se berou jako vstupní.
+   */
+  vstupni?: boolean;
   /** lektor, mentor nebo poskytovatel PLS */
   provedl?: string | null;
   poznamka?: string | null;
@@ -90,15 +95,26 @@ export async function nactiUdalosti(klientId: string): Promise<Udalost[]> {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Udalost);
 }
 
-/** Poslední záznam osoby k danému tématu (u prohlídky temaId = null). */
+/** Je záznam školení vstupní? `bezPeriody` = téma nemá periodické školení (starší záznamy jsou pak vstupní). */
+export function jeVstupniZaznam(u: Udalost, bezPeriody = false): boolean {
+  return u.vstupni === true || (u.vstupni === undefined && bezPeriody);
+}
+
+/**
+ * Poslední záznam osoby k danému tématu (u prohlídky temaId = null).
+ * U školení se výchozím nastavením hledá periodické; `vstupni = true` hledá vstupní.
+ */
 export function posledni(
   udalosti: Udalost[],
   osobaId: string,
   typ: TypUdalosti,
   temaId: string | null,
+  vstupni = false,
+  bezPeriody = false,
 ): Udalost | undefined {
   return udalosti
     .filter((u) => u.osobaId === osobaId && u.typ === typ && (u.temaId ?? null) === temaId)
+    .filter((u) => typ !== 'skoleni' || jeVstupniZaznam(u, bezPeriody) === vstupni)
     .sort((a, b) => (b.datum ?? '').localeCompare(a.datum ?? ''))[0];
 }
 
