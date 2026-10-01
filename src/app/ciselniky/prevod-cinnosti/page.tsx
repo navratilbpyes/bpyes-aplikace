@@ -91,6 +91,7 @@ export default function PrevodCinnostiPage() {
         .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs'));
       const s = snapS.docs
         .map((d) => ({ id: d.id, ...d.data() }) as CiselnikSkoleni)
+        .filter((x) => !x.klientId)
         .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs'));
       setCinnosti(c);
       setSkoleni(s);
