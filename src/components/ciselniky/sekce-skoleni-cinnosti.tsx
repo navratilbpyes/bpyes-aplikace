@@ -28,7 +28,7 @@ import {
   Plus, X, Loader2, ChevronDown, ChevronRight, Stethoscope, ArrowRightLeft,
 } from 'lucide-react';
 import EditorFaktoru from '@/components/ciselniky/editor-faktoru';
-import { PERIODY_S_NULOU, popisPeriody } from '@/lib/skoleni';
+import { PERIODY_S_NULOU, popisPeriody, maVstupniSkoleni } from '@/lib/skoleni';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
 import { PERIODY_PROHLIDKY, popisPeriodyProhlidky } from '@/lib/cinnosti';
 import { POZARNI_RADKY } from '@/lib/pozarni-kniha';
@@ -339,6 +339,7 @@ function RadekPolozky({
           />
           <div className="flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
             {evidencni && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium">evidenční položka</span>}
+            {maVstupniSkoleni(p) && <span className="rounded bg-sky-50 px-1.5 py-0.5 text-sky-700 font-medium">vstupní</span>}
             {p.zacvik && <span className="rounded bg-blue-50 px-1.5 py-0.5 text-blue-700 font-medium">zácvik</span>}
             {p.prezkouseni && <span className="rounded bg-violet-50 px-1.5 py-0.5 text-violet-700 font-medium">přezkoušení</span>}
             {p.vyzadujePovereni && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700 font-medium">pověření</span>}
@@ -427,6 +428,13 @@ function RadekPolozky({
                 uprav(p.id, v
                   ? { bezSkoleniPovereni: true, periodaMesice: 0, zacvik: false, prezkouseni: false, vyzadujePovereni: false }
                   : { bezSkoleniPovereni: false })}
+            />
+            <Prepinac
+              nadpis="Má vstupní školení"
+              popis="Zapisuje se při nástupu nebo změně pozice a ukazuje se v kroku Nástup. Periodické školení (perioda výše) je samostatné — kdo má jen vstupní, nechte periodu na „bez periody“."
+              hodnota={maVstupniSkoleni(p)}
+              onZmena={(v) => uprav(p.id, { maVstupni: v })}
+              zakazano={evidencni}
             />
             <Prepinac
               nadpis="Vyžaduje praktický zácvik"
