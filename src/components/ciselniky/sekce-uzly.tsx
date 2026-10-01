@@ -73,8 +73,8 @@ export default function SekceUzly() {
       }
 
       // spouštěcí „činnosti" uzlů jsou nově položky sloučeného číselníku
-      setCinnosti(sestaveno.cinnosti);
-      setSkoleni(polozky);
+      setCinnosti(sestaveno.cinnosti.filter((c) => !polozky.find((p) => p.id === c.id)?.klientId));
+      setSkoleni(polozky.filter((p) => !p.klientId));
     } catch (e) {
       console.error('Načtení uzlů selhalo:', e);
     } finally {
