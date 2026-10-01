@@ -497,7 +497,7 @@ export default function ClientDetailPage() {
               <TabsTrigger value="pls" className="px-6 py-2">Poskytovatelé PLS</TabsTrigger>
               <TabsTrigger value="zaznamy" className="px-6 py-2">Záznamy kontrol</TabsTrigger>
               <TabsTrigger value="prohlidky" className="px-6 py-2">Prověrky a PPP</TabsTrigger>
-              <TabsTrigger value="skoleni" className="px-6 py-2">Školení</TabsTrigger>
+              <TabsTrigger value="skoleni" className="px-6 py-2">Školení a činnosti</TabsTrigger>
               <TabsTrigger value="revize" className="px-6 py-2">Revize</TabsTrigger>
               <TabsTrigger value="dokumentace" className="px-6 py-2">Dokumentace</TabsTrigger>
               <TabsTrigger value="pristup" className="px-6 py-2">Přístup</TabsTrigger>
