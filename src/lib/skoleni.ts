@@ -53,6 +53,8 @@ export interface CiselnikSkoleni {
   souvisejiciIds?: string[];
   /** ID původních činností z `ciselnikCinnosti`, které se do položky sloučily */
   puvodniCinnostIds?: string[];
+  /** vlastní položka jednoho klienta (zakládá admin v Lidských zdrojích) — v globálním číselníku se neukazuje */
+  klientId?: string | null;
 }
 
 /**
@@ -90,6 +92,11 @@ export interface SkoleniKlienta {
   protokolDuvod?: string | null;
   /** mapování na řádek požární knihy (snapshot z číselníku) */
   pozarniRadek?: string | null;
+  /** automaticky vedený souhrn z Lidských zdrojů (viz lib/souhrn-skoleni.ts) — v UI jen ke čtení */
+  auto?: boolean;
+  /** u souhrnu: kolika osob se položka týká a kolika z nich chybí záznam */
+  pocetOsob?: number;
+  pocetBezZaznamu?: number;
 }
 
 /** Přičte měsíce k datu (ISO in, ISO out). */
