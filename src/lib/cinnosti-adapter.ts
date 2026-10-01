@@ -9,6 +9,7 @@
  */
 
 import type { CiselnikSkoleni } from './skoleni';
+import { maVstupniSkoleni } from './skoleni';
 import type { CiselnikCinnost } from './cinnosti';
 import type { Osoba, Pozice } from './osoby';
 import type { CiselnikUzel } from './uzly';
@@ -26,7 +27,7 @@ export function poradiOblasti(o?: string | null): number {
 
 /** Položka číselníku → tvar, se kterým pracují Lidské zdroje. */
 export function polozkaNaCinnost(s: CiselnikSkoleni): CiselnikCinnost {
-  const sledovana = !s.bezSkoleniPovereni && (s.periodaMesice ?? 0) > 0;
+  const sledovana = !s.bezSkoleniPovereni && ((s.periodaMesice ?? 0) > 0 || maVstupniSkoleni(s));
   return {
     id: s.id,
     nazev: s.nazev,
