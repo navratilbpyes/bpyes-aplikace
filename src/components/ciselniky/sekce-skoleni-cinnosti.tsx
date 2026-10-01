@@ -63,6 +63,7 @@ export default function SekceSkoleniCinnosti() {
       setPolozky(
         snap.docs
           .map((d) => ({ id: d.id, ...d.data() }) as CiselnikSkoleni)
+          .filter((x) => !x.klientId)
           .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs')),
       );
       setNeprevedeno(snapC.docs.filter((d) => !d.data().prevedeno).length);
