@@ -624,6 +624,7 @@ export default function ZamestnanciPage() {
         udalosti={otevrenaKarta ? udalosti[otevrenaKarta.klientId] ?? [] : []}
         jeVedouci={!!(otevrenaKarta && vypocet(otevrenaKarta).pozice?.jeVedouci)}
         skoleni={skoleni}
+        povereni={povereni}
         periodaProhlidky={otevrenaKarta ? vypocet(otevrenaKarta).perioda : undefined}
         zavri={() => setOtevrenaKarta(null)}
         poZmene={nacti}
