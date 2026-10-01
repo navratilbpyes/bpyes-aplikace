@@ -33,6 +33,7 @@ import type { Osoba } from '@/lib/osoby';
 import Napoveda from '@/components/ui/napoveda';
 import { celeJmeno, aktivniCinnosti } from '@/lib/osoby';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
+import { maVstupniSkoleni } from '@/lib/skoleni';
 import type { CiselnikCinnost, CiselnikKategorie } from '@/lib/cinnosti';
 import { periodaProhlidky, jeNad50, popisPeriodyProhlidky } from '@/lib/cinnosti';
 import type { Udalost, TypUdalosti, DruhProhlidky, ZaverProhlidky } from '@/lib/udalosti';
@@ -72,6 +73,8 @@ export default function SekceUdalosti({
   const [udalosti, setUdalosti] = useState<Udalost[]>([]);
   const [nacitam, setNacitam] = useState(true);
   const [temaId, setTemaId] = useState<string>('');
+  /** druh zápisu školení: vstupní (nástup / změna pozice) nebo periodické */
+  const [zapisVstupni, setZapisVstupni] = useState(false);
   const [historie, setHistorie] = useState<{ osoba: Osoba; zaznamy: Udalost[] } | null>(null);
 
   const nacti = useCallback(async () => {
@@ -116,18 +119,25 @@ export default function SekceUdalosti({
     return periodaProhlidky(kat, jejiCinnosti, nad50);
   }, [kategorie, poziceKategorie, cinnostiMap]);
 
+  const temaVybrane = skoleni.find((s) => s.id === temaId);
+  const moznePeriodicke = (temaVybrane?.periodaMesice ?? 0) > 0;
+  const mozneVstupni = !!temaVybrane && maVstupniSkoleni(temaVybrane);
+  /** skutečně použitý druh: téma jen s jedním druhem ho určí samo */
+  const vstupni = rezim === 'skoleni' && !!temaVybrane
+    && (!moznePeriodicke || (mozneVstupni && zapisVstupni));
+
   /** Řádky přehledu: osoba + poslední záznam + termín dalšího. */
   const radky = useMemo(() => {
     const tema = skoleni.find((s) => s.id === temaId);
     return osoby.map((o) => {
       const p = rezim === 'skoleni'
-        ? posledni(udalosti, o.id, 'skoleni', temaId || null)
+        ? posledni(udalosti, o.id, 'skoleni', temaId || null, vstupni, !((tema?.periodaMesice ?? 0) > 0))
         : posledni(udalosti, o.id, 'prohlidka', null);
-      const perioda = rezim === 'skoleni' ? (tema?.periodaMesice ?? 0) : (periodaOsoby(o) ?? 0);
+      const perioda = rezim === 'skoleni' ? (vstupni ? 0 : (tema?.periodaMesice ?? 0)) : (periodaOsoby(o) ?? 0);
       const dalsi = dalsiTermin(p, perioda);
       return { osoba: o, posledniZ: p, dalsi, perioda, povinne: rezim === 'skoleni' ? povinnaSkoleni(o).includes(temaId) : true };
     });
-  }, [osoby, udalosti, rezim, temaId, skoleni, periodaOsoby, povinnaSkoleni]);
+  }, [osoby, udalosti, rezim, temaId, skoleni, periodaOsoby, povinnaSkoleni, vstupni]);
 
   if (!klientId) {
     return (
@@ -164,12 +174,30 @@ export default function SekceUdalosti({
                     ))}
                   </SelectContent>
                 </Select>
+                {temaVybrane && moznePeriodicke && mozneVstupni && (
+                  <div className="inline-flex rounded-md border p-0.5 text-xs mt-1.5">
+                    {[{ v: false, t: 'Periodické' }, { v: true, t: 'Vstupní' }].map((o) => (
+                      <button
+                        key={o.t}
+                        type="button"
+                        onClick={() => setZapisVstupni(o.v)}
+                        className={`rounded px-3 py-1 ${zapisVstupni === o.v ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+                      >
+                        {o.t}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {temaVybrane && !moznePeriodicke && (
+                  <p className="text-[11px] text-muted-foreground mt-1">Téma má jen vstupní školení — eviduje se, kdo a kdy ho absolvoval.</p>
+                )}
               </div>
             ) : <div />}
             <DialogHromadny
               klientId={klientId}
               rezim={rezim}
               tema={skoleni.find((s) => s.id === temaId)}
+              vstupni={vstupni}
               radky={radky}
               poHotovo={nacti}
             />
@@ -210,7 +238,8 @@ export default function SekceUdalosti({
                       <span className="sm:hidden">poslední: </span>{formatDatum(posledniZ?.datum)}
                     </span>
                     <span className={`order-2 sm:order-none text-xs text-right sm:text-left ${BARVA[st]}`}>
-                      {st === 'chybi' ? 'bez záznamu' : formatDatum(dalsi)}
+                      {vstupni ? (posledniZ ? 'absolvoval' : 'bez záznamu')
+                        : st === 'chybi' ? 'bez záznamu' : formatDatum(dalsi)}
                     </span>
                     <Button
                       variant="ghost"
@@ -250,11 +279,12 @@ interface Radek {
 }
 
 function DialogHromadny({
-  klientId, rezim, tema, radky, poHotovo,
+  klientId, rezim, tema, vstupni, radky, poHotovo,
 }: {
   klientId: string;
   rezim: 'skoleni' | 'prohlidka';
   tema?: CiselnikSkoleni;
+  vstupni: boolean;
   radky: Radek[];
   poHotovo: () => void;
 }) {
@@ -295,7 +325,9 @@ function DialogHromadny({
     setProvedl(rezim === 'skoleni' ? (tema?.provadi ?? '') : '');
     setVybrani(
       rezim === 'skoleni'
-        ? new Set(radky.filter((r) => r.povinne && stavTerminu(r.dalsi) !== 'ok').map((r) => r.osoba.id))
+        ? new Set(radky
+          .filter((r) => r.povinne && (vstupni ? !r.posledniZ : stavTerminu(r.dalsi) !== 'ok'))
+          .map((r) => r.osoba.id))
         : new Set(),
     );
     setOtevreno(true);
@@ -320,6 +352,7 @@ function DialogHromadny({
           typ: (rezim === 'skoleni' ? 'skoleni' : 'prohlidka') as TypUdalosti,
           temaId: rezim === 'skoleni' ? (tema?.id ?? null) : null,
           temaNazev: rezim === 'skoleni' ? (tema?.nazev ?? null) : null,
+          vstupni: rezim === 'skoleni' ? vstupni : null,
           datum: new Date(datum).toISOString(),
           datumDo: datumDo ? new Date(datumDo).toISOString() : null,
           datumPosudku: rezim === 'prohlidka' && datumPosudku
@@ -371,7 +404,8 @@ function DialogHromadny({
           {r.posledniZ ? `naposledy ${formatDatum(r.posledniZ.datum)}` : ''}
         </span>
         <span className={`w-24 text-right ${BARVA[st]}`}>
-          {st === 'chybi' ? 'bez záznamu' : `do ${formatDatum(r.dalsi)}`}
+          {vstupni ? (r.posledniZ ? 'absolvoval' : 'bez záznamu')
+            : st === 'chybi' ? 'bez záznamu' : `do ${formatDatum(r.dalsi)}`}
         </span>
       </button>
     );
@@ -388,7 +422,7 @@ function DialogHromadny({
       <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>
-            {rezim === 'skoleni' ? `Zápis školení — ${tema?.nazev ?? ''}` : 'Zápis lékařské prohlídky'}
+            {rezim === 'skoleni' ? `Zápis ${vstupni ? 'vstupního ' : ''}školení — ${tema?.nazev ?? ''}` : 'Zápis lékařské prohlídky'}
           </DialogTitle>
           <DialogDescription>
             {rezim === 'skoleni'
