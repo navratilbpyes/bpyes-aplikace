@@ -920,11 +920,11 @@ function Matice({
               <tr>
                 <th className="sticky left-0 z-10 bg-background text-left p-2 border-b min-w-[130px] md:min-w-[180px]">Osoba</th>
                 {cinnosti.map((c) => (
-                  <th key={c.id} className="border-b p-1 align-bottom">
-                    <div className="h-24 md:h-32 w-7 md:w-8 flex items-end justify-center">
+                  <th key={c.id} className="border-b p-1 align-bottom" title={c.nazev}>
+                    <div className="h-52 w-7 md:w-8 flex items-end justify-center overflow-hidden">
                       <span
-                        className="whitespace-nowrap text-[11px] font-medium"
-                        style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                        className="block overflow-hidden text-ellipsis whitespace-nowrap text-[10px] leading-tight font-medium"
+                        style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', maxHeight: '12.5rem' }}
                       >
                         {c.nazev}
                       </span>
