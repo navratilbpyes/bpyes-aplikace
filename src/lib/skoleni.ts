@@ -41,6 +41,8 @@ export interface CiselnikSkoleni {
   prezkouseni?: boolean;
   /** vyžaduje pověření (lhůtu platnosti doplní až číselník Pověření) */
   vyzadujePovereni?: boolean;
+  /** druh pověření z `ciselnikPovereni`, které položka vyžaduje */
+  povereniId?: string | null;
   /** profesní riziko dle části II přílohy č. 1 vyhlášky č. 79/2013 Sb. */
   profesniRiziko?: boolean;
   prohlidkaDo50?: number | null;
