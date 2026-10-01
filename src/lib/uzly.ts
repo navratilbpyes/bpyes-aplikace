@@ -19,8 +19,9 @@ import type { CiselnikCinnost } from './cinnosti';
 import type { Osoba } from './osoby';
 import { aktivniCinnosti } from './osoby';
 import type { Udalost } from './udalosti';
-import { dalsiTermin, stavTerminu, PRAH_VYCHOZI } from './udalosti';
+import { dalsiTermin, stavTerminu, PRAH_VYCHOZI, jeVstupniZaznam } from './udalosti';
 import type { CiselnikSkoleni } from './skoleni';
+import { maVstupniSkoleni } from './skoleni';
 
 export type FazeUzlu = 'nastup' | 'provoz' | 'udalost' | 'ukonceni';
 
@@ -308,7 +309,32 @@ export function vyhodnotMapu(
   const mojeUdalosti = udalosti.filter((x) => x.osobaId === osoba.id);
   const rucni = (osoba as any).uzavreneUzly as Record<string, string> | undefined;
 
-  return uzly
+  // Vstupní školení se v Nástupu nevedou přes jeden obecný uzel, ale po položkách:
+  // každá položka s vlastností „Má vstupní školení“, která osobě plyne z pozice a činností.
+  const idsPolozek = new Set<string>();
+  cinnosti.forEach((c) => (c.skoleniIds ?? []).forEach((id) => idsPolozek.add(id)));
+  const vstupniUzly: CiselnikUzel[] = [];
+  for (const id of idsPolozek) {
+    const t = skoleni.find((s) => s.id === id);
+    if (!t || !maVstupniSkoleni(t)) continue;
+    vstupniUzly.push({
+      id: `vstup-${id}`,
+      poradi: 45,
+      faze: 'nastup',
+      nazev: `Vstupní školení — ${t.nazev}`,
+      podminka: 'vzdy',
+      uzavreni: 'skolenim',
+      skoleniId: id,
+      napoveda: 'Zapište na záložce Zápis školení s volbou „Vstupní“. Periodické školení se zapisuje zvlášť a vede se v Provozu.',
+      stav: 'aktivni',
+    });
+  }
+  const uzlyVse = [
+    ...uzly.filter((u) => !(u.faze === 'nastup' && u.uzavreni === 'skolenim')),
+    ...vstupniUzly.sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs')),
+  ].sort((a, b) => a.poradi - b.poradi);
+
+  return uzlyVse
     .filter((u) => zobrazit(u, osoba, cinnosti, jeVedouci))
     .map((u) => {
       let datum: string | null | undefined;
@@ -320,9 +346,11 @@ export function vyhodnotMapu(
           .sort((a, b) => (b.datum ?? '').localeCompare(a.datum ?? ''))[0];
         datum = z?.datum;
       } else if (u.uzavreni === 'skolenim' || u.uzavreni === 'kolem') {
+        const bezPeriody = !((skoleni.find((s) => s.id === u.skoleniId)?.periodaMesice ?? 0) > 0);
         const z = mojeUdalosti
           .filter((x) => x.typ === 'skoleni'
-            && (!u.skoleniId || x.temaId === u.skoleniId))
+            && (!u.skoleniId || x.temaId === u.skoleniId)
+            && (u.faze !== 'nastup' || jeVstupniZaznam(x, bezPeriody)))
           .sort((a, b) => (b.datum ?? '').localeCompare(a.datum ?? ''))[0];
         datum = z?.datum;
       } else if (u.uzavreni === 'zacvikem') {
@@ -379,7 +407,7 @@ export function vyhodnotMapu(
         const posledniZaznam = mojeUdalosti
           .filter((x) => (u.uzavreni === 'prohlidkou'
             ? x.typ === 'prohlidka' && (!u.druhProhlidky || x.druhProhlidky === u.druhProhlidky)
-            : x.typ === 'skoleni' && (!u.skoleniId || x.temaId === u.skoleniId)))
+            : x.typ === 'skoleni' && x.vstupni !== true && (!u.skoleniId || x.temaId === u.skoleniId)))
           .sort((a, b) => (b.datum ?? '').localeCompare(a.datum ?? ''))[0];
 
         const dalsi = dalsiTermin(posledniZaznam, perioda);
