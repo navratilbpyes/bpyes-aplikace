@@ -33,7 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   Users, Plus, Loader2, Upload, X, Briefcase, Grid3x3, Stethoscope, Search,
   ChevronDown, ChevronRight, Pencil, Download, Printer, Trash2, GraduationCap,
-  Check, AlertTriangle, RotateCw, Circle,
+  Check, AlertTriangle, RotateCw, Circle, SlidersHorizontal,
 } from 'lucide-react';
 import type { Osoba, Pozice } from '@/lib/osoby';
 import {
@@ -48,6 +48,8 @@ import EditorFaktoru from '@/components/ciselniky/editor-faktoru';
 import Napoveda from '@/components/ui/napoveda';
 import type { CiselnikSkoleni } from '@/lib/skoleni';
 import SekceUdalosti from '@/components/zamestnanci/sekce-udalosti';
+import NastaveniKlienta from '@/components/zamestnanci/nastaveni-klienta';
+import { sestavCinnosti, prepojOsobu, prepojPozici, prepojUzel } from '@/lib/cinnosti-adapter';
 import KartaOsoby from '@/components/zamestnanci/karta-osoby';
 import type { Udalost } from '@/lib/udalosti';
 import { nactiUdalosti, posledni, dalsiTermin, formatDatum, nactiPrah, ulozPrah, PRAH_VYCHOZI } from '@/lib/udalosti';
@@ -95,21 +97,19 @@ export default function ZamestnanciPage() {
     if (dostupniKlienti.length === 0) { setNacitam(false); return; }
     setNacitam(true);
     try {
-      const [snapC, snapK, snapS] = await Promise.all([
-        getDocs(query(collection(db, 'ciselnikCinnosti'), where('stav', '==', 'aktivni'))),
+      const [snapK, snapS] = await Promise.all([
         getDocs(collection(db, 'ciselnikKategorii')),
         getDocs(query(collection(db, 'ciselnikSkoleni'), where('stav', '==', 'aktivni'))),
       ]);
-      setSkoleni(
-        snapS.docs.map((d) => ({ id: d.id, ...d.data() }) as CiselnikSkoleni)
-          .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs')),
-      );
-      setCinnosti(
-        snapC.docs.map((d) => ({ id: d.id, ...d.data() }) as CiselnikCinnost)
-          .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs')),
-      );
+      const polozky = snapS.docs.map((d) => ({ id: d.id, ...d.data() }) as CiselnikSkoleni)
+        .sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs'));
+      setSkoleni(polozky);
+      // „činnosti" jsou nově položky sloučeného číselníku; stará ID se přemapují na nová
+      const sestaveno = sestavCinnosti(polozky);
+      const alias = sestaveno.alias;
+      setCinnosti(sestaveno.cinnosti);
       setKategorie(snapK.docs.map((d) => ({ id: d.id, ...d.data() }) as CiselnikKategorie));
-      setUzly(await nactiUzly());
+      setUzly((await nactiUzly()).map((u) => prepojUzel(u, alias)));
 
       const davky = await Promise.all(
         dostupniKlienti.map(async (k) => ({
@@ -122,10 +122,10 @@ export default function ZamestnanciPage() {
       setUdalosti(Object.fromEntries(davky.map((d) => [d.klient.id, d.udalosti])));
       setOsoby(
         davky.flatMap((d) =>
-          d.osoby.map((o) => ({ ...o, klientId: d.klient.id, klientNazev: d.klient.nazev })),
+          d.osoby.map((o) => ({ ...prepojOsobu(o, alias), klientId: d.klient.id, klientNazev: d.klient.nazev })),
         ).sort((a, b) => celeJmeno(a).localeCompare(celeJmeno(b), 'cs')),
       );
-      setPozice(Object.fromEntries(davky.map((d) => [d.klient.id, d.pozice])));
+      setPozice(Object.fromEntries(davky.map((d) => [d.klient.id, d.pozice.map((p) => prepojPozici(p, alias))])));
     } catch (e) {
       console.error('Načtení osob selhalo:', e);
       toast({ title: 'Načtení selhalo', variant: 'destructive' });
@@ -198,6 +198,37 @@ export default function ZamestnanciPage() {
 
   const vybranyKlient = fKlient !== 'vse' ? fKlient : null;
 
+  /* ── relevance položek pro vybraného klienta ── */
+  const [ukazOstatni, setUkazOstatni] = useState(false);
+  const klientDoc = vybranyKlient ? klienti.find((k) => k.id === vybranyKlient) : undefined;
+  const relevantni = useMemo(
+    () => (klientDoc?.relevantniPolozky && klientDoc.relevantniPolozky.length > 0
+      ? new Set(klientDoc.relevantniPolozky) : null),
+    [klientDoc?.relevantniPolozky],
+  );
+  const nastavenoRelevance = !!vybranyKlient && !!relevantni;
+  const filtrujeRelevanci = nastavenoRelevance && !ukazOstatni;
+
+  /** položky, které už má některá osoba klienta přiřazené — nikdy je neskrývat */
+  const prirazeneKlientovi = useMemo(() => {
+    const ids = new Set<string>();
+    osoby.filter((o) => o.klientId === vybranyKlient)
+      .forEach((o) => aktivniCinnosti(o).forEach((p) => ids.add(p.cinnostId)));
+    return ids;
+  }, [osoby, vybranyKlient]);
+
+  const viditelneCinnosti = useMemo(
+    () => (filtrujeRelevanci
+      ? cinnosti.filter((c) => relevantni!.has(c.id) || prirazeneKlientovi.has(c.id))
+      : cinnosti),
+    [cinnosti, filtrujeRelevanci, relevantni, prirazeneKlientovi],
+  );
+  const viditelneSkoleni = useMemo(
+    () => (filtrujeRelevanci ? skoleni.filter((s) => relevantni!.has(s.id)) : skoleni),
+    [skoleni, filtrujeRelevanci, relevantni],
+  );
+  const skrytoPolozek = nastavenoRelevance ? cinnosti.length - cinnosti.filter((c) => relevantni!.has(c.id) || prirazeneKlientovi.has(c.id)).length : 0;
+
   /** Export aktuálně vyfiltrovaného seznamu. BOM kvůli diakritice v Excelu. */
   function exportCsv() {
     const hlavicka = ['Klient', 'Příjmení', 'Jméno', 'Datum narození', 'Osobní číslo',
@@ -235,7 +266,7 @@ export default function ZamestnanciPage() {
             <Users className="h-6 w-6 md:h-7 md:w-7 text-blue-600" /> Lidské zdroje
           </h1>
           <p className="text-xs md:text-sm text-muted-foreground">
-            Evidence osob, pozic a činností. Z činností vyplývají povinná školení,
+            Evidence osob, pozic, školení a činností. Z položek vyplývají povinná školení,
             zácviky a periody lékařských prohlídek.
           </p>
         </div>
@@ -265,18 +296,43 @@ export default function ZamestnanciPage() {
             <Users className="mr-2 h-4 w-4" /> Přehled
           </TabsTrigger>
           <TabsTrigger value="matice" className="px-3 md:px-6 py-2 shrink-0">
-            <Grid3x3 className="mr-2 h-4 w-4" /> Matice činností
+            <Grid3x3 className="mr-2 h-4 w-4" /> Matice
           </TabsTrigger>
           <TabsTrigger value="pozice" className="px-3 md:px-6 py-2 shrink-0">
             <Briefcase className="mr-2 h-4 w-4" /> Pozice
           </TabsTrigger>
           <TabsTrigger value="skoleni" className="px-3 md:px-6 py-2 shrink-0">
-            <GraduationCap className="mr-2 h-4 w-4" /> Školení
+            <GraduationCap className="mr-2 h-4 w-4" /> Zápis školení
           </TabsTrigger>
           <TabsTrigger value="prohlidky" className="px-3 md:px-6 py-2 shrink-0">
             <Stethoscope className="mr-2 h-4 w-4" /> Prohlídky
           </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="nastaveni" className="px-3 md:px-6 py-2 shrink-0">
+              <SlidersHorizontal className="mr-2 h-4 w-4" /> Nastavení klienta
+            </TabsTrigger>
+          )}
         </TabsList>
+
+        {/* ─── relevance položek ─── */}
+        {vybranyKlient && !nastavenoRelevance && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            Relevantní školení a činnosti nejsou pro tohoto klienta nastaveny — zobrazuje se vše.
+            {isAdmin && ' Nastavíte je v záložce „Nastavení klienta“.'}
+          </div>
+        )}
+        {nastavenoRelevance && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2">
+            <p className="text-xs text-muted-foreground">
+              Zobrazují se jen položky relevantní pro klienta
+              {skrytoPolozek > 0 && <> (skryto {skrytoPolozek})</>}.
+            </p>
+            <label className="flex items-center gap-2 text-xs font-medium whitespace-nowrap">
+              <Switch checked={ukazOstatni} onCheckedChange={setUkazOstatni} />
+              Zobrazit i ostatní
+            </label>
+          </div>
+        )}
 
         {/* ─── filtry ─── */}
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -309,13 +365,13 @@ export default function ZamestnanciPage() {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Činnost</Label>
+            <Label className="text-xs">Školení / činnost</Label>
             <Select value={fCinnost} onValueChange={setFCinnost}>
               <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="vse">Všechny činnosti</SelectItem>
+                <SelectItem value="vse">Všechny školení a činnosti</SelectItem>
                 <SelectItem value="__zadna__">— bez přiřazené činnosti —</SelectItem>
-                {cinnosti.map((c) => (
+                {viditelneCinnosti.map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.nazev}</SelectItem>
                 ))}
               </SelectContent>
@@ -451,7 +507,7 @@ export default function ZamestnanciPage() {
           <Matice
             klientId={vybranyKlient}
             osoby={filtrovane}
-            cinnosti={cinnosti}
+            cinnosti={viditelneCinnosti}
             skoleni={skoleni}
             udalosti={vybranyKlient ? udalosti[vybranyKlient] ?? [] : []}
             poZmene={nacti}
@@ -462,7 +518,7 @@ export default function ZamestnanciPage() {
           <SekcePozice
             klientId={vybranyKlient}
             pozice={vybranyKlient ? pozice[vybranyKlient] ?? [] : []}
-            cinnosti={cinnosti}
+            cinnosti={viditelneCinnosti}
             osoby={osoby.filter((o) => o.klientId === vybranyKlient)}
             poZmene={nacti}
           />
@@ -473,7 +529,7 @@ export default function ZamestnanciPage() {
             rezim="skoleni"
             klientId={vybranyKlient}
             osoby={filtrovane}
-            skoleni={skoleni}
+            skoleni={viditelneSkoleni}
             cinnosti={cinnosti}
             kategorie={kategorie}
             poziceKategorie={Object.fromEntries(
@@ -487,7 +543,7 @@ export default function ZamestnanciPage() {
             rezim="prohlidka"
             klientId={vybranyKlient}
             osoby={filtrovane}
-            skoleni={skoleni}
+            skoleni={viditelneSkoleni}
             cinnosti={cinnosti}
             kategorie={kategorie}
             poziceKategorie={Object.fromEntries(
@@ -495,6 +551,17 @@ export default function ZamestnanciPage() {
             )}
           />
         </TabsContent>
+
+        {isAdmin && (
+          <TabsContent value="nastaveni">
+            <NastaveniKlienta
+              klientId={vybranyKlient}
+              klientNazev={klientDoc?.nazev}
+              ulozene={klientDoc?.relevantniPolozky}
+              polozky={skoleni}
+            />
+          </TabsContent>
+        )}
       </Tabs>
 
       <KartaOsoby
@@ -704,6 +771,17 @@ function Matice({
     [skoleni],
   );
 
+  /** Souvislé skupiny sloupců podle oblasti (cinnosti už jsou seřazené podle oblasti). */
+  const skupinyOblasti = useMemo(() => {
+    const out: { oblast: string; pocet: number }[] = [];
+    for (const c of cinnosti) {
+      const o = c.oblast || 'Bez oblasti';
+      const posl = out[out.length - 1];
+      if (posl && posl.oblast === o) posl.pocet += 1; else out.push({ oblast: o, pocet: 1 });
+    }
+    return out;
+  }, [cinnosti]);
+
   /** Sdílené s procesní mapou — nastavení žije na jednom místě. */
   function zmenPrah(v: string) {
     setPrah(Number(v));
@@ -716,11 +794,14 @@ function Matice({
    * Termín se počítá z data konkrétní osoby, ne z firemního termínu.
    */
   function stavBunky(osobaId: string, c: CiselnikCinnost): { stav: 'ok' | 'blizi' | 'po' | 'chybi'; popis: string } {
-    const ids = c.skoleniIds ?? [];
-    // Činnost bez navázaného školení není „v pořádku" — jen se neví, co hlídat.
-    // Modrá by tvrdila, že je doloženo něco, co doloženo není.
+    const ids = (c.skoleniIds ?? []).filter((id) => (skoleniMap[id]?.periodaMesice ?? 0) > 0);
     if (ids.length === 0) {
-      return { stav: 'chybi', popis: 'Činnost nemá v číselníku navázané žádné školení — doplň vazbu v Číselníky → Činnosti.' };
+      // Evidenční položka je výslovně bez termínů → v pořádku.
+      if (skoleniMap[c.id]?.bezSkoleniPovereni) {
+        return { stav: 'ok', popis: 'Evidenční položka — nevyžaduje školení ani pověření.' };
+      }
+      // Jinak se neví, co hlídat. Modrá by tvrdila, že je doloženo něco, co doloženo není.
+      return { stav: 'chybi', popis: 'Položka nemá periodu ani související školení — doplňte ji v Číselníky → Školení a činnosti.' };
     }
     const hranice = new Date();
     hranice.setMonth(hranice.getMonth() + prah);
@@ -786,7 +867,7 @@ function Matice({
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-1.5">
-          Matice činností <Napoveda klic="matice" />
+          Matice školení a činností <Napoveda klic="matice" />
         </CardTitle>
         <CardDescription>
           Klikni do mřížky. Odebrání činnost ukončí k dnešku, nesmaže ji — historie zůstává.
@@ -819,11 +900,23 @@ function Matice({
         </p>
         {osoby.length === 0 || cinnosti.length === 0 ? (
           <p className="py-8 text-sm text-muted-foreground">
-            {cinnosti.length === 0 ? 'Číselník činností je prázdný.' : 'Žádné osoby k zobrazení.'}
+            {cinnosti.length === 0 ? 'Číselník školení a činností je prázdný.' : 'Žádné osoby k zobrazení.'}
           </p>
         ) : (
           <table className="text-xs border-collapse">
             <thead>
+              <tr>
+                <th className="sticky left-0 z-10 bg-background" />
+                {skupinyOblasti.map((g) => (
+                  <th
+                    key={g.oblast}
+                    colSpan={g.pocet}
+                    className="border-l border-b px-1 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground text-left"
+                  >
+                    {g.oblast}
+                  </th>
+                ))}
+              </tr>
               <tr>
                 <th className="sticky left-0 z-10 bg-background text-left p-2 border-b min-w-[130px] md:min-w-[180px]">Osoba</th>
                 {cinnosti.map((c) => (
@@ -1062,7 +1155,7 @@ function SekcePozice({
                       </p>
                     </div>
                     {cinnosti.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">Číselník činností je prázdný.</p>
+                      <p className="text-xs text-muted-foreground">Číselník školení a činností je prázdný.</p>
                     ) : (
                       <div className="max-h-56 overflow-y-auto rounded border bg-background divide-y">
                         {cinnosti.map((c) => {
