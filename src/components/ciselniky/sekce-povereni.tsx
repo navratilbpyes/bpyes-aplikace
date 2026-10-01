@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  collection, addDoc, updateDoc, doc, query, where, getDocs,
+  collection, addDoc, setDoc, updateDoc, doc, query, where, getDocs,
 } from 'firebase/firestore';
 import { db } from '@/components/data-provider';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -21,9 +21,22 @@ import { Label } from '@/components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Plus, X, Loader2 } from 'lucide-react';
+import { Plus, X, Loader2, Sparkles } from 'lucide-react';
 import type { CiselnikPovereni } from '@/lib/povereni';
 import { PLATNOSTI_POVERENI } from '@/lib/povereni';
+
+/** Základní sada obvyklých pověření. Platnost je výchozí „na neurčito“ — upravte podle vnitřních předpisů klienta. */
+const ZAKLADNI_SADA: { id: string; nazev: string; predpis: string; kdoVydava: string }[] = [
+  { id: 'pov-preventista-po', nazev: 'Preventista požární ochrany', predpis: '§ 25 vyhlášky č. 246/2001 Sb.', kdoVydava: 'zaměstnavatel / vedoucí' },
+  { id: 'pov-hlidka-po', nazev: 'Člen preventivní požární hlídky', predpis: '§ 24 vyhlášky č. 246/2001 Sb.', kdoVydava: 'zaměstnavatel / vedoucí' },
+  { id: 'pov-snizeny-provoz-po', nazev: 'Osoba pověřená zajištěním PO při sníženém provozu a mimo pracovní dobu', predpis: '§ 23 odst. 5 vyhlášky č. 246/2001 Sb.', kdoVydava: 'zaměstnavatel / vedoucí' },
+  { id: 'pov-prace-zvysene-nebezpeci', nazev: 'Vydávání písemných příkazů k pracím se zvýšeným požárním nebezpečím', predpis: '§ 6a zákona č. 133/1985 Sb.', kdoVydava: 'zaměstnavatel' },
+  { id: 'pov-prvni-pomoc', nazev: 'Osoba pověřená poskytováním první pomoci', predpis: '§ 102 zákoníku práce', kdoVydava: 'zaměstnavatel / vedoucí' },
+  { id: 'pov-zdvihaci-zarizeni', nazev: 'Obsluha zdvihacích zařízení (jeřábník, vazač, signalista)', predpis: 'NV č. 193/2022 Sb.; ČSN ISO 12480-1', kdoVydava: 'provozovatel' },
+  { id: 'pov-manipulacni-vozik', nazev: 'Obsluha manipulačních vozíků a mobilních strojů', predpis: 'NV č. 378/2001 Sb.', kdoVydava: 'provozovatel' },
+  { id: 'pov-vyhrazena-zarizeni', nazev: 'Obsluha vyhrazených technických zařízení (tlaková, plynová)', predpis: 'zákon č. 250/2021 Sb.', kdoVydava: 'provozovatel' },
+  { id: 'pov-vozidlo-zamestnavatele', nazev: 'Řízení vozidla zaměstnavatele', predpis: 'vnitřní předpis', kdoVydava: 'zaměstnavatel' },
+];
 
 export default function SekcePovereni() {
   const [polozky, setPolozky] = useState<CiselnikPovereni[]>([]);
@@ -63,6 +76,22 @@ export default function SekcePovereni() {
       stav: 'aktivni',
     });
     setNazev(''); setKdo('');
+    nacti();
+  }
+
+  async function doplnZakladniSadu() {
+    for (const z of ZAKLADNI_SADA) {
+      // merge + pevné ID → opakované spuštění nic nezduplikuje; už upravené položky se nepřepisují
+      const stav = polozky.find((p) => p.id === z.id);
+      if (stav) continue;
+      await setDoc(doc(db, 'ciselnikPovereni', z.id), {
+        nazev: z.nazev,
+        platnostMesice: 0,
+        kdoVydava: z.kdoVydava,
+        predpis: z.predpis,
+        stav: 'aktivni',
+      }, { merge: true });
+    }
     nacti();
   }
 
@@ -134,7 +163,14 @@ export default function SekcePovereni() {
             <Loader2 className="h-4 w-4 animate-spin" /> Načítám…
           </div>
         ) : polozky.length === 0 ? (
-          <p className="py-6 text-sm text-muted-foreground">Zatím žádné druhy pověření.</p>
+          <div className="py-6 space-y-3">
+            <p className="text-sm text-muted-foreground">Zatím žádné druhy pověření.</p>
+            {!chyba && (
+              <Button variant="outline" onClick={doplnZakladniSadu}>
+                <Sparkles className="mr-2 h-4 w-4" /> Doplnit základní sadu ({ZAKLADNI_SADA.length} pověření)
+              </Button>
+            )}
+          </div>
         ) : (
           <div className="divide-y border-y">
             {polozky.map((p) => (
