@@ -112,7 +112,7 @@ export interface RevizeKlienta {
   /** mapování na řádek požární knihy (snapshot z číselníku) */
   pozarniRadek?: string | null;
   /** nedostatky zjištěné revizí a stav jejich odstranění */
-  nedostatky?: import('@/components/nedostatky-revize').Nedostatek[];
+  nedostatky?: import('@/lib/nedostatky').Nedostatek[];
 }
 
 /** Přičte měsíce k datu (ISO in, ISO out). Klouzavý výpočet. */
