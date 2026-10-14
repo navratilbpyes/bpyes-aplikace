@@ -11,6 +11,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc,
 } from 'firebase/firestore';
@@ -56,6 +57,11 @@ export default function RevizeKlienta({ klientId }: Props) {
   const [fOblast, setFOblast] = useState('vse');
   const [rozbaleno, setRozbaleno] = useState<string | null>(null);
 
+  // proklik z plánu / dashboardu: ?revize=ID&nedostatek=ID
+  const searchParams = useSearchParams();
+  const cilRevize = searchParams.get('revize');
+  const cilNedostatek = searchParams.get('nedostatek');
+
   const cesta = useCallback(
     () => collection(db, 'klienti', klientId, 'revize'),
     [klientId],
@@ -84,6 +90,18 @@ export default function RevizeKlienta({ klientId }: Props) {
   }, [cesta, klientId]);
 
   useEffect(() => { nacti(); }, [nacti]);
+
+  // po načtení rozbalit cílovou revizi a odrolovat na ni (nebo na její nedostatek)
+  useEffect(() => {
+    if (nacitam || !cilRevize) return;
+    setRozbaleno(cilRevize);
+    const t = setTimeout(() => {
+      const el = (cilNedostatek && document.getElementById(`nedostatek-${cilNedostatek}`))
+        || document.getElementById(`revize-${cilRevize}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [nacitam, cilRevize, cilNedostatek]);
 
   async function pridejZCiselniku() {
     const zdroj = ciselnik.find((c) => c.id === vybrane);
@@ -286,7 +304,7 @@ export default function RevizeKlienta({ klientId }: Props) {
               const termin = platnyTermin(r);
               const otevreno = rozbaleno === r.id;
               return (
-                <div key={r.id} className="rounded-lg border overflow-hidden">
+                <div key={r.id} id={`revize-${r.id}`} className="rounded-lg border overflow-hidden">
                   <div className="flex items-start gap-2 bg-muted/40 p-3">
                     <Button
                       variant="ghost"
@@ -572,6 +590,7 @@ export default function RevizeKlienta({ klientId }: Props) {
                         <NedostatkyRevize
                           data={r as NedostatkyPole}
                           onUlozit={(zmeny) => uprav(r.id, zmeny as Partial<TypRevize>)}
+                          otevritId={cilRevize === r.id ? cilNedostatek : null}
                         />
                       </div>
 
