@@ -32,6 +32,7 @@ import ProtokolUpload from '@/components/protokol-upload';
 import type { ProtokolPole } from '@/lib/protokol';
 import NedostatkyRevize from '@/components/nedostatky-revize';
 import type { NedostatkyPole } from '@/components/nedostatky-revize';
+import OdznakNedostatkyRevize, { OdznakSouhrnu, souctySouhrnu } from '@/components/nedostatky-odznak';
 
 interface Props {
   klientId: string;
@@ -278,6 +279,7 @@ export default function RevizeKlienta({ klientId }: Props) {
                     po termínu: {sk.polozky.filter(poTerminu).length}
                   </Badge>
                 )}
+                <OdznakSouhrnu souhrn={souctySouhrnu(sk.polozky)} />
               </div>
               <div className="space-y-2">
             {sk.polozky.map((r) => {
@@ -321,6 +323,7 @@ export default function RevizeKlienta({ klientId }: Props) {
                             potvrzeno
                           </Badge>
                         )}
+                        <OdznakNedostatkyRevize nedostatky={r.nedostatky} />
                       </div>
 
                       {r.zadal === 'klient' && r.potvrzenoOzo === false && (
