@@ -79,6 +79,12 @@ export default function MojeRevizePage() {
   const [vybrane, setVybrane] = useState('');
   const [uklada, setUklada] = useState(false);
   const [rozbaleno, setRozbaleno] = useState<string | null>(null);
+  // proklik z plánu: ?revize=ID&nedostatek=ID (čteno z URL v prohlížeči, stránka je statická)
+  const [cil, setCil] = useState<{ revize: string | null; nedostatek: string | null }>({ revize: null, nedostatek: null });
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    setCil({ revize: q.get('revize'), nedostatek: q.get('nedostatek') });
+  }, []);
 
   const cesta = useCallback(
     () => collection(db, 'klienti', klientId!, druh),
@@ -123,6 +129,17 @@ export default function MojeRevizePage() {
   }, [klientId, cesta, ciselnikKolekce, toast]);
 
   useEffect(() => { nacti(); }, [nacti]);
+
+  // po načtení odrolovat na cílovou revizi (nedostatek se rozbalí sám přes otevritId)
+  useEffect(() => {
+    if (nacitam || !cil.revize) return;
+    const t = setTimeout(() => {
+      const el = (cil.nedostatek && document.getElementById(`nedostatek-${cil.nedostatek}`))
+        || document.getElementById(`revize-${cil.revize}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [nacitam, cil]);
 
   // --- přidání z číselníku ---
   async function pridejZCiselniku() {
@@ -312,7 +329,7 @@ export default function MojeRevizePage() {
             const jeRozbaleno = rozbaleno === z.id;
 
             return (
-              <Card key={z.id} className={cn(!muzuUpravit && 'bg-muted/30')}>
+              <Card key={z.id} id={`revize-${z.id}`} className={cn(!muzuUpravit && 'bg-muted/30', cil.revize === z.id && 'ring-2 ring-blue-300')}>
                 <CardContent className="py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0">
@@ -481,6 +498,7 @@ export default function MojeRevizePage() {
                         data={z as NedostatkyPole}
                         onUlozit={(zmeny) => uprav(z.id, zmeny as Partial<Polozka>)}
                         jeKlient
+                        otevritId={cil.revize === z.id ? cil.nedostatek : null}
                       />
                     </div>
                   )}
