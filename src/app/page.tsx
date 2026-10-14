@@ -11,12 +11,14 @@ import { useMemo } from "react";
 import WidgetTerminy from "@/components/dashboard/widget-terminy";
 import KlientPrehled from "@/components/dashboard/klient-prehled";
 import ProtokolyKeKontrole from "@/components/dashboard/protokoly-ke-kontrole";
+import { useNedostatkyKOvereni } from "@/hooks/use-nedostatky-k-overeni";
 
 export default function Dashboard() {
   const { zaznamy, klienti, userProfile } = useData();
   const router = useRouter();
 
   const isAdmin = userProfile?.role === 'admin';
+  const { polozky: nedostatkyRevizi } = useNedostatkyKOvereni();
 
   const zavadyKReseni = zaznamy.reduce((acc, z) => {
     if (z.stav !== 'uzavreny' && z.kontrolniBody) {
@@ -166,11 +168,11 @@ export default function Dashboard() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold tracking-tight text-emerald-800">Čeká na vaši revizi</h2>
-              {zavadyKRevizi.length > 0 && <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-1 rounded-full border border-emerald-200">{zavadyKRevizi.length} novinek</span>}
+              {(zavadyKRevizi.length + nedostatkyRevizi.length) > 0 && <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-1 rounded-full border border-emerald-200">{zavadyKRevizi.length + nedostatkyRevizi.length} novinek</span>}
             </div>
             <Card className="border-emerald-200 shadow-sm bg-emerald-50/30">
               <CardContent className="p-0">
-                {zavadyKRevizi.length > 0 ? (
+                {(zavadyKRevizi.length + nedostatkyRevizi.length) > 0 ? (
                   <div className="divide-y divide-emerald-100">
                     {zavadyKRevizi.map((zavada, idx) => (
                       <div key={idx} className="p-4 hover:bg-emerald-50/80 transition-colors">
@@ -187,6 +189,24 @@ export default function Dashboard() {
                         <div className="flex items-center justify-between">
                           <div className="text-xs text-emerald-700 bg-emerald-100 px-2 py-1 rounded border border-emerald-200 truncate max-w-[120px]">Od: <span className="font-bold">{zavada.jmeno}</span></div>
                           <Button size="sm" variant="outline" className="h-7 text-xs font-bold border-emerald-300 text-emerald-700 hover:bg-emerald-100" onClick={() => router.push(`/zaznamy/${zavada.zaznamId}`)}><Eye className="h-3 w-3 mr-1.5" /> Revidovat</Button>
+                        </div>
+                      </div>
+                    ))}
+                    {nedostatkyRevizi.map((n) => (
+                      <div key={`${n.klientId}_${n.revizeId}_${n.nedostatekId}`} className="p-4 hover:bg-emerald-50/80 transition-colors">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-emerald-600 tracking-wider">
+                            <CheckCircle2 className="h-3 w-3" /> Klient hlásí odstranění · revize
+                          </div>
+                          <span className="text-xs font-bold text-slate-400">{n.datumIso ? new Date(n.datumIso).toLocaleDateString('cs-CZ') : ''}</span>
+                        </div>
+                        <div className="space-y-1 mb-3">
+                          <p className="text-sm font-bold text-slate-900 leading-tight line-clamp-2">{n.popis}</p>
+                          <p className="text-xs font-medium text-slate-500 truncate">{n.klientNazev} • {n.revizeNazev}</p>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs text-emerald-700 bg-emerald-100 px-2 py-1 rounded border border-emerald-200 truncate max-w-[120px]">Od: <span className="font-bold">{n.jmeno ?? '—'}</span></div>
+                          <Button size="sm" variant="outline" className="h-7 text-xs font-bold border-emerald-300 text-emerald-700 hover:bg-emerald-100" onClick={() => router.push(`/klienti/${n.klientId}?tab=revize`)}><Eye className="h-3 w-3 mr-1.5" /> Revidovat</Button>
                         </div>
                       </div>
                     ))}
