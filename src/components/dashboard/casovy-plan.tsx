@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
-  Zap, GraduationCap, ShieldAlert, ClipboardCheck, Loader2, ChevronRight, Printer,
+  Zap, GraduationCap, ShieldAlert, ClipboardCheck, Loader2, ChevronRight, Printer, AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
 import { useCasovyPlan } from '@/hooks/use-casovy-plan';
@@ -32,6 +32,7 @@ const IKONA: Record<TypPolozky, typeof Zap> = {
   skoleni: GraduationCap,
   nalez: ShieldAlert,
   prohlidka: ClipboardCheck,
+  nedostatek: AlertTriangle,
 };
 
 const NAZEV_TYPU: Record<TypPolozky, string> = {
@@ -39,6 +40,7 @@ const NAZEV_TYPU: Record<TypPolozky, string> = {
   skoleni: 'školení',
   nalez: 'nálezy',
   prohlidka: 'prohlídky',
+  nedostatek: 'nedostatek revize',
 };
 
 const BARVA: Record<Naliehavost, string> = {
@@ -112,6 +114,7 @@ export default function CasovyPlan({ klientId }: Props) {
     { klic: 'revize', popis: 'revize' },
     { klic: 'skoleni', popis: 'školení' },
     { klic: 'prohlidka', popis: 'prohlídky' },
+    { klic: 'nedostatek', popis: 'nedostatky revizí' },
     { klic: 'nalez', popis: 'nálezy' },
   ];
 
@@ -198,6 +201,7 @@ export default function CasovyPlan({ klientId }: Props) {
         {!nacitam && !chyba && zobraz.length > 0 && (
           <div className="no-print flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-[11px] text-muted-foreground">
             <span className="inline-flex items-center gap-1"><Zap className="h-3 w-3" /> revize</span>
+            <span className="inline-flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> nedostatek revize</span>
             <span className="inline-flex items-center gap-1"><ShieldAlert className="h-3 w-3" /> nález</span>
             <span className="inline-flex items-center gap-1"><GraduationCap className="h-3 w-3" /> školení</span>
             <span className="inline-flex items-center gap-1"><ClipboardCheck className="h-3 w-3" /> prohlídka</span>
@@ -205,6 +209,7 @@ export default function CasovyPlan({ klientId }: Props) {
               <span className="inline-flex items-center gap-1"><Tecka b="bg-red-500" /> po termínu</span>
               <span className="inline-flex items-center gap-1"><Tecka b="bg-amber-500" /> blíží se</span>
               <span className="inline-flex items-center gap-1"><Tecka b="bg-emerald-600" /> v pořádku</span>
+              <span className="inline-flex items-center gap-1"><Tecka b="bg-blue-500" /> čeká na ověření</span>
             </span>
           </div>
         )}
@@ -235,7 +240,7 @@ function Radek({ p }: { p: PolozkaPlanu }) {
 
   const obsah = (
     <>
-      <Ikona className={cn('mt-0.5 h-4 w-4 shrink-0', BARVA_IKONA[p.naliehavost])} />
+      <Ikona className={cn('mt-0.5 h-4 w-4 shrink-0', p.cekaNaOvereni ? 'text-blue-500' : BARVA_IKONA[p.naliehavost])} />
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -251,7 +256,7 @@ function Radek({ p }: { p: PolozkaPlanu }) {
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
-        <span className={cn('whitespace-nowrap text-xs font-medium', BARVA_TEXT[p.naliehavost])}>
+        <span className={cn('whitespace-nowrap text-xs font-medium', p.cekaNaOvereni ? 'text-blue-600' : BARVA_TEXT[p.naliehavost])}>
           {p.stitek}
         </span>
         {p.odkaz && (
@@ -263,7 +268,7 @@ function Radek({ p }: { p: PolozkaPlanu }) {
 
   const trida = cn(
     'plan-radek flex items-start gap-3 border-t border-l-[3px] py-3 pl-3',
-    BARVA[p.naliehavost],
+    p.cekaNaOvereni ? 'border-l-blue-500' : BARVA[p.naliehavost],
   );
 
   if (p.odkaz) {
