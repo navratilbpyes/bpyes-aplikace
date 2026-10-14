@@ -14,12 +14,13 @@
 import { platnyTermin as terminRevize } from '@/lib/revize';
 import { platnyTermin as terminSkoleni } from '@/lib/skoleni';
 import { terminNaDatum } from '@/lib/prohlidky';
+import { stavNedostatku } from '@/lib/nedostatky';
 import type { RevizeKlienta } from '@/lib/revize';
 import type { SkoleniKlienta } from '@/lib/skoleni';
 import type { Prohlidka } from '@/lib/prohlidky';
 import type { Zaznam, Zavada } from '@/app/lib/types';
 
-export type TypPolozky = 'revize' | 'skoleni' | 'prohlidka' | 'nalez';
+export type TypPolozky = 'revize' | 'skoleni' | 'prohlidka' | 'nalez' | 'nedostatek';
 export type Naliehavost = 'po_terminu' | 'blizi_se' | 'ok';
 
 export interface PolozkaPlanu {
@@ -41,6 +42,8 @@ export interface PolozkaPlanu {
   maDokument: boolean;
   /** cílová routa prokliku, nebo undefined když položka nikam nevede */
   odkaz?: string;
+  /** nedostatek revize: klient nahlásil odstranění, čeká na ověření OZO */
+  cekaNaOvereni?: boolean;
 }
 
 const DEN = 86400000;
@@ -114,6 +117,44 @@ export function revizeNaPolozky(
         odkaz: `/klienti/${klientId}?tab=revize`,
       };
     });
+}
+
+/**
+ * Nedostatky zjištěné revizemi — každý neuzavřený je vlastní položka plánu
+ * na svém termínu. Nahlášené klientem zůstávají vidět (čekají na OZO),
+ * ale nepočítají se jako po termínu ani jako otevřené.
+ */
+export function nedostatkyRevizNaPolozky(
+  revize: RevizeKlienta[],
+  dnes: Date,
+  klientId: string,
+): PolozkaPlanu[] {
+  const out: PolozkaPlanu[] = [];
+  for (const r of revize) {
+    if (r.stav !== 'aktivni') continue;
+    for (const n of r.nedostatky ?? []) {
+      const stav = stavNedostatku(n);
+      if (stav === 'odstranen') continue;
+      const ceka = stav === 'ceka_na_overeni';
+      const datum = n.terminIso ? new Date(n.terminIso) : undefined;
+      const meta = [r.nazev, r.poznamka, n.odpovedny].filter(Boolean).join(' · ') || undefined;
+      out.push({
+        id: `nedostatek_${r.id}_${n.id}`,
+        typ: 'nedostatek',
+        nazev: n.popis || 'Nedostatek bez popisu',
+        meta,
+        odpovednaOsoba: n.odpovedny || undefined,
+        zdroj: r.cisloProtokolu ? `revize · protokol ${r.cisloProtokolu}` : 'revize',
+        terminDatum: datum,
+        stitek: ceka ? 'čeká na ověření OZO' : stitekDatum(datum, dnes),
+        naliehavost: ceka ? 'ok' : naliehavostZDatumu(datum, dnes),
+        maDokument: !!r.cisloProtokolu,
+        odkaz: `/klienti/${klientId}?tab=revize`,
+        cekaNaOvereni: ceka,
+      });
+    }
+  }
+  return out;
 }
 
 export function skoleniNaPolozky(
@@ -206,6 +247,7 @@ export function sestavCasovyPlan(vstup: {
   const dnes = vstup.dnes ?? new Date();
   const vse = [
     ...revizeNaPolozky(vstup.revize, dnes, vstup.klientId),
+    ...nedostatkyRevizNaPolozky(vstup.revize, dnes, vstup.klientId),
     ...skoleniNaPolozky(vstup.skoleni, dnes, vstup.klientId),
     ...prohlidkyNaPolozky(vstup.prohlidky, dnes),
     ...nalezyNaPolozky(vstup.zaznamy, dnes),
@@ -228,7 +270,10 @@ export interface Metriky {
 export function spoctiMetriky(polozky: PolozkaPlanu[]): Metriky {
   return {
     do30dni: polozky.filter((p) => p.naliehavost === 'blizi_se').length,
-    otevreneNalezy: polozky.filter((p) => p.typ === 'nalez').length,
+    // nálezy z kontrol + nedostatky z revizí (kromě těch, co čekají na OZO)
+    otevreneNalezy: polozky.filter(
+      (p) => p.typ === 'nalez' || (p.typ === 'nedostatek' && !p.cekaNaOvereni),
+    ).length,
     poTerminu: polozky.filter((p) => p.naliehavost === 'po_terminu').length,
   };
 }
