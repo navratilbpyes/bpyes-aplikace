@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
 import { useCasovyPlan } from '@/hooks/use-casovy-plan';
+import { useData } from '@/components/data-provider';
 import type { PolozkaPlanu, TypPolozky, Naliehavost } from '@/lib/casovy-plan';
 
 interface Props {
@@ -65,6 +66,8 @@ type FiltrTyp = 'vse' | 'po_terminu' | TypPolozky;
 
 export default function CasovyPlan({ klientId }: Props) {
   const { polozky, nacitam, chyba } = useCasovyPlan(klientId);
+  const { userProfile } = useData();
+  const jeAdmin = userProfile?.role === 'admin';
   const [filtr, setFiltr] = useState<FiltrTyp>('vse');
   const [obdobi, setObdobi] = useState<'vse' | 'mesic' | 'kvartal'>('vse');
   const [osoba, setOsoba] = useState<string>('vse');
@@ -192,7 +195,7 @@ export default function CasovyPlan({ klientId }: Props) {
         ) : (
           <div className="space-y-0">
             {zobraz.map((p) => (
-              <Radek key={p.id} p={p} />
+              <Radek key={p.id} p={p} jeAdmin={jeAdmin} />
             ))}
           </div>
         )}
@@ -235,8 +238,13 @@ function Tecka({ b }: { b: string }) {
   return <span className={cn('inline-block h-2 w-2 rounded-full', b)} />;
 }
 
-function Radek({ p }: { p: PolozkaPlanu }) {
+function Radek({ p, jeAdmin }: { p: PolozkaPlanu; jeAdmin: boolean }) {
   const Ikona = IKONA[p.typ];
+
+  // Klient nemá kartu klienta — revize a jejich nedostatky otevírá na /moje-revize.
+  const odkaz = !jeAdmin && (p.typ === 'revize' || p.typ === 'nedostatek') && p.revizeId
+    ? `/moje-revize?revize=${p.revizeId}${p.nedostatekId ? `&nedostatek=${p.nedostatekId}` : ''}`
+    : p.odkaz;
 
   const obsah = (
     <>
@@ -259,7 +267,7 @@ function Radek({ p }: { p: PolozkaPlanu }) {
         <span className={cn('whitespace-nowrap text-xs font-medium', p.cekaNaOvereni ? 'text-blue-600' : BARVA_TEXT[p.naliehavost])}>
           {p.stitek}
         </span>
-        {p.odkaz && (
+        {odkaz && (
           <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
         )}
       </div>
@@ -271,9 +279,9 @@ function Radek({ p }: { p: PolozkaPlanu }) {
     p.cekaNaOvereni ? 'border-l-blue-500' : BARVA[p.naliehavost],
   );
 
-  if (p.odkaz) {
+  if (odkaz) {
     return (
-      <Link href={p.odkaz} className={cn(trida, 'pr-2 transition-colors hover:bg-muted/50')}>
+      <Link href={odkaz} className={cn(trida, 'pr-2 transition-colors hover:bg-muted/50')}>
         {obsah}
       </Link>
     );
