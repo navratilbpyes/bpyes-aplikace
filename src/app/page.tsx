@@ -206,7 +206,7 @@ export default function Dashboard() {
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="text-xs text-emerald-700 bg-emerald-100 px-2 py-1 rounded border border-emerald-200 truncate max-w-[120px]">Od: <span className="font-bold">{n.jmeno ?? '—'}</span></div>
-                          <Button size="sm" variant="outline" className="h-7 text-xs font-bold border-emerald-300 text-emerald-700 hover:bg-emerald-100" onClick={() => router.push(`/klienti/${n.klientId}?tab=revize`)}><Eye className="h-3 w-3 mr-1.5" /> Revidovat</Button>
+                          <Button size="sm" variant="outline" className="h-7 text-xs font-bold border-emerald-300 text-emerald-700 hover:bg-emerald-100" onClick={() => router.push(`/klienti/${n.klientId}?tab=revize&revize=${n.revizeId}&nedostatek=${n.nedostatekId}`)}><Eye className="h-3 w-3 mr-1.5" /> Revidovat</Button>
                         </div>
                       </div>
                     ))}
