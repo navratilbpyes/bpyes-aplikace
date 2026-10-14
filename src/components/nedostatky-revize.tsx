@@ -20,7 +20,7 @@
  * revize|skoleni, stejně jako u protokolů.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,7 +48,7 @@ const format = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString(
 const dnesDatum = () => new Date().toISOString().slice(0, 10);
 
 export default function NedostatkyRevize({
-  data, onUlozit, osoby = [], disabled, jeKlient = false,
+  data, onUlozit, osoby = [], disabled, jeKlient = false, otevritId,
 }: {
   data: NedostatkyPole;
   onUlozit: (zmeny: NedostatkyPole) => Promise<void>;
@@ -57,11 +57,23 @@ export default function NedostatkyRevize({
   disabled?: boolean;
   /** true = klientský pohled (odstranění jen hlásí, nepotvrzuje) */
   jeKlient?: boolean;
+  /** id nedostatku, který se má po otevření stránky rozbalit a zobrazit (proklik z plánu) */
+  otevritId?: string | null;
 }) {
   const seznam = data.nedostatky ?? [];
   const [uklada, setUklada] = useState(false);
   const [zobrazitHotove, setZobrazitHotove] = useState(false);
-  const [rozbaleny, setRozbaleny] = useState<string | null>(null);
+  const [rozbaleny, setRozbaleny] = useState<string | null>(otevritId ?? null);
+
+  // proklik z plánu / dashboardu: rozbalit a odrolovat na konkrétní nedostatek
+  useEffect(() => {
+    if (!otevritId) return;
+    setRozbaleny(otevritId);
+    const t = setTimeout(() => {
+      document.getElementById(`nedostatek-${otevritId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 150);
+    return () => clearTimeout(t);
+  }, [otevritId]);
 
   // klient: formulář hlášení odstranění
   const [hlasim, setHlasim] = useState<string | null>(null);
@@ -191,7 +203,7 @@ export default function NedostatkyRevize({
             const vraceno = stav === 'vraceno';
             const propadl = nedostatekPoTerminu(n);
             return (
-              <div key={n.id}>
+              <div key={n.id} id={`nedostatek-${n.id}`}>
                 <div className="flex items-start gap-2 p-2.5">
                   <button
                     type="button"
