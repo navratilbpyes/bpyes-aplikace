@@ -44,6 +44,7 @@ import ProtokolUpload from '@/components/protokol-upload';
 import type { ProtokolPole } from '@/lib/protokol';
 import NedostatkyRevize from '@/components/nedostatky-revize';
 import type { NedostatkyPole } from '@/components/nedostatky-revize';
+import OdznakNedostatkyRevize from '@/components/nedostatky-odznak';
 
 type Druh = 'revize' | 'skoleni';
 
@@ -333,6 +334,9 @@ export default function MojeRevizePage() {
                           {!muzuUpravit && (
                             <span className="text-[11px] text-muted-foreground">zadal technik</span>
                           )}
+                          {druh === 'revize' && (
+                            <OdznakNedostatkyRevize nedostatky={(z as RevizeKlienta).nedostatky} jeKlient />
+                          )}
                         </div>
                         <div className="text-sm text-muted-foreground mt-0.5">
                           {popisPeriody(z.periodaMesice)}
@@ -476,6 +480,7 @@ export default function MojeRevizePage() {
                       <NedostatkyRevize
                         data={z as NedostatkyPole}
                         onUlozit={(zmeny) => uprav(z.id, zmeny as Partial<Polozka>)}
+                        jeKlient
                       />
                     </div>
                   )}
