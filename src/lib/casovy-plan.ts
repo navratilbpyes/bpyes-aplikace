@@ -44,6 +44,9 @@ export interface PolozkaPlanu {
   odkaz?: string;
   /** nedostatek revize: klient nahlásil odstranění, čeká na ověření OZO */
   cekaNaOvereni?: boolean;
+  /** revize, ke které položka patří (revize i její nedostatky) — pro proklik */
+  revizeId?: string;
+  nedostatekId?: string;
 }
 
 const DEN = 86400000;
@@ -114,7 +117,8 @@ export function revizeNaPolozky(
         stitek: stitekDatum(datum, dnes),
         naliehavost: naliehavostZDatumu(datum, dnes),
         maDokument: !!r.cisloProtokolu,
-        odkaz: `/klienti/${klientId}?tab=revize`,
+        odkaz: `/klienti/${klientId}?tab=revize&revize=${r.id}`,
+        revizeId: r.id,
       };
     });
 }
@@ -149,7 +153,9 @@ export function nedostatkyRevizNaPolozky(
         stitek: ceka ? 'čeká na ověření OZO' : stitekDatum(datum, dnes),
         naliehavost: ceka ? 'ok' : naliehavostZDatumu(datum, dnes),
         maDokument: !!r.cisloProtokolu,
-        odkaz: `/klienti/${klientId}?tab=revize`,
+        odkaz: `/klienti/${klientId}?tab=revize&revize=${r.id}&nedostatek=${n.id}`,
+        revizeId: r.id,
+        nedostatekId: n.id,
         cekaNaOvereni: ceka,
       });
     }
