@@ -16,7 +16,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  Zap, GraduationCap, ShieldAlert, ClipboardCheck, Loader2, ChevronRight,
+  Zap, GraduationCap, ShieldAlert, ClipboardCheck, Loader2, ChevronRight, AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
 import { usePlanVsech } from '@/hooks/use-plan-vsech';
@@ -24,10 +24,10 @@ import type { PolozkaSKlientem } from '@/hooks/use-plan-vsech';
 import type { TypPolozky, Naliehavost } from '@/lib/casovy-plan';
 
 const IKONA: Record<TypPolozky, typeof Zap> = {
-  revize: Zap, skoleni: GraduationCap, nalez: ShieldAlert, prohlidka: ClipboardCheck,
+  revize: Zap, skoleni: GraduationCap, nalez: ShieldAlert, prohlidka: ClipboardCheck, nedostatek: AlertTriangle,
 };
 const NAZEV_TYPU: Record<TypPolozky, string> = {
-  revize: 'revize', skoleni: 'školení', nalez: 'nález', prohlidka: 'prohlídka',
+  revize: 'revize', skoleni: 'školení', nalez: 'nález', prohlidka: 'prohlídka', nedostatek: 'nedostatek revize',
 };
 const BARVA: Record<Naliehavost, string> = {
   po_terminu: 'border-l-red-500', blizi_se: 'border-l-amber-500', ok: 'border-l-emerald-600',
@@ -65,6 +65,7 @@ export default function PlanPage() {
     { klic: 'revize', popis: 'revize' },
     { klic: 'skoleni', popis: 'školení' },
     { klic: 'prohlidka', popis: 'prohlídky' },
+    { klic: 'nedostatek', popis: 'nedostatky revizí' },
     { klic: 'nalez', popis: 'nálezy' },
   ];
 
@@ -167,7 +168,7 @@ function Radek({ p }: { p: PolozkaSKlientem }) {
 
   const obsah = (
     <>
-      <Ikona className={cn('mt-0.5 h-4 w-4 shrink-0', BARVA_IKONA[p.naliehavost])} />
+      <Ikona className={cn('mt-0.5 h-4 w-4 shrink-0', p.cekaNaOvereni ? 'text-blue-500' : BARVA_IKONA[p.naliehavost])} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium">{p.nazev}</span>
@@ -180,7 +181,7 @@ function Radek({ p }: { p: PolozkaSKlientem }) {
         {p.zdroj && <div className="mt-0.5 text-xs text-muted-foreground/70">{p.zdroj}</div>}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        <span className={cn('whitespace-nowrap text-xs font-medium', BARVA_TEXT[p.naliehavost])}>
+        <span className={cn('whitespace-nowrap text-xs font-medium', p.cekaNaOvereni ? 'text-blue-600' : BARVA_TEXT[p.naliehavost])}>
           {p.stitek}
         </span>
         {p.odkaz && <ChevronRight className="h-4 w-4 text-muted-foreground/50" />}
@@ -188,7 +189,7 @@ function Radek({ p }: { p: PolozkaSKlientem }) {
     </>
   );
 
-  const trida = cn('flex items-start gap-3 border-t border-l-[3px] py-3 pl-3', BARVA[p.naliehavost]);
+  const trida = cn('flex items-start gap-3 border-t border-l-[3px] py-3 pl-3', p.cekaNaOvereni ? 'border-l-blue-500' : BARVA[p.naliehavost]);
 
   if (p.odkaz) {
     return (
