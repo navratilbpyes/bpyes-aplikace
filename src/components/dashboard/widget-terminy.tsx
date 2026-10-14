@@ -15,7 +15,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
-  Zap, GraduationCap, ShieldAlert, ClipboardCheck, Loader2, ArrowRight, ChevronRight,
+  Zap, GraduationCap, ShieldAlert, ClipboardCheck, Loader2, ArrowRight, ChevronRight, AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
 import { usePlanVsech } from '@/hooks/use-plan-vsech';
@@ -23,7 +23,7 @@ import type { PolozkaSKlientem } from '@/hooks/use-plan-vsech';
 import type { TypPolozky, Naliehavost } from '@/lib/casovy-plan';
 
 const IKONA: Record<TypPolozky, typeof Zap> = {
-  revize: Zap, skoleni: GraduationCap, nalez: ShieldAlert, prohlidka: ClipboardCheck,
+  revize: Zap, skoleni: GraduationCap, nalez: ShieldAlert, prohlidka: ClipboardCheck, nedostatek: AlertTriangle,
 };
 const BARVA: Record<Naliehavost, string> = {
   po_terminu: 'border-l-red-500', blizi_se: 'border-l-amber-500', ok: 'border-l-emerald-600',
